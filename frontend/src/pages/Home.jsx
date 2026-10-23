@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Scissors, 
@@ -36,6 +36,40 @@ export default function Home() {
 
   // Navigation state
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const headerVisibleRef = useRef(true);
+
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      return undefined;
+    }
+
+    const updateHeaderVisibility = (visible) => {
+      if (headerVisibleRef.current !== visible) {
+        headerVisibleRef.current = visible;
+        setHeaderVisible(visible);
+      }
+    };
+
+    let previousScrollY = window.scrollY;
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      const scrollDifference = currentScrollY - previousScrollY;
+
+      if (currentScrollY <= 80) {
+        updateHeaderVisibility(true);
+      } else if (scrollDifference > 8) {
+        updateHeaderVisibility(false);
+      } else if (scrollDifference < -8) {
+        updateHeaderVisibility(true);
+      }
+
+      previousScrollY = currentScrollY;
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [mobileMenuOpen]);
 
   // Username Claim / Hero state
   const [usernameInput, setUsernameInput] = useState('');
@@ -190,27 +224,26 @@ export default function Home() {
   ];
 
   return (
-    <div className="min-h-screen bg-[#F7F6F2] text-[#171717] font-sans antialiased selection:bg-[#285844] selection:text-white">
+    <div
+      className="min-h-screen bg-[#F7F6F2] text-[#171717] font-sans antialiased selection:bg-[#285844] selection:text-white"
+      style={{
+        backgroundImage:
+          'radial-gradient(ellipse at 8% 4%, rgba(40, 88, 68, 0.20), transparent 34%), radial-gradient(ellipse at 92% 24%, rgba(93, 141, 105, 0.17), transparent 32%), radial-gradient(ellipse at 18% 58%, rgba(159, 190, 151, 0.19), transparent 36%), radial-gradient(ellipse at 82% 82%, rgba(40, 88, 68, 0.13), transparent 34%), linear-gradient(135deg, rgba(235, 242, 237, 0.55), transparent 48%, rgba(217, 229, 220, 0.45))',
+      }}
+    >
       
-      {/* Toast Notification */}
-      <AnimatePresence>
-        {copiedToast && (
-          <motion.div 
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-6 right-6 z-50 px-4 py-2.5 rounded-full bg-[#171717] text-white text-xs font-medium shadow-xl flex items-center gap-2 border border-neutral-700"
-          >
-            <Check className="w-4 h-4 text-emerald-400" />
-            <span>Tautan disalin ke clipboard!</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ 1. NAVIGATION BAR ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <nav className="sticky top-0 z-40 bg-[#F7F6F2]/90 backdrop-blur-md border-b border-neutral-200/80 transition-all">
+      <motion.nav
+        initial={false}
+        animate={{
+          y: headerVisible ? '0%' : '-110%',
+          opacity: headerVisible ? 1 : 0,
+        }}
+        transition={{ type: 'tween', duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+        className="sticky top-0 z-40 bg-[#F7F6F2]/90 backdrop-blur-md border-b border-neutral-200/80"
+      >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
           
           {/* Official Brand Logo */}
@@ -255,15 +288,19 @@ export default function Home() {
               </button>
             )}
             <button
-              onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="md:hidden w-8 h-8 flex items-center justify-center text-neutral-700 hover:text-black rounded-lg hover:bg-neutral-100 transition-colors cursor-pointer"
+              onClick={() => {
+                headerVisibleRef.current = true;
+                setHeaderVisible(true);
+                setMobileMenuOpen(!mobileMenuOpen);
+              }}
+              className="md:hidden w-11 h-11 flex items-center justify-center text-neutral-700 hover:text-black rounded-lg hover:bg-neutral-100 transition-colors cursor-pointer"
               aria-label="Menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
-      </nav>
+      </motion.nav>
 
       {/* Mobile Drawer Menu */}
       <AnimatePresence>
@@ -377,7 +414,7 @@ export default function Home() {
 
           {/* Right Hero Column: Authentic Mobile Phone Mockup */}
           <div className="lg:col-span-5 flex justify-center">
-            <div className="w-[300px] sm:w-[330px] bg-[#171717] rounded-[44px] p-3 shadow-2xl border-4 border-neutral-800 text-white relative">
+            <div className="w-full max-w-[300px] sm:max-w-[330px] bg-[#171717] rounded-[44px] p-3 shadow-2xl border-4 border-neutral-800 text-white relative">
               
               {/* Phone Camera Notch */}
               <div className="w-24 h-4 bg-neutral-900 rounded-full mx-auto mb-3" />
@@ -390,6 +427,7 @@ export default function Home() {
                   <img 
                     src={activeData.photo} 
                     alt={activeData.name} 
+                    decoding="async"
                     className="w-full h-full rounded-full object-cover border-2 border-neutral-700" 
                   />
                   <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-[#1C1C1C]" />
@@ -440,7 +478,7 @@ export default function Home() {
                   </span>
                   <div className="grid grid-cols-2 gap-1.5">
                     {activeData.haircuts.map((h, i) => (
-                      <img key={i} src={h.img} alt={h.name} className="w-full h-16 rounded-lg object-cover" />
+                      <img key={i} src={h.img} alt={h.name} loading="lazy" decoding="async" className="w-full h-16 rounded-lg object-cover" />
                     ))}
                   </div>
                 </div>
@@ -492,7 +530,7 @@ export default function Home() {
             ].map((seg, i) => {
               const Icon = seg.icon;
               return (
-                <div key={i} className="flex flex-col items-start p-4 rounded-2xl bg-[#F7F6F2] border border-neutral-200/80">
+                <div key={i} className="transform-gpu flex flex-col items-start p-4 rounded-2xl border border-[#285844]/20 bg-gradient-to-br from-white via-[#F7F6F2] to-[#EBF2ED] shadow-[0_8px_18px_rgba(23,23,23,0.06)] transition-all duration-300 ease-out hover:border-[#285844]/40 hover:shadow-[0_18px_35px_rgba(40,88,68,0.16)] hover:[transform:perspective(900px)_rotateX(3deg)_rotateY(-2deg)_translateY(-5px)]">
                   <div className="w-9 h-9 rounded-xl bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-3">
                     <Icon className="w-4 h-4" />
                   </div>
@@ -619,7 +657,7 @@ export default function Home() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             
             {/* Fitur A: Profil Barber */}
-            <div className="p-6 rounded-2xl bg-[#F7F6F2] border border-neutral-200 flex flex-col justify-between">
+            <div className="transform-gpu rounded-2xl border border-[#285844]/20 bg-gradient-to-br from-white via-[#F7F6F2] to-[#EBF2ED] p-6 flex flex-col justify-between shadow-[0_8px_18px_rgba(23,23,23,0.06)] transition-all duration-300 ease-out hover:border-[#285844]/40 hover:shadow-[0_18px_35px_rgba(40,88,68,0.16)] hover:[transform:perspective(900px)_rotateX(3deg)_rotateY(-2deg)_translateY(-5px)]">
               <div>
                 <div className="w-10 h-10 rounded-xl bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-4">
                   <User className="w-5 h-5" />
@@ -633,7 +671,7 @@ export default function Home() {
             </div>
 
             {/* Fitur B: Portfolio Haircut */}
-            <div className="p-6 rounded-2xl bg-[#F7F6F2] border border-neutral-200 flex flex-col justify-between">
+            <div className="transform-gpu rounded-2xl border border-[#285844]/20 bg-gradient-to-br from-white via-[#F7F6F2] to-[#EBF2ED] p-6 flex flex-col justify-between shadow-[0_8px_18px_rgba(23,23,23,0.06)] transition-all duration-300 ease-out hover:border-[#285844]/40 hover:shadow-[0_18px_35px_rgba(40,88,68,0.16)] hover:[transform:perspective(900px)_rotateX(3deg)_rotateY(-2deg)_translateY(-5px)]">
               <div>
                 <div className="w-10 h-10 rounded-xl bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-4">
                   <Sparkles className="w-5 h-5" />
@@ -647,7 +685,7 @@ export default function Home() {
             </div>
 
             {/* Fitur C: Menu Layanan & Harga */}
-            <div className="p-6 rounded-2xl bg-[#F7F6F2] border border-neutral-200 flex flex-col justify-between">
+            <div className="transform-gpu rounded-2xl border border-[#285844]/20 bg-gradient-to-br from-white via-[#F7F6F2] to-[#EBF2ED] p-6 flex flex-col justify-between shadow-[0_8px_18px_rgba(23,23,23,0.06)] transition-all duration-300 ease-out hover:border-[#285844]/40 hover:shadow-[0_18px_35px_rgba(40,88,68,0.16)] hover:[transform:perspective(900px)_rotateX(3deg)_rotateY(-2deg)_translateY(-5px)]">
               <div>
                 <div className="w-10 h-10 rounded-xl bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-4">
                   <Scissors className="w-5 h-5" />
@@ -661,7 +699,7 @@ export default function Home() {
             </div>
 
             {/* Fitur D: Booking Otomatis Langsung di Web */}
-            <div className="p-6 rounded-2xl bg-[#F7F6F2] border border-neutral-200 flex flex-col justify-between">
+            <div className="transform-gpu rounded-2xl border border-[#285844]/20 bg-gradient-to-br from-white via-[#F7F6F2] to-[#EBF2ED] p-6 flex flex-col justify-between shadow-[0_8px_18px_rgba(23,23,23,0.06)] transition-all duration-300 ease-out hover:border-[#285844]/40 hover:shadow-[0_18px_35px_rgba(40,88,68,0.16)] hover:[transform:perspective(900px)_rotateX(3deg)_rotateY(-2deg)_translateY(-5px)]">
               <div>
                 <div className="w-10 h-10 rounded-xl bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-4">
                   <Calendar className="w-5 h-5" />
@@ -675,7 +713,7 @@ export default function Home() {
             </div>
 
             {/* Fitur E: Lokasi & Peta */}
-            <div className="p-6 rounded-2xl bg-[#F7F6F2] border border-neutral-200 flex flex-col justify-between">
+            <div className="transform-gpu rounded-2xl border border-[#285844]/20 bg-gradient-to-br from-white via-[#F7F6F2] to-[#EBF2ED] p-6 flex flex-col justify-between shadow-[0_8px_18px_rgba(23,23,23,0.06)] transition-all duration-300 ease-out hover:border-[#285844]/40 hover:shadow-[0_18px_35px_rgba(40,88,68,0.16)] hover:[transform:perspective(900px)_rotateX(3deg)_rotateY(-2deg)_translateY(-5px)]">
               <div>
                 <div className="w-10 h-10 rounded-xl bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-4">
                   <MapPin className="w-5 h-5" />
@@ -689,7 +727,7 @@ export default function Home() {
             </div>
 
             {/* Fitur F & G: Statistik & Kustomisasi (Honest Demo Label) */}
-            <div className="p-6 rounded-2xl bg-[#F7F6F2] border border-neutral-200 flex flex-col justify-between">
+            <div className="transform-gpu rounded-2xl border border-[#285844]/20 bg-gradient-to-br from-white via-[#F7F6F2] to-[#EBF2ED] p-6 flex flex-col justify-between shadow-[0_8px_18px_rgba(23,23,23,0.06)] transition-all duration-300 ease-out hover:border-[#285844]/40 hover:shadow-[0_18px_35px_rgba(40,88,68,0.16)] hover:[transform:perspective(900px)_rotateX(3deg)_rotateY(-2deg)_translateY(-5px)]">
               <div>
                 <div className="flex items-center gap-2 mb-4">
                   <div className="w-10 h-10 rounded-xl bg-[#D9E5DC] text-[#285844] flex items-center justify-center">
@@ -728,7 +766,7 @@ export default function Home() {
           </p>
 
           {/* Persona Switcher Tabs */}
-          <div className="inline-flex items-center gap-1.5 p-1 bg-white rounded-full border border-neutral-200 mt-6 shadow-sm">
+          <div className="flex flex-wrap justify-center items-center gap-1.5 p-1 bg-white rounded-2xl sm:rounded-full border border-neutral-200 mt-6 shadow-sm max-w-full">
             {[
               { id: 'reza', label: 'Capster Mandiri' },
               { id: 'studio', label: 'Barbershop Modern' },
@@ -738,7 +776,7 @@ export default function Home() {
                 key={tab.id}
                 type="button"
                 onClick={() => setPreviewPersona(tab.id)}
-                className={`px-4 py-2 rounded-full text-xs font-semibold transition-all ${
+                className={`px-3 sm:px-4 py-2 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
                   previewPersona === tab.id 
                     ? 'bg-[#285844] text-white shadow-sm' 
                     : 'text-neutral-600 hover:text-black'
@@ -766,6 +804,8 @@ export default function Home() {
             <img 
               src={activeData.photo} 
               alt={activeData.name} 
+              loading="lazy"
+              decoding="async"
               className="w-20 h-20 rounded-full object-cover border-2 border-neutral-200 shadow-sm mb-3" 
             />
             <h3 className="font-display font-bold text-lg text-[#171717]">{activeData.name}</h3>
@@ -808,7 +848,7 @@ export default function Home() {
               <div className="grid grid-cols-2 gap-2">
                 {activeData.haircuts.map((h, i) => (
                   <div key={i} className="rounded-xl overflow-hidden border border-neutral-200">
-                    <img src={h.img} alt={h.name} className="w-full h-24 object-cover" />
+                    <img src={h.img} alt={h.name} loading="lazy" decoding="async" className="w-full h-24 object-cover" />
                     <div className="p-1.5 text-center text-[10px] font-medium text-neutral-700 bg-neutral-50">
                       {h.name}
                     </div>

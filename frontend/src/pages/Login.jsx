@@ -5,7 +5,6 @@ import {
   CheckCircle2, 
   AlertCircle, 
   RefreshCw,
-  Check
 } from 'lucide-react';
 import { useStore } from '../store';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -178,10 +177,10 @@ export default function Login({ defaultTab = 'login' }) {
 
       {/* Main Container */}
       <main className="w-full max-w-6xl mx-auto px-4 sm:px-6 py-4 flex items-center justify-center flex-1">
-        <div className="w-full grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-12 items-center">
+        <div className="w-full flex items-center justify-center">
           
-          {/* Left Column: Form Card */}
-          <div className="lg:col-span-6 xl:col-span-6 w-full max-w-md mx-auto">
+          {/* Form Card */}
+          <div className="w-full max-w-md mx-auto">
             <div className="bg-white rounded-2xl border border-neutral-200/90 shadow-sm p-6 sm:p-8">
               
               {/* Audience Selector (Barber vs Customer) */}
@@ -429,86 +428,6 @@ export default function Login({ defaultTab = 'login' }) {
                   </div>
                 </div>
               )}
-
-            </div>
-          </div>
-
-          {/* Right Column: Editorial Preview & Trust (Desktop Only) */}
-          <div className="hidden lg:flex lg:col-span-6 xl:col-span-6 flex-col items-center justify-center pl-4">
-            <div className="w-full max-w-sm">
-              
-              {/* Product Badge */}
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-neutral-200 bg-white/70 backdrop-blur-xs text-[11px] font-medium text-neutral-600 mb-4 shadow-2xs">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                <span>Link-in-bio terstandarisasi untuk barber Indonesia</span>
-              </div>
-
-              {/* Headings */}
-              <h2 className="font-display font-black text-2xl xl:text-3xl tracking-tight text-[#171717] leading-snug">
-                Satu Link. <br />
-                Seluruh Portofolio & Reservasi Barbermu.
-              </h2>
-              <p className="text-xs text-neutral-600 mt-2 leading-relaxed">
-                Pasang di bio Instagram & TikTok. Pelanggan bisa melihat daftar tarif, hasil potongan rambut, lokasi peta studio, hingga booking jadwal cukur langsung di web.
-              </p>
-
-              {/* Mini Clean Phone Mockup */}
-              <div className="mt-6 bg-[#171717] rounded-3xl p-3 shadow-2xl border-4 border-neutral-900 w-full max-w-[280px] mx-auto text-white">
-                <div className="flex justify-center mb-3">
-                  <div className="w-16 h-1 bg-neutral-800 rounded-full" />
-                </div>
-                
-                {/* Profile mini preview */}
-                <div className="text-center pb-3 border-b border-neutral-800">
-                  <div className="w-12 h-12 rounded-full mx-auto mb-2 overflow-hidden border border-neutral-700">
-                    <img 
-                      src="https://images.unsplash.com/photo-1622286342621-4bd786c2447c?q=80&w=300" 
-                      alt="Reza Fade" 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                  <div className="text-xs font-bold text-white flex items-center justify-center gap-1">
-                    <span>Reza Fade</span>
-                    <span className="text-emerald-400 text-[10px]">✓</span>
-                  </div>
-                  <div className="text-[10px] font-mono text-neutral-400 mt-0.5">
-                    ecukur.id/reza
-                  </div>
-                </div>
-
-                {/* Micro services */}
-                <div className="py-2.5 space-y-1.5">
-                  <div className="bg-neutral-900 rounded-lg p-2 flex justify-between items-center text-[11px]">
-                    <span className="font-medium">Gentleman Cut & Wash</span>
-                    <span className="font-mono text-emerald-400">50K</span>
-                  </div>
-                  <div className="bg-neutral-900 rounded-lg p-2 flex justify-between items-center text-[11px]">
-                    <span className="font-medium">Signature Fade & Lineup</span>
-                    <span className="font-mono text-emerald-400">75K</span>
-                  </div>
-                </div>
-
-                {/* Direct Booking button */}
-                <div className="bg-emerald-600 rounded-xl py-2 text-center text-[11px] font-semibold text-white mt-1 cursor-pointer">
-                  Pilih Jam & Booking Langsung
-                </div>
-              </div>
-
-              {/* Trust Points */}
-              <div className="mt-6 pt-5 border-t border-neutral-200/80 flex items-center justify-between text-[11px] text-neutral-500">
-                <span className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Gratis selamanya</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Setup dalam 2 menit</span>
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Booking instan di web</span>
-                </span>
-              </div>
 
             </div>
           </div>
