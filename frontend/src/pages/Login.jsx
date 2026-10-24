@@ -21,9 +21,6 @@ export default function Login({ defaultTab = 'login' }) {
   const signInBarber = useStore((state) => state.signInBarber);
   const signUpBarber = useStore((state) => state.signUpBarber);
 
-  // Role: 'barber' | 'customer'
-  const [role, setRole] = useState('barber');
-  
   // Auth Mode: 'login' | 'register'
   const [authMode, setAuthMode] = useState(modeParam);
 
@@ -118,17 +115,16 @@ export default function Login({ defaultTab = 'login' }) {
     }
   };
 
-  // Handle Google OAuth Login / Register (Fast 1-Click)
-  const handleGoogleLogin = async (targetRole = role) => {
+  // Handle Google OAuth Login / Register (Fast 1-Click for Barber)
+  const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setErrorMsg('');
     try {
       if (isSupabaseConfigured) {
-        const redirectPath = targetRole === 'barber' ? '/barber/dashboard' : '/booking';
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: `${window.location.origin}${redirectPath}`,
+            redirectTo: `${window.location.origin}/barber/dashboard`,
             queryParams: {
               access_type: 'offline',
               prompt: 'consent'
@@ -139,7 +135,7 @@ export default function Login({ defaultTab = 'login' }) {
       } else {
         setTimeout(() => {
           setGoogleLoading(false);
-          navigate(targetRole === 'barber' ? '/barber/dashboard' : '/booking');
+          navigate('/barber/dashboard');
         }, 600);
       }
     } catch (err) {
@@ -183,33 +179,16 @@ export default function Login({ defaultTab = 'login' }) {
           <div className="w-full max-w-md mx-auto">
             <div className="bg-white rounded-2xl border border-neutral-200/90 shadow-sm p-6 sm:p-8">
               
-              {/* Audience Selector (Barber vs Customer) */}
-              <div className="flex items-center justify-between pb-5 mb-5 border-b border-neutral-100">
-                <div>
-                  <h1 className="font-display font-bold text-xl text-[#171717] tracking-tight">
-                    {role === 'barber'
-                      ? (authMode === 'login' ? 'Masuk ke Studio Barber' : 'Buat Link Bio Barber')
-                      : 'Portal Pelanggan Cukur'}
-                  </h1>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    {role === 'barber'
-                      ? (authMode === 'login' ? 'Kelola jadwal, bio link, dan booking masuk' : '1 link untuk seluruh info, harga, dan portfoliomu')
-                      : 'Reservasi jam cukur ke barber pilihanmu'}
-                  </p>
-                </div>
-
-                <div className="shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setRole(role === 'barber' ? 'customer' : 'barber');
-                      setErrorMsg('');
-                    }}
-                    className="text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border border-neutral-200 text-neutral-600 hover:text-[#171717] hover:border-neutral-300 bg-neutral-50/50 transition-all cursor-pointer"
-                  >
-                    {role === 'barber' ? 'Saya Pelanggan' : 'Saya Barber'}
-                  </button>
-                </div>
+              {/* Form Header */}
+              <div className="pb-5 mb-5 border-b border-neutral-100">
+                <h1 className="font-display font-bold text-xl text-[#171717] tracking-tight">
+                  {authMode === 'login' ? 'Masuk ke Studio Barber' : 'Buat Link Bio Barber'}
+                </h1>
+                <p className="text-xs text-neutral-500 mt-1">
+                  {authMode === 'login' 
+                    ? 'Kelola jadwal, profil bio link, dan booking masuk bisnismu' 
+                    : 'Dapatkan 1 link untuk seluruh info tarif, harga, dan portofoliomu'}
+                </p>
               </div>
 
               {/* Alert Messages */}
@@ -230,7 +209,7 @@ export default function Login({ defaultTab = 'login' }) {
               {/* 1-Click Fast Google Button */}
               <button 
                 type="button"
-                onClick={() => handleGoogleLogin(role)}
+                onClick={() => handleGoogleLogin()}
                 disabled={googleLoading}
                 className="w-full bg-white hover:bg-neutral-50 text-[#171717] py-3 px-4 font-semibold text-xs rounded-xl border border-neutral-300 flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer active:scale-[0.99] disabled:opacity-50"
               >
@@ -265,7 +244,7 @@ export default function Login({ defaultTab = 'login' }) {
               </div>
 
               {/* BARBER: LOGIN FORM */}
-              {role === 'barber' && authMode === 'login' && (
+              {authMode === 'login' && (
                 <form onSubmit={handleBarberLogin} className="space-y-3.5">
                   <div>
                     <label className="text-xs font-medium text-neutral-700 block mb-1">
@@ -313,7 +292,7 @@ export default function Login({ defaultTab = 'login' }) {
               )}
 
               {/* BARBER: REGISTER FORM */}
-              {role === 'barber' && authMode === 'register' && (
+              {authMode === 'register' && (
                 <form onSubmit={handleBarberRegister} className="space-y-3">
                   <div>
                     <label className="text-xs font-medium text-neutral-700 block mb-1">
@@ -409,24 +388,6 @@ export default function Login({ defaultTab = 'login' }) {
                     )}
                   </button>
                 </form>
-              )}
-
-              {/* CUSTOMER AUTH */}
-              {role === 'customer' && (
-                <div className="space-y-3 pt-2 text-center">
-                  <p className="text-xs text-neutral-600 leading-relaxed">
-                    Pelanggan cukup gunakan <strong>1-Klik Akun Google</strong> di atas untuk login cepat tanpa perlu kata sandi terpisah.
-                  </p>
-                  <div className="pt-2">
-                    <Link 
-                      to="/booking"
-                      className="inline-flex items-center gap-1.5 text-xs font-medium text-[#285844] hover:underline"
-                    >
-                      <span>Lihat jadwal barber langsung</span>
-                      <ArrowRight className="w-3.5 h-3.5" />
-                    </Link>
-                  </div>
-                </div>
               )}
 
             </div>
