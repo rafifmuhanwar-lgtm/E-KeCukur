@@ -8,11 +8,13 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
+import { getAppDomain } from '../lib/domain';
 import Logo from '../components/Logo';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function Login({ defaultTab = 'login' }) {
+  const appDomain = getAppDomain();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const slugParam = searchParams.get('slug') || '';
@@ -314,7 +316,7 @@ export default function Login({ defaultTab = 'login' }) {
                     </label>
                     <div className="flex items-center rounded-lg border border-neutral-200 focus-within:border-[#171717] focus-within:ring-1 focus-within:ring-[#171717] overflow-hidden bg-neutral-50/50">
                       <span className="px-3 py-2.5 text-xs text-neutral-400 font-mono select-none">
-                        ecukur.id/
+                        {appDomain}/
                       </span>
                       <input 
                         type="text"

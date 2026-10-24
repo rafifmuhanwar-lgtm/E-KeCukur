@@ -18,10 +18,12 @@ import {
 import { AnimatePresence, motion } from 'framer-motion';
 import Logo from '../components/Logo';
 import { useStore } from '../store';
+import { getAppDomain } from '../lib/domain';
 
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function Home() {
+  const appDomain = getAppDomain();
   const navigate = useNavigate();
   const authUser = useStore((state) => state.authUser);
   const isLoggedIn = Boolean(authUser);
@@ -195,7 +197,7 @@ export default function Home() {
   const FAQS = [
     {
       q: 'Apa itu E Cukur?',
-      a: 'E Cukur adalah platform profil digital dan sistem booking mandiri khusus untuk industri pangkas rambut & barbershop di Indonesia. Melalui satu link (contoh: ecukur.id/namamu), pelanggan bisa melihat portfolio, tarif layanan, memilih jadwal booking langsung di web, atau menghubungi barber.'
+      a: `E Cukur adalah platform profil digital dan sistem booking mandiri khusus untuk industri pangkas rambut & barbershop di Indonesia. Melalui satu link (contoh: ${appDomain}/namamu), pelanggan bisa melihat portfolio, tarif layanan, memilih jadwal booking langsung di web, atau menghubungi barber.`
     },
     {
       q: 'Apakah E Cukur gratis untuk digunakan?',
@@ -215,7 +217,7 @@ export default function Home() {
     },
     {
       q: 'Bagaimana cara membagikan link profil ke pelanggan?',
-      a: 'Cukup salin alamat profilmu (misal: ecukur.id/reza) dan tempel di bio Instagram, bio TikTok, status WhatsApp, atau cetak kode QR di kartu nama bisnismu.'
+      a: `Cukup salin alamat profilmu (misal: ${appDomain}/reza) dan tempel di bio Instagram, bio TikTok, status WhatsApp, atau cetak kode QR di kartu nama bisnismu.`
     },
     {
       q: 'Apakah saya bisa mengubah informasi dan harga layanan kapan saja?',
@@ -379,7 +381,7 @@ export default function Home() {
               >
                 <div className="flex items-center px-3 py-1.5 w-full text-left">
                   <span className="text-neutral-400 font-mono text-xs font-semibold select-none">
-                    ecukur.id/
+                    {appDomain}/
                   </span>
                   <input 
                     type="text"
@@ -485,7 +487,7 @@ export default function Home() {
 
                 {/* Footer Micro */}
                 <div className="pt-2 border-t border-neutral-800 text-[9px] font-mono text-neutral-500">
-                  ecukur.id/{activeData.id} &bull; Profil Resmi
+                  {appDomain}/{activeData.id} &bull; Profil Resmi
                 </div>
 
               </div>
@@ -610,7 +612,7 @@ export default function Home() {
               <ul className="space-y-3.5 text-sm text-neutral-700">
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                  <span>Satu alamat link rapi: <strong className="text-[#171717]">ecukur.id/namamu</strong> yang mudah diingat.</span>
+                  <span>Satu alamat link rapi: <strong className="text-[#171717]">{appDomain}/namamu</strong> yang mudah diingat.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
@@ -667,7 +669,7 @@ export default function Home() {
                   Tampilkan foto profil profesional, nama panggung, biografi singkat, dan tautan akun Instagram atau TikTok.
                 </p>
               </div>
-              <span className="text-xs font-mono text-neutral-400">ecukur.id/namamu &bull; Siap Pakai</span>
+              <span className="text-xs font-mono text-neutral-400">{appDomain}/namamu &bull; Siap Pakai</span>
             </div>
 
             {/* Fitur B: Portfolio Haircut */}
@@ -885,7 +887,7 @@ export default function Home() {
               {
                 step: '01',
                 title: 'Klaim Username Pilihanmu',
-                desc: 'Daftar gratis dan tentukan alamat unikmu seperti ecukur.id/namamu atau ecukur.id/barbershop.'
+                desc: `Daftar gratis dan tentukan alamat unikmu seperti ${appDomain}/namamu atau ${appDomain}/barbershop.`
               },
               {
                 step: '02',
@@ -956,7 +958,7 @@ export default function Home() {
                 <ul className="space-y-3 text-sm text-neutral-700 mb-8">
                   <li className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Halaman profil publik <strong className="text-neutral-900">ecukur.id/namamu</strong></span>
+                    <span>Halaman profil publik <strong className="text-neutral-900">{appDomain}/namamu</strong></span>
                   </li>
                   <li className="flex items-center gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0" />
@@ -1119,7 +1121,7 @@ export default function Home() {
             >
               <div className="flex items-center px-3 py-2 w-full text-left">
                 <span className="text-neutral-400 font-mono text-sm font-semibold select-none">
-                  ecukur.id/
+                  {appDomain}/
                 </span>
                 <input 
                   type="text"

@@ -41,6 +41,7 @@ import { useStore } from '../../store';
 import Logo from '../../components/Logo';
 import BarberBioLink from '../customer/BarberBioLink';
 import { compressImage } from '../../lib/imageUploader';
+import { getAppDomain } from '../../lib/domain';
 
 const computeWeeklyChartData = (bookingsList) => {
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -62,6 +63,7 @@ const computeWeeklyChartData = (bookingsList) => {
 };
 
 export default function BarberDashboard() {
+  const appDomain = getAppDomain();
   const navigate = useNavigate();
 
   // Zustand state
@@ -299,7 +301,7 @@ export default function BarberDashboard() {
     setSlugStatus({ valid: true, msg: '' });
     if (finalSlug !== barber.slug) {
       handleProfileFieldChange('slug', finalSlug);
-      showToast(`Username disimpan: ecukur.id/${finalSlug}`);
+      showToast(`Username disimpan: ${appDomain}/${finalSlug}`);
     }
   };
 
@@ -799,7 +801,7 @@ export default function BarberDashboard() {
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Quick Bio URL copy */}
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-mono">
-            <span className="text-neutral-500">ecukur.id/<strong>{barber.slug || barber.id}</strong></span>
+            <span className="text-neutral-500">{appDomain}/<strong>{barber.slug || barber.id}</strong></span>
             <button 
               onClick={handleCopyLink} 
               className="text-neutral-500 hover:text-[#171717] p-0.5 transition-colors cursor-pointer"
@@ -1471,11 +1473,11 @@ export default function BarberDashboard() {
                       {slugStatus.msg ? (
                         <span className="text-[11px] text-rose-500 font-medium">{slugStatus.msg}</span>
                       ) : (
-                        <span className="text-[11px] text-emerald-600 font-mono font-medium">ecukur.id/{slugInput || '...'}</span>
+                        <span className="text-[11px] text-emerald-600 font-mono font-medium">{appDomain}/{slugInput || '...'}</span>
                       )}
                     </div>
                     <div className="flex items-center bg-neutral-50 border border-neutral-300 rounded-xl px-3 focus-within:border-neutral-900 focus-within:bg-white transition-colors">
-                      <span className="text-xs font-mono text-neutral-400 select-none">ecukur.id/</span>
+                      <span className="text-xs font-mono text-neutral-400 select-none">{appDomain}/</span>
                       <input 
                         type="text"
                         value={slugInput}
@@ -2660,7 +2662,7 @@ export default function BarberDashboard() {
                   </div>
 
                   <p className="font-mono text-[11px] text-[#171717] font-bold mt-3">
-                    ecukur.id/{barber.slug || barber.id}
+                    {appDomain}/{barber.slug || barber.id}
                   </p>
                   <p className="text-[10px] text-neutral-500 mt-0.5">Scan untuk Menu & Booking Jadwal</p>
                 </div>

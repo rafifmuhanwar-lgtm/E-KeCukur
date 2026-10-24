@@ -25,6 +25,7 @@ import {
   Send
 } from 'lucide-react';
 import { useStore } from '../../store';
+import { getAppDomain } from '../../lib/domain';
 import Logo from '../../components/Logo';
 
 const TIME_SLOTS = [
@@ -54,6 +55,7 @@ const UPCOMING_DATES = generateNextDates();
 const generateBookingCode = () => `ECK-${Math.floor(100 + Math.random() * 900)}`;
 
 export default function BarberBioLink({ customBarber = null, isPreview = false }) {
+  const appDomain = getAppDomain();
   const { id } = useParams();
 
   const barbers = useStore((state) => state.barbers);
@@ -381,7 +383,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
           <p className="text-xs text-neutral-500 mt-1.5 mb-6 leading-relaxed">
             {isLoading 
               ? 'Menghubungkan ke database...' 
-              : `Alamat "ecukur.id/${id}" belum dimiliki oleh siapa pun. Kamu bisa langsung mendaftar dan mengklaim link ini sekarang!`}
+              : `Alamat "${appDomain}/${id}" belum dimiliki oleh siapa pun. Kamu bisa langsung mendaftar dan mengklaim link ini sekarang!`}
           </p>
           <Link
             to={`/daftar?slug=${id || ''}`}
