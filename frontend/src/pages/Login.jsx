@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { 
   ArrowRight, 
@@ -117,7 +117,73 @@ export default function Login({ defaultTab = 'login' }) {
     }
   };
 
-  // Handle Google OAuth Login / Register (Fast 1-Click for Barber)
+  const googleBtnContainerRef = useRef(null);
+  const [gisLoaded, setGisLoaded] = useState(false);
+
+  // Handle direct Google ID Token (No supabase URL shown)
+  const handleCredentialResponse = async (response) => {
+    setGoogleLoading(true);
+    setErrorMsg('');
+    try {
+      if (!response?.credential) {
+        throw new Error('Tidak ada token kredensial Google yang diterima.');
+      }
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: response.credential,
+      });
+      if (error) throw error;
+      navigate('/barber/dashboard');
+    } catch (err) {
+      setGoogleLoading(false);
+      setErrorMsg(err.message || 'Gagal login melalui Google ID Token.');
+    }
+  };
+
+  useEffect(() => {
+    const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || '239781382181-sk41bl7t8ovgl98e04j13tsj0crevnqi.apps.googleusercontent.com';
+
+    const initGoogleGsi = () => {
+      if (window.google?.accounts?.id && googleBtnContainerRef.current) {
+        try {
+          window.google.accounts.id.initialize({
+            client_id: googleClientId,
+            callback: handleCredentialResponse,
+            auto_select: false,
+          });
+
+          googleBtnContainerRef.current.innerHTML = '';
+          window.google.accounts.id.renderButton(googleBtnContainerRef.current, {
+            theme: 'outline',
+            size: 'large',
+            type: 'standard',
+            shape: 'rectangular',
+            text: authMode === 'login' ? 'signin_with' : 'signup_with',
+            width: googleBtnContainerRef.current.offsetWidth || 340,
+            logo_alignment: 'left',
+          });
+
+          setGisLoaded(true);
+        } catch (e) {
+          console.warn('Google GIS button render:', e);
+        }
+      }
+    };
+
+    if (window.google?.accounts?.id) {
+      initGoogleGsi();
+    } else {
+      const interval = setInterval(() => {
+        if (window.google?.accounts?.id) {
+          clearInterval(interval);
+          initGoogleGsi();
+        }
+      }, 300);
+      return () => clearInterval(interval);
+    }
+  }, [authMode]);
+
+  // Fallback OAuth Login / Register if GIS script is blocked
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setErrorMsg('');
@@ -208,32 +274,42 @@ export default function Login({ defaultTab = 'login' }) {
                 </div>
               )}
 
-              {/* 1-Click Fast Google Button */}
-              <button 
-                type="button"
-                onClick={() => handleGoogleLogin()}
-                disabled={googleLoading}
-                className="w-full bg-white hover:bg-neutral-50 text-[#171717] py-3 px-4 font-semibold text-xs rounded-xl border border-neutral-300 flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer active:scale-[0.99] disabled:opacity-50"
-              >
-                {googleLoading ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-[#285844]" />
-                    <span>Menghubungkan ke Google...</span>
-                  </>
-                ) : (
-                  <>
-                    <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-                      <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.4l3.7 2.9C6.5 7.4 9 5 12 5z" />
-                      <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z" />
-                      <path fill="#FBBC05" d="M5.6 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.9 6.4C.7 8.8 0 10.3 0 12s.7 3.2 1.9 5.6l3.7-2.9z" />
-                      <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.4C3.7 20.4 7.5 23 12 23z" />
-                    </svg>
-                    <span>
-                      {authMode === 'login' ? 'Masuk Cepat dengan Google' : 'Daftar 1-Klik dengan Google'}
-                    </span>
-                  </>
+              {/* Google Direct Sign-In Container (Renders official Google Button without Supabase redirect) */}
+              <div className="w-full flex flex-col items-center justify-center">
+                <div 
+                  ref={googleBtnContainerRef}
+                  className={`w-full flex justify-center ${gisLoaded && !googleLoading ? 'block' : 'hidden'} min-h-[44px]`}
+                />
+
+                {/* Fallback button if GIS script hasn't loaded or is authenticating */}
+                {(!gisLoaded || googleLoading) && (
+                  <button 
+                    type="button"
+                    onClick={() => handleGoogleLogin()}
+                    disabled={googleLoading}
+                    className="w-full bg-white hover:bg-neutral-50 text-[#171717] py-3 px-4 font-semibold text-xs rounded-xl border border-neutral-300 flex items-center justify-center gap-2.5 transition-all shadow-xs cursor-pointer active:scale-[0.99] disabled:opacity-50"
+                  >
+                    {googleLoading ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin text-[#285844]" />
+                        <span>Menghubungkan ke Google...</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
+                          <path fill="#EA4335" d="M12 5c1.6 0 3 .6 4.1 1.6l3.1-3.1C17.3 1.8 14.8 1 12 1 7.5 1 3.7 3.6 1.9 7.4l3.7 2.9C6.5 7.4 9 5 12 5z" />
+                          <path fill="#4285F4" d="M23.5 12.3c0-.8-.1-1.6-.2-2.3H12v4.5h6.5c-.3 1.5-1.1 2.8-2.4 3.7l3.7 2.9c2.2-2 3.7-5 3.7-8.8z" />
+                          <path fill="#FBBC05" d="M5.6 14.7c-.2-.7-.4-1.5-.4-2.7s.2-2 .4-2.7L1.9 6.4C.7 8.8 0 10.3 0 12s.7 3.2 1.9 5.6l3.7-2.9z" />
+                          <path fill="#34A853" d="M12 23c3.2 0 6-1.1 8-3l-3.7-2.9c-1.1.7-2.5 1.2-4.3 1.2-3 0-5.5-2-6.4-4.8L1.9 16.4C3.7 20.4 7.5 23 12 23z" />
+                        </svg>
+                        <span>
+                          {authMode === 'login' ? 'Masuk Cepat dengan Google' : 'Daftar 1-Klik dengan Google'}
+                        </span>
+                      </>
+                    )}
+                  </button>
                 )}
-              </button>
+              </div>
 
               {/* Minimal Divider */}
               <div className="relative my-4 text-center">
