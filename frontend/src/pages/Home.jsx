@@ -255,7 +255,7 @@ export default function Home() {
           <div className="hidden md:flex items-center gap-7 text-sm font-medium text-neutral-600">
             <a href="#fitur" className="hover:text-[#171717] transition-colors">Fitur</a>
             <a href="#cara-kerja" className="hover:text-[#171717] transition-colors">Cara Kerja</a>
-            <a href="#untuk-barber" className="hover:text-[#171717] transition-colors">Untuk Barber</a>
+            <a href="#untuk-barber" className="hover:text-[#171717] transition-colors">Capster & Barber</a>
             <a href="#harga" className="hover:text-[#171717] transition-colors">Harga</a>
             <a href="#faq" className="hover:text-[#171717] transition-colors">FAQ</a>
           </div>
@@ -314,7 +314,7 @@ export default function Home() {
             <div className="flex flex-col gap-3 font-medium text-base text-neutral-800">
               <a href="#fitur" onClick={() => setMobileMenuOpen(false)} className="py-1">Fitur</a>
               <a href="#cara-kerja" onClick={() => setMobileMenuOpen(false)} className="py-1">Cara Kerja</a>
-              <a href="#untuk-barber" onClick={() => setMobileMenuOpen(false)} className="py-1">Untuk Barber</a>
+              <a href="#untuk-barber" onClick={() => setMobileMenuOpen(false)} className="py-1">Capster & Barber</a>
               <a href="#harga" onClick={() => setMobileMenuOpen(false)} className="py-1">Harga</a>
               <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="py-1">FAQ</a>
             </div>
@@ -1182,7 +1182,7 @@ export default function Home() {
           </div>
 
           <div className="flex items-center gap-3">
-            <span>Dibuat untuk barber Indonesia</span>
+            <span>Dibuat untuk Barber & Capster Indonesia</span>
             <button
               type="button"
               onClick={() => navigate('/internal')}

@@ -155,7 +155,7 @@ export default function Login({ defaultTab = 'login' }) {
 
         <div className="flex items-center gap-2 text-xs">
           <span className="text-neutral-500 hidden sm:inline">
-            {authMode === 'login' ? 'Belum punya akun barber?' : 'Sudah terdaftar?'}
+            {authMode === 'login' ? 'Belum punya akun studio?' : 'Sudah terdaftar?'}
           </span>
           <button
             type="button"
@@ -182,12 +182,12 @@ export default function Login({ defaultTab = 'login' }) {
               {/* Form Header */}
               <div className="pb-5 mb-5 border-b border-neutral-100">
                 <h1 className="font-display font-bold text-xl text-[#171717] tracking-tight">
-                  {authMode === 'login' ? 'Masuk ke Studio Barber' : 'Buat Link Bio Barber'}
+                  {authMode === 'login' ? 'Masuk ke Studio Capster & Barber' : 'Buat Link Bio Capster & Barber'}
                 </h1>
                 <p className="text-xs text-neutral-500 mt-1">
                   {authMode === 'login' 
-                    ? 'Kelola jadwal, profil bio link, dan booking masuk bisnismu' 
-                    : 'Dapatkan 1 link untuk seluruh info tarif, harga, dan portofoliomu'}
+                    ? 'Kelola jadwal, profil bio link, dan antrean booking bisnismu' 
+                    : 'Dapatkan 1 link untuk seluruh info tarif, portofolio, dan jadwalmu'}
                 </p>
               </div>
 
@@ -285,7 +285,7 @@ export default function Login({ defaultTab = 'login' }) {
                         <span>Memverifikasi...</span>
                       </>
                     ) : (
-                      <span>Masuk ke Creator Studio</span>
+                      <span>Masuk ke Dashboard Studio</span>
                     )}
                   </button>
                 </form>
@@ -296,14 +296,14 @@ export default function Login({ defaultTab = 'login' }) {
                 <form onSubmit={handleBarberRegister} className="space-y-3">
                   <div>
                     <label className="text-xs font-medium text-neutral-700 block mb-1">
-                      Nama Barber atau Studio
+                      Nama Usaha, Capster, atau Barbershop
                     </label>
                     <input 
                       type="text"
                       required
                       value={regName}
                       onChange={handleNameChange}
-                      placeholder="e.g. Reza Fade / Studio Galaxy"
+                      placeholder="e.g. Reza Fade / Studio Galaxy / Asgar Putra"
                       className="w-full text-xs font-normal px-3 py-2.5 bg-white border border-neutral-200 rounded-lg outline-none focus:border-[#171717] focus:ring-1 focus:ring-[#171717] text-[#171717] transition-all"
                     />
                   </div>
@@ -398,7 +398,7 @@ export default function Login({ defaultTab = 'login' }) {
 
       {/* Minimal Footer */}
       <footer className="w-full max-w-6xl mx-auto px-6 py-4 text-center text-[11px] text-neutral-400">
-        © {CURRENT_YEAR} E-Cukur Indonesia • Platform Link-in-Bio Khusus Barber & Capster
+        © {CURRENT_YEAR} E-Cukur Indonesia • Platform Link-in-Bio Khusus Barber, Capster & Pangkas Rambut
       </footer>
 
     </div>
