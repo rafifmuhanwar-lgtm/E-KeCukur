@@ -123,65 +123,70 @@ DECLARE
   v_slug text;
   v_photo text;
 BEGIN
-  -- Ambil nama dari metadata email atau Google OAuth
-  v_name := COALESCE(
-    new.raw_user_meta_data->>'name',
-    new.raw_user_meta_data->>'full_name',
-    split_part(new.email, '@', 1)
-  );
-  v_phone := COALESCE(new.raw_user_meta_data->>'phone', '');
-  v_role := COALESCE(new.raw_user_meta_data->>'role', 'barber');
-  
-  -- Buat slug bio unik
-  v_slug := COALESCE(
-    new.raw_user_meta_data->>'slug',
-    LOWER(REGEXP_REPLACE(v_name, '[^a-zA-Z0-9]', '', 'g'))
-  );
-  IF v_slug IS NULL OR v_slug = '' THEN
-    v_slug := 'barber-' || SUBSTRING(new.id::text, 1, 6);
-  END IF;
+  BEGIN
+    -- Ambil nama dari metadata email atau Google OAuth
+    v_name := COALESCE(
+      new.raw_user_meta_data->>'name',
+      new.raw_user_meta_data->>'full_name',
+      split_part(new.email, '@', 1)
+    );
+    v_phone := COALESCE(new.raw_user_meta_data->>'phone', '');
+    v_role := COALESCE(new.raw_user_meta_data->>'role', 'barber');
+    
+    -- Buat slug bio unik
+    v_slug := COALESCE(
+      new.raw_user_meta_data->>'slug',
+      LOWER(REGEXP_REPLACE(v_name, '[^a-zA-Z0-9]', '', 'g'))
+    );
+    IF v_slug IS NULL OR v_slug = '' THEN
+      v_slug := 'barber-' || SUBSTRING(new.id::text, 1, 6);
+    END IF;
 
-  -- Jika slug sudah dipakai oleh barber lain, tambahkan akhiran unik
-  IF EXISTS (SELECT 1 FROM public.barbers WHERE slug = v_slug AND email <> new.email) THEN
-    v_slug := v_slug || '-' || SUBSTRING(new.id::text, 1, 4);
-  END IF;
+    -- Jika slug sudah dipakai oleh barber lain, tambahkan akhiran unik
+    IF EXISTS (SELECT 1 FROM public.barbers WHERE slug = v_slug AND email <> new.email) THEN
+      v_slug := v_slug || '-' || SUBSTRING(new.id::text, 1, 4);
+    END IF;
 
-  v_photo := COALESCE(
-    new.raw_user_meta_data->>'avatar_url',
-    new.raw_user_meta_data->>'picture',
-    ''
-  );
+    v_photo := COALESCE(
+      new.raw_user_meta_data->>'avatar_url',
+      new.raw_user_meta_data->>'picture',
+      ''
+    );
 
-  -- Insert / Update ke tabel users
-  INSERT INTO public.users (id, email, name, role, phone)
-  VALUES (new.id, new.email, v_name, UPPER(v_role), v_phone)
-  ON CONFLICT (email) DO UPDATE SET 
-    id = new.id,
-    name = COALESCE(public.users.name, v_name);
-
-  -- Insert / Update ke tabel barbers jika role = barber (semua bio, specialty, alamat KOSONG / POLOS)
-  IF LOWER(v_role) = 'barber' THEN
-    INSERT INTO public.barbers (
-      user_id, name, email, phone, whatsapp, slug, specialty, bio, profile_photo, availability_status, account_status
-    )
-    VALUES (
-      new.id,
-      v_name,
-      new.email,
-      v_phone,
-      v_phone,
-      v_slug,
-      '',
-      '',
-      v_photo,
-      'AVAILABLE',
-      'ACTIVE'
-    )
+    -- Insert / Update ke tabel users
+    INSERT INTO public.users (id, email, name, role, phone)
+    VALUES (new.id, new.email, v_name, UPPER(v_role), v_phone)
     ON CONFLICT (email) DO UPDATE SET 
-      user_id = new.id, 
-      slug = COALESCE(public.barbers.slug, v_slug),
-      profile_photo = COALESCE(public.barbers.profile_photo, v_photo);
-  END IF;
+      name = COALESCE(public.users.name, v_name),
+      phone = COALESCE(public.users.phone, v_phone);
+
+    -- Insert / Update ke tabel barbers jika role = barber
+    IF LOWER(v_role) = 'barber' THEN
+      INSERT INTO public.barbers (
+        user_id, name, email, phone, whatsapp, slug, specialty, bio, profile_photo, availability_status, account_status
+      )
+      VALUES (
+        new.id,
+        v_name,
+        new.email,
+        v_phone,
+        v_phone,
+        v_slug,
+        '',
+        '',
+        v_photo,
+        'AVAILABLE',
+        'ACTIVE'
+      )
+      ON CONFLICT (email) DO UPDATE SET 
+        user_id = new.id, 
+        slug = COALESCE(public.barbers.slug, v_slug),
+        profile_photo = COALESCE(public.barbers.profile_photo, v_photo);
+    END IF;
+
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'handle_new_auth_user warning: %', SQLERRM;
+  END;
 
   RETURN new;
 END;
