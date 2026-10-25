@@ -515,7 +515,8 @@ export const useStore = create((set, get) => ({
     }
 
     try {
-      const cleanSlug = (slug || name.toLowerCase().replace(/[^a-zA-Z0-9]/g, ''));
+      const barberName = name || slug || email.split('@')[0];
+      const cleanSlug = (slug || barberName.toLowerCase().replace(/[^a-zA-Z0-9]/g, ''));
       
       // 1. Sign up di Supabase Auth
       const { data, error } = await supabase.auth.signUp({
@@ -523,7 +524,7 @@ export const useStore = create((set, get) => ({
         password,
         options: {
           data: {
-            name,
+            name: barberName,
             phone,
             slug: cleanSlug,
             role: 'barber'
@@ -536,39 +537,38 @@ export const useStore = create((set, get) => ({
       const user = data.user;
       if (!user) throw new Error('Pendaftaran tidak mengembalikan data user.');
 
-      // 2. Insert ke tabel barbers Supabase langsung
-      try {
-        const { data: newBarberRow, error: barberInsertError } = await supabase
-          .from('barbers')
-          .insert({
-            user_id: user.id,
-            name,
-            email,
-            phone,
-            whatsapp: phone,
-            slug: cleanSlug,
-            specialty: '',
-            bio: '',
-            availability_status: 'AVAILABLE',
-            account_status: 'ACTIVE'
-          })
-          .select()
-          .single();
-
-        if (!barberInsertError && newBarberRow) {
-          const mapped = mapSupabaseBarber(newBarberRow, get().services);
-          set((state) => ({
-            barbers: [mapped, ...state.barbers],
-            activeBarber: mapped,
-            activeBarberId: mapped.id
-          }));
-        }
-      } catch (insertErr) {
-        console.warn('Notice inserting barber row:', insertErr.message);
-      }
-
-      // Update state auth
+      // 2. Insert ke tabel barbers Supabase langsung jika session langsung terbentuk
       if (data.session) {
+        try {
+          const { data: newBarberRow, error: barberInsertError } = await supabase
+            .from('barbers')
+            .insert({
+              user_id: user.id,
+              name: barberName,
+              email,
+              phone,
+              whatsapp: phone,
+              slug: cleanSlug,
+              specialty: '',
+              bio: '',
+              availability_status: 'AVAILABLE',
+              account_status: 'ACTIVE'
+            })
+            .select()
+            .single();
+
+          if (!barberInsertError && newBarberRow) {
+            const mapped = mapSupabaseBarber(newBarberRow, get().services);
+            set((state) => ({
+              barbers: [mapped, ...state.barbers],
+              activeBarber: mapped,
+              activeBarberId: mapped.id
+            }));
+          }
+        } catch (insertErr) {
+          console.warn('Notice inserting barber row:', insertErr.message);
+        }
+
         set({ authUser: user });
       }
 
@@ -579,6 +579,120 @@ export const useStore = create((set, get) => ({
       };
     } catch (err) {
       return { success: false, error: err.message };
+    }
+  },
+
+  verifyOtpBarber: async ({ email, token, slug, phone }) => {
+    if (!isSupabaseConfigured) {
+      return { success: false, error: 'Koneksi Supabase belum terkonfigurasi.' };
+    }
+
+    try {
+      let { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: token.trim(),
+        type: 'signup'
+      });
+
+      // Jika verify dengan 'signup' gagal, coba dengan 'email'
+      if (error) {
+        const retry = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: token.trim(),
+          type: 'email'
+        });
+        if (!retry.error) {
+          data = retry.data;
+          error = null;
+        }
+      }
+
+      if (error) throw error;
+
+      const user = data?.user;
+      if (user) {
+        set({ authUser: user });
+
+        // Pastikan record di barbers ada
+        try {
+          const { data: existingBarber } = await supabase
+            .from('barbers')
+            .select('*')
+            .eq('user_id', user.id)
+            .maybeSingle();
+
+          if (!existingBarber) {
+            const barberName = user.user_metadata?.name || slug || email.split('@')[0];
+            const cleanSlug = slug || user.user_metadata?.slug || barberName.toLowerCase().replace(/[^a-zA-Z0-9]/g, '');
+            const barberPhone = phone || user.user_metadata?.phone || '';
+
+            const { data: newRow } = await supabase
+              .from('barbers')
+              .insert({
+                user_id: user.id,
+                name: barberName,
+                email: user.email,
+                phone: barberPhone,
+                whatsapp: barberPhone,
+                slug: cleanSlug,
+                availability_status: 'AVAILABLE',
+                account_status: 'ACTIVE'
+              })
+              .select()
+              .single();
+
+            if (newRow) {
+              const mapped = mapSupabaseBarber(newRow, get().services);
+              set((state) => ({
+                barbers: [mapped, ...state.barbers],
+                activeBarber: mapped,
+                activeBarberId: mapped.id
+              }));
+            }
+          } else {
+            const mapped = mapSupabaseBarber(existingBarber, get().services);
+            set((state) => ({
+              activeBarber: mapped,
+              activeBarberId: mapped.id
+            }));
+          }
+        } catch (dbErr) {
+          console.warn('Sync barber post-OTP error:', dbErr?.message);
+        }
+
+        await get().fetchBarbersFromSupabase();
+      }
+
+      return { success: true, session: data?.session, user };
+    } catch (err) {
+      return { 
+        success: false, 
+        error: err.message === 'Token has expired or is invalid' 
+          ? 'Kode OTP salah atau sudah kedaluwarsa. Silakan periksa kembali atau kirim ulang kode baru.'
+          : err.message || 'Gagal memverifikasi kode OTP.' 
+      };
+    }
+  },
+
+  resendOtp: async (email) => {
+    if (!isSupabaseConfigured) {
+      return { success: false, error: 'Koneksi Supabase belum terkonfigurasi.' };
+    }
+    try {
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: email.trim()
+      });
+      if (error) {
+        const retry = await supabase.auth.resend({
+          type: 'email',
+          email: email.trim()
+        });
+        if (retry.error) throw retry.error;
+      }
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message || 'Gagal mengirim ulang kode OTP.' };
     }
   },
 
