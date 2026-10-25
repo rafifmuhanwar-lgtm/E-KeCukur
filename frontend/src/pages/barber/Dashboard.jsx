@@ -42,6 +42,7 @@ import Logo from '../../components/Logo';
 import BarberBioLink from '../customer/BarberBioLink';
 import { compressImage } from '../../lib/imageUploader';
 import { getAppDomain } from '../../lib/domain';
+import { isSupabaseConfigured } from '../../lib/supabase';
 
 const computeWeeklyChartData = (bookingsList) => {
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -94,6 +95,9 @@ export default function BarberDashboard() {
   const subscribeToBookings = useStore((state) => state.subscribeToBookings);
   const signOutUser = useStore((state) => state.signOutUser);
   const activeBarber = useStore((state) => state.activeBarber);
+  const authUser = useStore((state) => state.authUser);
+  const isLoading = useStore((state) => state.isLoading);
+  const matchActiveBarber = useStore((state) => state.matchActiveBarber);
 
   // File upload state & ref
   const fileInputRef = useRef(null);
@@ -112,6 +116,17 @@ export default function BarberDashboard() {
   const querySlug = (searchParams.get('slug') || searchParams.get('id') || '').toLowerCase().trim();
   const queryTab = searchParams.get('tab');
 
+  // Auth Protection: Jika belum login, redirect ke /login
+  useEffect(() => {
+    if (!isLoading && !authUser && isSupabaseConfigured) {
+      navigate('/login');
+      return;
+    }
+    if (authUser) {
+      matchActiveBarber(authUser);
+    }
+  }, [authUser, isLoading, matchActiveBarber, navigate]);
+
   // Match barber by query parameter (e.g. ?slug=ojean)
   useEffect(() => {
     if (querySlug && barbers.length > 0) {
@@ -126,13 +141,18 @@ export default function BarberDashboard() {
     }
   }, [querySlug, barbers, activeBarber, setActiveBarberId]);
 
-  // Active Barber Data (dari query param, sesi login nyata atau database)
+  // Active Barber Data: Utamakan query slug -> profil user yang sedang login -> activeBarber
   const queryMatchedBarber = querySlug ? barbers.find((b) => 
     (b.slug && b.slug.toLowerCase() === querySlug) || 
     (b.id && b.id.toLowerCase() === querySlug) ||
     (b.name && b.name.toLowerCase() === querySlug)
   ) : null;
-  const barber = queryMatchedBarber || activeBarber || barbers.find((b) => b.id === activeBarberId || b.slug === activeBarberId) || barbers[0];
+
+  const userMatchedBarber = authUser ? barbers.find((b) => 
+    b.user_id === authUser.id || b.email?.toLowerCase() === authUser.email?.toLowerCase()
+  ) : null;
+
+  const barber = queryMatchedBarber || userMatchedBarber || activeBarber;
 
   // Sync Supabase Bookings on mount & setup realtime subscription
   useEffect(() => {
@@ -1240,16 +1260,18 @@ export default function BarberDashboard() {
                           <span>{isUploadingPhoto ? 'Mengupload...' : 'Pilih Foto Baru'}</span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            handleProfileFieldChange('photo', 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?q=80&w=1000');
-                            showToast('Foto direset');
-                          }}
-                          className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 text-xs font-medium rounded-lg transition-colors cursor-pointer"
-                        >
-                          Reset
-                        </button>
+                        {barber.photo && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleProfileFieldChange('photo', '');
+                              showToast('Foto profil berhasil dihapus');
+                            }}
+                            className="px-3 py-2 bg-neutral-100 hover:bg-red-50 hover:text-red-600 text-neutral-600 text-xs font-medium rounded-lg transition-colors cursor-pointer"
+                          >
+                            Hapus Foto
+                          </button>
+                        )}
                       </div>
 
                       <div className="flex flex-col gap-1.5">

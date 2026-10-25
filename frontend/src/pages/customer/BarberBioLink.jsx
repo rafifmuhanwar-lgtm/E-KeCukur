@@ -22,7 +22,8 @@ import {
   Grid,
   List,
   MessageSquare,
-  Send
+  Send,
+  Camera
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
@@ -984,9 +985,22 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   }
                 ];
 
-                const posts = (barber.lookbook && barber.lookbook.length > 0)
+                const isDemoBarber = barber?.slug === 'reza' || barber?.slug === 'demo';
+                const posts = (Array.isArray(barber?.lookbook) && barber.lookbook.length > 0)
                   ? barber.lookbook
-                  : sampleFeedPosts;
+                  : (isDemoBarber ? sampleFeedPosts : []);
+
+                if (posts.length === 0) {
+                  return (
+                    <div className="py-12 px-4 text-center rounded-2xl bg-neutral-50/70 border border-neutral-200/80">
+                      <Camera className="w-8 h-8 text-neutral-400 mx-auto mb-2 opacity-50" />
+                      <p className="text-xs font-semibold text-neutral-700">Belum Ada Postingan Feed</p>
+                      <p className="text-[11px] text-neutral-400 mt-1 max-w-xs mx-auto">
+                        Capster ini belum mengunggah foto portofolio atau suasana studio.
+                      </p>
+                    </div>
+                  );
+                }
 
                 return lookbookViewMode === 'grid' ? (
                   /* ─── 3-COLUMN UNCROPPED GRID ─── */

@@ -144,7 +144,7 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
     }
   };
 
-  // Merge dengan local cache jika kolom database baru belum ditambahkan
+  // Merge dengan local cache jika kolom database baru belum ditambahkan (khusus config tampilan)
   try {
     if (typeof localStorage !== 'undefined') {
       const cachedStr = localStorage.getItem(`ecukur_barber_cache_${row.id}`) || localStorage.getItem(`ecukur_barber_cache_${slug}`);
@@ -153,14 +153,6 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
         if (!row.features && cached.features) barberObj.features = cached.features;
         if (!row.tipping_config && cached.tippingConfig) barberObj.tippingConfig = cached.tippingConfig;
         if (row.tip_balance === undefined && cached.tipBalance !== undefined) barberObj.tipBalance = cached.tipBalance;
-        if (!row.withdrawals_history && Array.isArray(cached.withdrawalsHistory)) barberObj.withdrawalsHistory = cached.withdrawalsHistory;
-        if (!row.tips_history && Array.isArray(cached.tipsHistory)) barberObj.tipsHistory = cached.tipsHistory;
-        if (!row.payout_account && cached.payoutAccount) barberObj.payoutAccount = cached.payoutAccount;
-        if ((!row.lookbook || row.lookbook.length === 0) && Array.isArray(cached.lookbook)) barberObj.lookbook = cached.lookbook;
-        if ((!row.custom_links || row.custom_links.length === 0) && Array.isArray(cached.customLinks)) barberObj.customLinks = cached.customLinks;
-        if ((!row.team_members || row.team_members.length === 0) && Array.isArray(cached.teamMembers)) barberObj.teamMembers = cached.teamMembers;
-        if (!row.banner_image && cached.bannerImage) barberObj.bannerImage = cached.bannerImage;
-        if (!row.location_city && cached.locationCity) barberObj.locationCity = cached.locationCity;
       }
     }
   } catch {}
@@ -435,14 +427,10 @@ export const useStore = create((set, get) => ({
         
         set({ barbers: mappedBarbers });
 
-        // Set active barber jika belum ada
-        const currentActive = get().activeBarber;
+        // Set active barber hanya jika user sedang login
         const authUser = get().authUser;
-
         if (authUser) {
           get().matchActiveBarber(authUser);
-        } else if (!currentActive && mappedBarbers.length > 0) {
-          set({ activeBarber: mappedBarbers[0], activeBarberId: mappedBarbers[0].id });
         }
       }
     } catch (err) {
