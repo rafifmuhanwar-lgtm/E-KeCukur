@@ -1,14 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { 
   ArrowRight, 
   CheckCircle2, 
   AlertCircle, 
-  RefreshCw,
-  Mail,
-  ArrowLeft,
-  KeyRound,
-  ShieldCheck,
+  RefreshCw, 
+  Mail, 
+  ArrowLeft 
 } from 'lucide-react';
 import { useStore } from '../store';
 import { supabase, isSupabaseConfigured } from '../lib/supabase';
@@ -202,14 +200,14 @@ export default function Login({ defaultTab = 'login' }) {
   const [gisLoaded, setGisLoaded] = useState(false);
 
   // Handle direct Google ID Token (No supabase URL shown)
-  const handleCredentialResponse = async (response) => {
+  const handleCredentialResponse = useCallback(async (response) => {
     setGoogleLoading(true);
     setErrorMsg('');
     try {
       if (!response?.credential) {
         throw new Error('Tidak ada token kredensial Google yang diterima.');
       }
-      const { data, error } = await supabase.auth.signInWithIdToken({
+      const { error } = await supabase.auth.signInWithIdToken({
         provider: 'google',
         token: response.credential,
       });
@@ -219,7 +217,7 @@ export default function Login({ defaultTab = 'login' }) {
       setGoogleLoading(false);
       setErrorMsg(err.message || 'Gagal login melalui Google ID Token.');
     }
-  };
+  }, [navigate]);
 
   useEffect(() => {
     const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '239781382181-sk41bl7t8ovgl98e04j13tsj0crevnqi.apps.googleusercontent.com').trim();
@@ -262,7 +260,7 @@ export default function Login({ defaultTab = 'login' }) {
       }, 300);
       return () => clearInterval(interval);
     }
-  }, [authMode]);
+  }, [authMode, handleCredentialResponse]);
 
   // Fallback OAuth Login / Register if GIS script is blocked
   const handleGoogleLogin = async () => {

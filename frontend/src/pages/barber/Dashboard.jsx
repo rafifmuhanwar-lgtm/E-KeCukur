@@ -69,7 +69,6 @@ export default function BarberDashboard() {
 
   // Zustand state
   const barbers = useStore((state) => state.barbers);
-  const activeBarberId = useStore((state) => state.activeBarberId);
   const setActiveBarberId = useStore((state) => state.setActiveBarberId);
   const updateBarber = useStore((state) => state.updateBarber);
   const addBarberService = useStore((state) => state.addBarberService);

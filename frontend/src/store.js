@@ -639,10 +639,10 @@ export const useStore = create((set, get) => ({
             }
           } else {
             const mapped = mapSupabaseBarber(existingBarber, get().services);
-            set((state) => ({
+            set({
               activeBarber: mapped,
               activeBarberId: mapped.id
-            }));
+            });
           }
         } catch (dbErr) {
           console.warn('Sync barber post-OTP error:', dbErr?.message);
@@ -1163,7 +1163,7 @@ export const useStore = create((set, get) => ({
     });
 
     if (updatedLookbook) {
-      get().updateBarberProfile(barberId, { lookbook: updatedLookbook });
+      get().syncBarberToSupabase(barberId);
     }
   },
 
