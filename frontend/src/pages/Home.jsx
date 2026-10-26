@@ -316,11 +316,9 @@ export default function Home() {
             <button
               type="button"
               onClick={() => {
-                headerVisibleRef.current = true;
-                setHeaderVisible(true);
                 setMobileMenuOpen(!mobileMenuOpen);
               }}
-              className={`md:hidden w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${
+              className={`md:hidden w-10 h-10 flex items-center justify-center rounded-xl active:scale-90 transition-transform duration-75 cursor-pointer ${
                 mobileMenuOpen 
                   ? 'bg-neutral-200 text-black border border-neutral-300' 
                   : 'text-neutral-700 hover:text-black hover:bg-neutral-100'
@@ -333,21 +331,21 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Mobile Drawer Menu attached inside sticky nav */}
+        {/* Mobile Drawer Menu attached inside sticky nav with GPU acceleration */}
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              transition={{ duration: 0.25, ease: 'easeInOut' }}
-              className="md:hidden border-t border-neutral-200/90 bg-[#F7F6F2]/98 backdrop-blur-xl px-5 py-4 space-y-4 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto"
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.15, ease: 'easeOut' }}
+              className="md:hidden border-t border-neutral-200/90 bg-[#F7F6F2] px-5 py-4 space-y-4 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto transform-gpu will-change-transform"
             >
               <div className="flex flex-col gap-1 text-sm font-semibold text-neutral-800">
                 <a 
                   href="#fitur" 
                   onClick={(e) => handleNavClick(e, 'fitur')} 
-                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 active:scale-98 transition-all flex items-center justify-between"
                 >
                   <span>Fitur</span>
                   <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
@@ -355,7 +353,7 @@ export default function Home() {
                 <a 
                   href="#cara-kerja" 
                   onClick={(e) => handleNavClick(e, 'cara-kerja')} 
-                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 active:scale-98 transition-all flex items-center justify-between"
                 >
                   <span>Cara Kerja</span>
                   <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
@@ -363,7 +361,7 @@ export default function Home() {
                 <a 
                   href="#untuk-barber" 
                   onClick={(e) => handleNavClick(e, 'untuk-barber')} 
-                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 active:scale-98 transition-all flex items-center justify-between"
                 >
                   <span>Capster & Barber</span>
                   <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
@@ -371,7 +369,7 @@ export default function Home() {
                 <a 
                   href="#harga" 
                   onClick={(e) => handleNavClick(e, 'harga')} 
-                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 active:scale-98 transition-all flex items-center justify-between"
                 >
                   <span>Harga</span>
                   <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
@@ -379,7 +377,7 @@ export default function Home() {
                 <a 
                   href="#faq" 
                   onClick={(e) => handleNavClick(e, 'faq')} 
-                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 active:scale-98 transition-all flex items-center justify-between"
                 >
                   <span>FAQ</span>
                   <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
@@ -422,15 +420,16 @@ export default function Home() {
         </AnimatePresence>
       </motion.nav>
 
-      {/* Backdrop overlay when mobile menu is open */}
+      {/* Lightweight GPU backdrop overlay */}
       <AnimatePresence>
         {mobileMenuOpen && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
             onClick={() => setMobileMenuOpen(false)}
-            className="md:hidden fixed inset-0 bg-black/35 backdrop-blur-xs z-40"
+            className="md:hidden fixed inset-0 bg-black/40 z-40 transform-gpu"
           />
         )}
       </AnimatePresence>

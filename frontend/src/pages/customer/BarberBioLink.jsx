@@ -726,7 +726,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                         <button
                           type="button"
                           onClick={() => setActiveTab(tab.id)}
-                          className={`flex-1 py-2 sm:py-2.5 px-2 rounded-xl font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                          className={`flex-1 py-2 sm:py-2.5 px-2 rounded-xl font-bold active:scale-95 transition-all duration-75 flex items-center justify-center gap-1.5 cursor-pointer select-none ${
                             isActive 
                               ? 'bg-[#285844] text-white shadow-xs' 
                               : 'text-neutral-500 hover:text-neutral-800'
@@ -751,7 +751,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
           {/* TAB 1: SERVICES & PRICING */}
           {activeTab === 'services' && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-2 transform-gpu will-change-transform">
               
               <div className="flex items-center justify-between px-1 mb-1">
                 <span className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} font-mono font-bold uppercase tracking-wider ${theme.textSecondary}`}>
@@ -828,7 +828,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
           {/* TAB: TIM CAPSTER (JIKA FITUR TEAM DIAKTIFKAN) */}
           {activeTab === 'team' && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-3 transform-gpu will-change-transform">
               <div className="flex items-center justify-between px-1 mb-1">
                 <span className={`text-[11px] font-mono font-bold uppercase tracking-wider ${theme.textSecondary}`}>
                   Tim Capster Bertugas
@@ -889,7 +889,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
           {/* TAB 2: FEED PORTOFOLIO / BEBAS POSTING */}
           {activeTab === 'lookbook' && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-3">
+            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-3 transform-gpu will-change-transform">
               
               {/* Header Info */}
               <div className="flex items-center justify-between px-1">
@@ -912,7 +912,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   <button
                     type="button"
                     onClick={() => setLookbookViewMode('grid')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all duration-75 cursor-pointer select-none ${
                       lookbookViewMode === 'grid' 
                         ? 'bg-white shadow-2xs text-neutral-900' 
                         : 'text-neutral-400 hover:text-neutral-700'
@@ -925,7 +925,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   <button
                     type="button"
                     onClick={() => setLookbookViewMode('feed')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all cursor-pointer ${
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all duration-75 cursor-pointer select-none ${
                       lookbookViewMode === 'feed' 
                         ? 'bg-white shadow-2xs text-neutral-900' 
                         : 'text-neutral-400 hover:text-neutral-700'
@@ -1204,7 +1204,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
           {/* TAB 3: TIPPING / TRAKTIR KOPI */}
           {activeTab === 'tipping' && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`${isPreview ? 'p-3.5 rounded-xl' : 'p-6 rounded-2xl'} border text-center shadow-xs ${theme.cardBg} ${theme.cardBorder}`}>
+            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className={`transform-gpu will-change-transform ${isPreview ? 'p-3.5 rounded-xl' : 'p-6 rounded-2xl'} border text-center shadow-xs ${theme.cardBg} ${theme.cardBorder}`}>
               <div className={`${isPreview ? 'w-9 h-9 rounded-xl mb-1.5' : 'w-12 h-12 rounded-2xl mb-3'} bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-600`}>
                 <Coffee className={`${isPreview ? 'w-4 h-4' : 'w-6 h-6'}`} />
               </div>
@@ -1256,7 +1256,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
           {/* TAB 4: LOCATION & OPERATIONAL INFO */}
           {activeTab === 'info' && (
-            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-2.5">
+            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-2.5 transform-gpu will-change-transform">
               <div className={`${isPreview ? 'p-2.5 rounded-xl' : 'p-4 rounded-2xl'} border shadow-2xs ${theme.cardBg} ${theme.cardBorder}`}>
                 <span className={`font-display font-bold ${isPreview ? 'text-[11px]' : 'text-xs'} block mb-0.5`}>📍 Alamat Studio:</span>
                 <p className={`${isPreview ? 'text-[10px]' : 'text-xs'} leading-relaxed ${theme.textSecondary}`}>
