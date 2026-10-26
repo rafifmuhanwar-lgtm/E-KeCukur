@@ -9,7 +9,6 @@ import {
   ChevronDown, 
   Menu, 
   X, 
-  Lock, 
   ArrowRight,
   Calendar,
   BarChart2,
@@ -1251,19 +1250,9 @@ export default function Home() {
 
           <div className="md:col-span-3 space-y-2">
             <h4 className="font-mono uppercase font-bold text-[11px] text-neutral-400 tracking-wider">Akses Akun</h4>
-            <ul className="space-y-2 text-neutral-300">
+            <ul className="space-y-1.5 text-neutral-300">
               <li><a href="/login" className="hover:text-white transition-colors">Masuk ke Akun Barber</a></li>
               <li><a href="/customer/barbers" className="hover:text-white transition-colors">Cari Barber Sekitar</a></li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => navigate('/internal')}
-                  className="text-neutral-400 hover:text-white transition-colors inline-flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Lock className="w-3.5 h-3.5 text-neutral-500" />
-                  <span>Portal Kasir & Staff Studio</span>
-                </button>
-              </li>
             </ul>
           </div>
 

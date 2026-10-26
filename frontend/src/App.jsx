@@ -1,14 +1,11 @@
 import React, { useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import Login from './pages/Login';
 import CustomerBarbers from './pages/customer/Barbers';
 import CustomerBookings from './pages/customer/Bookings';
 import BookingFlow from './pages/customer/BookingFlow';
-import StaffDashboard from './pages/staff/Dashboard';
 import BarberDashboard from './pages/barber/Dashboard';
-
-import InternalLogin from './pages/InternalLogin';
 import BarberBioLink from './pages/customer/BarberBioLink';
 import { useStore } from './store';
 
@@ -27,7 +24,7 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Login defaultTab="register" />} />
         <Route path="/daftar" element={<Login defaultTab="register" />} />
-        <Route path="/internal" element={<InternalLogin />} />
+        <Route path="/internal" element={<Navigate to="/login" replace />} />
 
         {/* Customer Routes */}
         <Route path="/customer/barbers" element={<CustomerBarbers />} />
@@ -35,8 +32,8 @@ export default function App() {
         <Route path="/booking" element={<BookingFlow />} />
         <Route path="/customer/bookings" element={<CustomerBookings />} />
         
-        {/* Staff Routes */}
-        <Route path="/staff/dashboard" element={<StaffDashboard />} />
+        {/* Legacy staff route redirects to Barber Studio Dashboard */}
+        <Route path="/staff/dashboard" element={<Navigate to="/barber/dashboard" replace />} />
         
         {/* Barber Creator Studio Dashboard */}
         <Route path="/barber/dashboard" element={<BarberDashboard />} />
