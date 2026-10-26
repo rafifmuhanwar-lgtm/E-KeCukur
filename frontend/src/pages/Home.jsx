@@ -41,6 +41,29 @@ export default function Home() {
   const [headerVisible, setHeaderVisible] = useState(true);
   const headerVisibleRef = useRef(true);
 
+  // Lock body scroll when mobile menu is open
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      const originalOverflow = document.body.style.overflow;
+      document.body.style.overflow = 'hidden';
+      return () => {
+        document.body.style.overflow = originalOverflow;
+      };
+    }
+  }, [mobileMenuOpen]);
+
+  // Smooth scroll handler for anchor links
+  const handleNavClick = (e, targetId) => {
+    e.preventDefault();
+    setMobileMenuOpen(false);
+    const element = document.getElementById(targetId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const isHeaderShown = headerVisible || mobileMenuOpen;
+
   useEffect(() => {
     if (mobileMenuOpen) {
       return undefined;
@@ -240,11 +263,11 @@ export default function Home() {
       <motion.nav
         initial={false}
         animate={{
-          y: headerVisible ? '0%' : '-110%',
-          opacity: headerVisible ? 1 : 0,
+          y: isHeaderShown ? '0%' : '-110%',
+          opacity: isHeaderShown ? 1 : 0,
         }}
-        transition={{ type: 'tween', duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
-        className="sticky top-0 z-40 bg-[#F7F6F2]/90 backdrop-blur-md border-b border-neutral-200/80"
+        transition={{ type: 'tween', duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+        className="sticky top-0 z-50 bg-[#F7F6F2]/95 backdrop-blur-md border-b border-neutral-200/80"
       >
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
           
@@ -255,11 +278,11 @@ export default function Home() {
 
           {/* Desktop Nav Links */}
           <div className="hidden md:flex items-center gap-7 text-sm font-medium text-neutral-600">
-            <a href="#fitur" className="hover:text-[#171717] transition-colors">Fitur</a>
-            <a href="#cara-kerja" className="hover:text-[#171717] transition-colors">Cara Kerja</a>
-            <a href="#untuk-barber" className="hover:text-[#171717] transition-colors">Capster & Barber</a>
-            <a href="#harga" className="hover:text-[#171717] transition-colors">Harga</a>
-            <a href="#faq" className="hover:text-[#171717] transition-colors">FAQ</a>
+            <a href="#fitur" onClick={(e) => handleNavClick(e, 'fitur')} className="hover:text-[#171717] transition-colors">Fitur</a>
+            <a href="#cara-kerja" onClick={(e) => handleNavClick(e, 'cara-kerja')} className="hover:text-[#171717] transition-colors">Cara Kerja</a>
+            <a href="#untuk-barber" onClick={(e) => handleNavClick(e, 'untuk-barber')} className="hover:text-[#171717] transition-colors">Capster & Barber</a>
+            <a href="#harga" onClick={(e) => handleNavClick(e, 'harga')} className="hover:text-[#171717] transition-colors">Harga</a>
+            <a href="#faq" onClick={(e) => handleNavClick(e, 'faq')} className="hover:text-[#171717] transition-colors">FAQ</a>
           </div>
 
           {/* Action Buttons */}
@@ -283,75 +306,133 @@ export default function Home() {
             ) : (
               <button 
                 onClick={() => navigate('/barber/dashboard')}
-                className="bg-[#285844] hover:bg-[#1E4334] text-white px-4 py-2 rounded-lg font-semibold text-xs transition-all shadow-xs active:scale-95 items-center gap-1.5 inline-flex cursor-pointer"
+                className="bg-[#285844] hover:bg-[#1E4334] text-white px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg font-semibold text-xs transition-all shadow-xs active:scale-95 items-center gap-1.5 inline-flex cursor-pointer"
               >
                 <span>Dashboard Studio</span>
                 <ArrowRight className="w-3.5 h-3.5" />
               </button>
             )}
+
+            {/* Mobile Toggle Button on the Right */}
             <button
+              type="button"
               onClick={() => {
                 headerVisibleRef.current = true;
                 setHeaderVisible(true);
                 setMobileMenuOpen(!mobileMenuOpen);
               }}
-              className="md:hidden w-11 h-11 flex items-center justify-center text-neutral-700 hover:text-black rounded-lg hover:bg-neutral-100 transition-colors cursor-pointer"
-              aria-label="Menu"
+              className={`md:hidden w-10 h-10 flex items-center justify-center rounded-xl transition-all cursor-pointer ${
+                mobileMenuOpen 
+                  ? 'bg-neutral-200 text-black border border-neutral-300' 
+                  : 'text-neutral-700 hover:text-black hover:bg-neutral-100'
+              }`}
+              aria-label={mobileMenuOpen ? 'Tutup menu navigasi' : 'Buka menu navigasi'}
+              aria-expanded={mobileMenuOpen}
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
-      </motion.nav>
 
-      {/* Mobile Drawer Menu */}
-      <AnimatePresence>
-        {mobileMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            className="md:hidden bg-[#F7F6F2] border-b border-neutral-200 px-6 py-5 space-y-4"
-          >
-            <div className="flex flex-col gap-3 font-medium text-base text-neutral-800">
-              <a href="#fitur" onClick={() => setMobileMenuOpen(false)} className="py-1">Fitur</a>
-              <a href="#cara-kerja" onClick={() => setMobileMenuOpen(false)} className="py-1">Cara Kerja</a>
-              <a href="#untuk-barber" onClick={() => setMobileMenuOpen(false)} className="py-1">Capster & Barber</a>
-              <a href="#harga" onClick={() => setMobileMenuOpen(false)} className="py-1">Harga</a>
-              <a href="#faq" onClick={() => setMobileMenuOpen(false)} className="py-1">FAQ</a>
-            </div>
-            <div className="pt-3 border-t border-neutral-200 flex flex-col gap-2.5">
-              {!isLoggedIn ? (
-                <>
-                  <button 
-                    onClick={() => { setMobileMenuOpen(false); navigate('/login'); }}
-                    className="w-full py-2.5 text-center font-semibold text-sm text-neutral-700 border border-neutral-300 rounded-xl"
-                  >
-                    Login
-                  </button>
+        {/* Mobile Drawer Menu attached inside sticky nav */}
+        <AnimatePresence>
+          {mobileMenuOpen && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.25, ease: 'easeInOut' }}
+              className="md:hidden border-t border-neutral-200/90 bg-[#F7F6F2]/98 backdrop-blur-xl px-5 py-4 space-y-4 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto"
+            >
+              <div className="flex flex-col gap-1 text-sm font-semibold text-neutral-800">
+                <a 
+                  href="#fitur" 
+                  onClick={(e) => handleNavClick(e, 'fitur')} 
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                >
+                  <span>Fitur</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
+                </a>
+                <a 
+                  href="#cara-kerja" 
+                  onClick={(e) => handleNavClick(e, 'cara-kerja')} 
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                >
+                  <span>Cara Kerja</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
+                </a>
+                <a 
+                  href="#untuk-barber" 
+                  onClick={(e) => handleNavClick(e, 'untuk-barber')} 
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                >
+                  <span>Capster & Barber</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
+                </a>
+                <a 
+                  href="#harga" 
+                  onClick={(e) => handleNavClick(e, 'harga')} 
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                >
+                  <span>Harga</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
+                </a>
+                <a 
+                  href="#faq" 
+                  onClick={(e) => handleNavClick(e, 'faq')} 
+                  className="py-2.5 px-3 rounded-lg hover:bg-neutral-200/60 transition-colors flex items-center justify-between"
+                >
+                  <span>FAQ</span>
+                  <ArrowRight className="w-3.5 h-3.5 text-neutral-400" />
+                </a>
+              </div>
+
+              <div className="pt-3 border-t border-neutral-200/80 flex flex-col gap-2">
+                {!isLoggedIn ? (
+                  <>
+                    <button 
+                      onClick={() => { setMobileMenuOpen(false); navigate('/login'); }}
+                      className="w-full py-2.5 text-center font-semibold text-sm text-neutral-800 bg-white border border-neutral-300 rounded-xl shadow-2xs hover:bg-neutral-50 active:scale-98 transition-all"
+                    >
+                      Login ke Akun
+                    </button>
+                    <button 
+                      onClick={() => {
+                        setMobileMenuOpen(false);
+                        handleCreatePageAction();
+                      }}
+                      className="w-full py-2.5 text-center font-semibold text-sm bg-[#171717] hover:bg-black text-white rounded-xl shadow-xs active:scale-98 transition-all"
+                    >
+                      Buat Halaman Gratis
+                    </button>
+                  </>
+                ) : (
                   <button 
                     onClick={() => {
                       setMobileMenuOpen(false);
-                      handleCreatePageAction();
+                      navigate('/barber/dashboard');
                     }}
-                    className="w-full py-2.5 text-center font-semibold text-sm bg-[#171717] text-white rounded-xl shadow-sm"
+                    className="w-full py-2.5 text-center font-semibold text-sm bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl shadow-xs active:scale-98 transition-all"
                   >
-                    Buat Halaman Gratis
+                    Buka Dashboard Studio
                   </button>
-                </>
-              ) : (
-                <button 
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    navigate('/barber/dashboard');
-                  }}
-                  className="w-full py-2.5 text-center font-semibold text-sm bg-[#285844] text-white rounded-xl shadow-sm"
-                >
-                  Buka Dashboard Studio
-                </button>
-              )}
-            </div>
-          </motion.div>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.nav>
+
+      {/* Backdrop overlay when mobile menu is open */}
+      <AnimatePresence>
+        {mobileMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setMobileMenuOpen(false)}
+            className="md:hidden fixed inset-0 bg-black/35 backdrop-blur-xs z-40"
+          />
         )}
       </AnimatePresence>
 
@@ -501,7 +582,7 @@ export default function Home() {
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ 3. TRUST / COMMUNITY STRIP ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section id="untuk-barber" className="py-12 bg-white border-y border-neutral-200">
+      <section id="untuk-barber" className="scroll-mt-20 py-12 bg-white border-y border-neutral-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <p className="text-xs font-mono uppercase tracking-widest text-neutral-500 font-semibold text-center mb-8">
             Dirancang Untuk Berbagai Segmen Industri Pangkas Rambut
@@ -641,7 +722,7 @@ export default function Home() {
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ 5. FEATURE SHOWCASE (THE 7 PILLARS) ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section id="fitur" className="py-16 sm:py-24 bg-white border-y border-neutral-200">
+      <section id="fitur" className="scroll-mt-20 py-16 sm:py-24 bg-white border-y border-neutral-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           
           <div className="text-center max-w-2xl mx-auto mb-14">
@@ -755,7 +836,7 @@ export default function Home() {
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ 6. LIVE PRODUCT PREVIEW SECTION ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section id="preview" className="py-16 sm:py-24 max-w-6xl mx-auto px-4 sm:px-6">
+      <section id="preview" className="scroll-mt-20 py-16 sm:py-24 max-w-6xl mx-auto px-4 sm:px-6">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <span className="text-xs font-mono uppercase tracking-widest text-[#285844] font-semibold">
             Simulasi Interaktif
@@ -867,7 +948,7 @@ export default function Home() {
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ 7. HOW IT WORKS ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section id="cara-kerja" className="py-16 sm:py-24 bg-white border-y border-neutral-200">
+      <section id="cara-kerja" className="scroll-mt-20 py-16 sm:py-24 bg-white border-y border-neutral-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           
           <div className="text-center max-w-2xl mx-auto mb-14">
@@ -924,7 +1005,7 @@ export default function Home() {
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ 9. PRICING (HONEST & TRANSPARENT) ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section id="harga" className="py-16 sm:py-24 bg-white border-y border-neutral-200">
+      <section id="harga" className="scroll-mt-20 py-16 sm:py-24 bg-white border-y border-neutral-200">
         <div className="max-w-4xl mx-auto px-4 sm:px-6">
           
           <div className="text-center max-w-xl mx-auto mb-14">
@@ -1048,7 +1129,7 @@ export default function Home() {
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ 10. FAQ SECTION ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      <section id="faq" className="py-16 sm:py-24 max-w-4xl mx-auto px-4 sm:px-6">
+      <section id="faq" className="scroll-mt-20 py-16 sm:py-24 max-w-4xl mx-auto px-4 sm:px-6">
         <div className="text-center max-w-xl mx-auto mb-12">
           <span className="text-xs font-mono uppercase tracking-widest text-[#285844] font-semibold">
             Pertanyaan Umum
@@ -1170,9 +1251,19 @@ export default function Home() {
 
           <div className="md:col-span-3 space-y-2">
             <h4 className="font-mono uppercase font-bold text-[11px] text-neutral-400 tracking-wider">Akses Akun</h4>
-            <ul className="space-y-1.5 text-neutral-300">
-              <li><a href="/login" className="hover:text-white transition-colors">Masuk ke Akun</a></li>
+            <ul className="space-y-2 text-neutral-300">
+              <li><a href="/login" className="hover:text-white transition-colors">Masuk ke Akun Barber</a></li>
               <li><a href="/customer/barbers" className="hover:text-white transition-colors">Cari Barber Sekitar</a></li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => navigate('/internal')}
+                  className="text-neutral-400 hover:text-white transition-colors inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Lock className="w-3.5 h-3.5 text-neutral-500" />
+                  <span>Portal Kasir & Staff Studio</span>
+                </button>
+              </li>
             </ul>
           </div>
 
@@ -1183,18 +1274,8 @@ export default function Home() {
             &copy; {CURRENT_YEAR} E Cukur. Semua hak dilindungi.
           </div>
 
-          <div className="flex items-center gap-3">
+          <div>
             <span>Dibuat untuk Barber & Capster Indonesia</span>
-            <button
-              type="button"
-              onClick={() => navigate('/internal')}
-              title="Portal Staff & Internal"
-              className="text-neutral-600 hover:text-neutral-300 transition-colors flex items-center gap-1.5"
-              aria-label="Internal Portal"
-            >
-              <Lock className="w-3 h-3" />
-              <span>Portal Staff</span>
-            </button>
           </div>
         </div>
       </footer>

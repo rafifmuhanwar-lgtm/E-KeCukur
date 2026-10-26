@@ -200,6 +200,8 @@ async function saveBarberPayloadToSupabase(barberId, payload) {
   }
 }
 
+let bookingsChannel = null;
+
 export const useStore = create((set, get) => ({
   barbers: [],
   services: [],
@@ -476,8 +478,15 @@ export const useStore = create((set, get) => ({
   subscribeToBookings: () => {
     if (!isSupabaseConfigured) return () => {};
     try {
-      const channel = supabase
-        .channel('realtime:bookings')
+      if (bookingsChannel) {
+        try {
+          supabase.removeChannel(bookingsChannel);
+        } catch {}
+        bookingsChannel = null;
+      }
+
+      bookingsChannel = supabase
+        .channel(`realtime:bookings:${Date.now()}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'bookings' },
@@ -488,7 +497,10 @@ export const useStore = create((set, get) => ({
         .subscribe();
 
       return () => {
-        supabase.removeChannel(channel);
+        if (bookingsChannel) {
+          supabase.removeChannel(bookingsChannel);
+          bookingsChannel = null;
+        }
       };
     } catch (err) {
       console.warn('Supabase subscribe error:', err);
