@@ -19,8 +19,10 @@ consultation without customer login, the Supabase project owner must enable
 Anonymous Sign-Ins under **Authentication → Sign In / Providers**. Guest chats
 use a persistent Supabase anonymous-auth session. Before opening a guest chat,
 the customer must enter a display name; it is saved to the guest session and
-shown in the barber inbox. This name-only step does not verify a person's legal
-identity. Re-run the updated chat migration to install the display-name RPC.
+shown in the barber inbox. Common Indonesian and English profanity is rejected
+both in the form and by the database. This filter is not exhaustive, and the
+name-only step does not verify a person's legal identity. Re-run the updated
+chat migration to install the display-name validation functions.
 Booking continues to collect customer name and WhatsApp in its existing form.
 Barber and capster sign-in continues to use the existing studio login.
 

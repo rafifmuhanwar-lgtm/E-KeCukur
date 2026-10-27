@@ -18,6 +18,13 @@ const INVALID_CUSTOMER_NAME_WORDS = new Set([
   'pelanggan', 'phone', 'panda', 'qwerty', 'rabbit', 'sapi', 'table', 'test',
   'testing', 'tiger', 'kursi'
 ]);
+const INAPPROPRIATE_CUSTOMER_NAME_WORDS = new Set([
+  'ass', 'arse', 'asshole', 'bastard', 'bitch', 'bitches', 'bullshit', 'cock',
+  'cocksucker', 'crap', 'cunt', 'dick', 'dicks', 'dickhead', 'fuck', 'fucker',
+  'fucking', 'motherfucker', 'piss', 'pussy', 'shit', 'shitty', 'slut', 'whore',
+  'asu', 'bajingan', 'bangsat', 'brengsek', 'kontol', 'memek', 'ngentot', 'ngewe',
+  'jancuk', 'jancok', 'kampret', 'keparat', 'tai', 'tahi', 'tolol', 'goblok'
+]);
 
 const validateCustomerName = (value) => {
   const name = value.trim().replace(/\s+/g, ' ');
@@ -26,9 +33,16 @@ const validateCustomerName = (value) => {
     return 'Gunakan huruf dan pemisah nama yang wajar; jangan gunakan angka atau simbol.';
   }
 
-  const words = name.toLocaleLowerCase('id-ID').split(/\s+/);
+  const words = name.toLocaleLowerCase('id-ID')
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .split(/\s+/)
+    .map((word) => word.replace(/[^a-z0-9]/g, ''));
   if (words.some((word) => INVALID_CUSTOMER_NAME_WORDS.has(word))) {
     return 'Masukkan nama orang yang akan digunakan barber untuk menyapamu.';
+  }
+  if (words.some((word) => INAPPROPRIATE_CUSTOMER_NAME_WORDS.has(word))) {
+    return 'Nama tidak boleh mengandung kata kasar atau tidak pantas.';
   }
   if (/^(.)\1{2,}$/u.test(name.replace(/\s/g, ''))) {
     return 'Masukkan nama yang valid.';
@@ -604,6 +618,9 @@ export default function Messages({ barberMode = false }) {
           <p id="customer-name-help" className="mt-2 text-xs leading-relaxed text-neutral-500">
             Nama ini akan terlihat oleh barber/capster di percakapan. Tidak perlu login atau memberikan data lain.
           </p>
+          {customerName.trim() && customerNameError && (
+            <p role="alert" className="mt-2 text-xs text-red-700">{customerNameError}</p>
+          )}
           {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
           <button
             type="submit"

@@ -159,12 +159,50 @@ AS $$
   );
 $$;
 
+CREATE OR REPLACE FUNCTION public.is_valid_chat_display_name(display_name TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+IMMUTABLE
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_name TEXT := regexp_replace(btrim(COALESCE(display_name, '')), '\s+', ' ', 'g');
+  v_name_words TEXT[];
+BEGIN
+  IF char_length(v_name) < 2 OR char_length(v_name) > 60 OR v_name ~ '[0-9]' THEN
+    RETURN FALSE;
+  END IF;
+
+  SELECT ARRAY_AGG(
+    regexp_replace(
+      translate(lower(token), '013457@$!', 'oieastasi'),
+      '[^[:alnum:]]',
+      '',
+      'g'
+    )
+  )
+  INTO v_name_words
+  FROM unnest(regexp_split_to_array(lower(v_name), '\s+')) AS words(token);
+
+  RETURN NOT (v_name_words && ARRAY[
+    'ass', 'arse', 'asshole', 'bastard', 'bitch', 'bitches', 'bullshit', 'cock',
+    'cocksucker', 'crap', 'cunt', 'dick', 'dicks', 'dickhead', 'fuck', 'fucker',
+    'fucking', 'motherfucker', 'piss', 'pussy', 'shit', 'shitty', 'slut', 'whore',
+    'asu', 'bajingan', 'bangsat', 'brengsek', 'goblok', 'jancok', 'jancuk',
+    'kampret', 'keparat', 'kontol', 'memek', 'ngewe', 'ngentot', 'tai', 'tahi',
+    'tolol'
+  ]::TEXT[]);
+END;
+$$;
+
 CREATE OR REPLACE FUNCTION public.set_conversation_participant_details()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+  v_customer_name TEXT;
 BEGIN
   IF NEW.customer_id IS DISTINCT FROM auth.uid() THEN
     RAISE EXCEPTION 'A customer can only create a conversation for their own account.';
@@ -175,14 +213,18 @@ BEGIN
   END IF;
 
   IF COALESCE(auth.jwt()->>'is_anonymous', 'false') = 'true' THEN
-    NEW.customer_name := COALESCE(auth.jwt()->'user_metadata'->>'name', 'Pelanggan');
+    v_customer_name := auth.jwt()->'user_metadata'->>'name';
   ELSE
     SELECT u.name
-    INTO NEW.customer_name
+    INTO v_customer_name
     FROM public.users u
     WHERE u.id = NEW.customer_id AND u.role = 'CUSTOMER';
-    NEW.customer_name := COALESCE(NEW.customer_name, 'Pelanggan');
   END IF;
+
+  IF NOT public.is_valid_chat_display_name(v_customer_name) THEN
+    RAISE EXCEPTION 'A valid customer display name is required to start a consultation.';
+  END IF;
+  NEW.customer_name := regexp_replace(btrim(v_customer_name), '\s+', ' ', 'g');
 
   SELECT b.name, COALESCE(b.profile_photo, '')
   INTO NEW.barber_name, NEW.barber_photo
@@ -269,14 +311,14 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 DECLARE
-  v_name TEXT := regexp_replace(btrim(display_name), '\s+', ' ', 'g');
+  v_name TEXT := regexp_replace(btrim(COALESCE(display_name, '')), '\s+', ' ', 'g');
 BEGIN
   IF NOT public.is_chat_customer() THEN
     RAISE EXCEPTION 'Only customers can update their consultation display name.';
   END IF;
 
-  IF char_length(v_name) < 2 OR char_length(v_name) > 60 OR v_name ~ '[0-9]' THEN
-    RAISE EXCEPTION 'Enter a valid name between 2 and 60 characters.';
+  IF NOT public.is_valid_chat_display_name(v_name) THEN
+    RAISE EXCEPTION 'Display name must be 2–60 characters and cannot contain numbers or inappropriate language.';
   END IF;
 
   UPDATE public.conversations
@@ -414,6 +456,7 @@ GRANT INSERT (conversation_id, sender_id, body) ON public.messages TO authentica
 GRANT UPDATE (read_at) ON public.messages TO authenticated;
 REVOKE ALL ON FUNCTION public.is_chat_customer() FROM PUBLIC, anon;
 REVOKE ALL ON FUNCTION public.is_chat_barber() FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.is_valid_chat_display_name(TEXT) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.is_chat_customer() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_chat_barber() TO authenticated;
 REVOKE ALL ON FUNCTION public.mark_conversation_read(UUID) FROM PUBLIC, anon;
