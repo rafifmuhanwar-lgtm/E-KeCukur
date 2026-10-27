@@ -156,8 +156,7 @@ export default function Messages({ barberMode = false }) {
           if (!userProfile) throw new Error('Profil akun tidak ditemukan. Silakan hubungi pengelola E-KeCukur.');
           const role = String(userProfile.role || '').toUpperCase();
           if (role === 'BARBER') {
-            navigate('/barber/messages', { replace: true });
-            return;
+            throw new Error('Inbox barber hanya dapat dibuka dari dashboard akun barber. Untuk konsultasi sebagai pelanggan, keluar dari akun barber terlebih dahulu.');
           }
           if (role !== 'CUSTOMER') {
             throw new Error('Akun ini bukan akun pelanggan dan tidak dapat membuka konsultasi.');

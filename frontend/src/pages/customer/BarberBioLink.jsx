@@ -346,20 +346,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
   const handleConsultation = () => {
     const barberUserId = barber?.user_id;
-    if (!hasConsultationAccount) return;
-
-    if (authUser?.id === barberUserId) {
-      navigate('/barber/messages');
-      return;
-    }
-
-    const destination = `/messages?barberId=${encodeURIComponent(barberUserId)}`;
-    if (authUser) {
-      navigate(destination);
-    } else {
-      navigate(destination);
-    }
+    if (!hasConsultationAccount || authUser?.id === barberUserId) return;
+    navigate(`/messages?barberId=${encodeURIComponent(barberUserId)}`);
   };
+  const isOwnProfile = Boolean(authUser?.id && authUser.id === barber?.user_id);
 
   const handleSubmitBooking = async (e) => {
     e.preventDefault();
@@ -722,12 +712,18 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                 <button
                   type="button"
                   onClick={handleConsultation}
-                  disabled={!hasConsultationAccount}
+                  disabled={!hasConsultationAccount || isOwnProfile}
                   className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#285844] hover:bg-[#1E4334] text-white px-4 py-2.5 text-sm font-semibold shadow-sm transition-colors disabled:bg-neutral-300 disabled:text-neutral-600 disabled:cursor-not-allowed"
-                  title={!hasConsultationAccount ? 'Konsultasi belum tersedia untuk profil ini.' : 'Konsultasi langsung dengan pemilik profil'}
+                  title={
+                    !hasConsultationAccount
+                      ? 'Konsultasi belum tersedia untuk profil ini.'
+                      : isOwnProfile
+                        ? 'Anda sedang melihat profil publik milik sendiri.'
+                        : 'Konsultasi langsung dengan pemilik profil'
+                  }
                 >
                   <MessageCircle className="w-4 h-4" />
-                  <span>Konsultasi</span>
+                  <span>{isOwnProfile ? 'Profil Anda' : 'Konsultasi'}</span>
                 </button>
                 {!hasConsultationAccount && (
                   <p role="status" className="text-[11px] text-amber-700 mt-2">
