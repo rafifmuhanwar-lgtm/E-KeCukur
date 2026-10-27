@@ -396,7 +396,7 @@ export default function Messages({ barberMode = false }) {
 
       <section className="flex-1 min-h-0 p-0 md:p-5 lg:p-7">
         <div className="h-full max-w-7xl mx-auto bg-white md:border md:border-neutral-200 md:rounded-2xl md:shadow-sm overflow-hidden flex">
-          <aside className={`${selectedConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-[320px] lg:w-[360px] shrink-0 flex-col border-r border-neutral-200`}>
+          <aside className={`${selectedConversationId && !barberMode ? 'hidden' : selectedConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-[320px] lg:w-[360px] shrink-0 flex-col border-r border-neutral-200`}>
             <div className="px-5 py-4 border-b border-neutral-100">
               <h1 className="text-lg font-bold">Percakapan</h1>
               <p className="text-xs text-neutral-500 mt-1">
@@ -411,14 +411,6 @@ export default function Messages({ barberMode = false }) {
                   <p className="text-xs text-neutral-500 mt-1">
                     {barberMode ? 'Pesan dari pelanggan akan tampil di sini.' : 'Buka profil barber untuk memulai konsultasi.'}
                   </p>
-                  {!barberMode && (
-                    <Link
-                      to="/customer/barbers"
-                      className="mt-4 inline-flex items-center justify-center rounded-lg bg-[#285844] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1E4334]"
-                    >
-                      Lihat profil barber & capster
-                    </Link>
-                  )}
                 </div>
               ) : conversations.map((conversation) => {
                 const participant = otherParticipant(conversation);
@@ -463,7 +455,7 @@ export default function Messages({ barberMode = false }) {
             </div>
           </aside>
 
-          <section className={`${selectedConversationId ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
+          <section className={`${selectedConversationId || !barberMode ? 'flex' : 'hidden md:flex'} min-w-0 flex-1 flex-col`}>
             {selectedConversation && currentParticipant ? (
               <>
                 <header className="h-[68px] shrink-0 border-b border-neutral-200 px-4 sm:px-6 flex items-center gap-3">
