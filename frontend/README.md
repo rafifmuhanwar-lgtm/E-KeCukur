@@ -17,9 +17,12 @@ No new environment variables are required. The frontend needs the existing
 `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` configuration. To allow
 consultation without customer login, the Supabase project owner must enable
 Anonymous Sign-Ins under **Authentication → Sign In / Providers**. Guest chats
-use a persistent Supabase anonymous-auth session; the customer can provide
-their name and WhatsApp number later in the existing booking form. Barber and
-capster sign-in continues to use the existing studio login.
+use a persistent Supabase anonymous-auth session. Before opening a guest chat,
+the customer must enter a display name; it is saved to the guest session and
+shown in the barber inbox. This name-only step does not verify a person's legal
+identity. Re-run the updated chat migration to install the display-name RPC.
+Booking continues to collect customer name and WhatsApp in its existing form.
+Barber and capster sign-in continues to use the existing studio login.
 
 The inbox is available to customers at `/messages` and to authenticated
 barber/capster accounts at `/barber/messages`. Consultation starts from an

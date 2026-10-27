@@ -262,6 +262,29 @@ BEGIN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.update_my_chat_display_name(display_name TEXT)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_name TEXT := regexp_replace(btrim(display_name), '\s+', ' ', 'g');
+BEGIN
+  IF NOT public.is_chat_customer() THEN
+    RAISE EXCEPTION 'Only customers can update their consultation display name.';
+  END IF;
+
+  IF char_length(v_name) < 2 OR char_length(v_name) > 60 OR v_name ~ '[0-9]' THEN
+    RAISE EXCEPTION 'Enter a valid name between 2 and 60 characters.';
+  END IF;
+
+  UPDATE public.conversations
+  SET customer_name = v_name
+  WHERE customer_id = auth.uid();
+END;
+$$;
+
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 
@@ -395,6 +418,8 @@ GRANT EXECUTE ON FUNCTION public.is_chat_customer() TO authenticated;
 GRANT EXECUTE ON FUNCTION public.is_chat_barber() TO authenticated;
 REVOKE ALL ON FUNCTION public.mark_conversation_read(UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mark_conversation_read(UUID) TO authenticated;
+REVOKE ALL ON FUNCTION public.update_my_chat_display_name(TEXT) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.update_my_chat_display_name(TEXT) TO authenticated;
 
 DO $$
 BEGIN
