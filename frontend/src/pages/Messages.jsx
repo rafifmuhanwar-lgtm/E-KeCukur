@@ -411,6 +411,14 @@ export default function Messages({ barberMode = false }) {
                   <p className="text-xs text-neutral-500 mt-1">
                     {barberMode ? 'Pesan dari pelanggan akan tampil di sini.' : 'Buka profil barber untuk memulai konsultasi.'}
                   </p>
+                  {!barberMode && (
+                    <Link
+                      to="/customer/barbers"
+                      className="mt-4 inline-flex items-center justify-center rounded-lg bg-[#285844] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#1E4334]"
+                    >
+                      Lihat profil barber & capster
+                    </Link>
+                  )}
                 </div>
               ) : conversations.map((conversation) => {
                 const participant = otherParticipant(conversation);
