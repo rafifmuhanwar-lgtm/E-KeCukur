@@ -42,7 +42,7 @@ import Logo from '../../components/Logo';
 import BarberBioLink from '../customer/BarberBioLink';
 import { compressImage } from '../../lib/imageUploader';
 import { getAppDomain } from '../../lib/domain';
-import { isSupabaseConfigured } from '../../lib/supabase';
+import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 
 const computeWeeklyChartData = (bookingsList) => {
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -97,6 +97,8 @@ export default function BarberDashboard() {
   const authUser = useStore((state) => state.authUser);
   const isLoading = useStore((state) => state.isLoading);
   const matchActiveBarber = useStore((state) => state.matchActiveBarber);
+  const [unreadChatSummary, setUnreadChatSummary] = useState({ userId: '', count: 0 });
+  const unreadChatCount = unreadChatSummary.userId === authUser?.id ? unreadChatSummary.count : 0;
 
   // File upload state & ref
   const fileInputRef = useRef(null);
@@ -152,6 +154,55 @@ export default function BarberDashboard() {
   ) : null;
 
   const barber = queryMatchedBarber || userMatchedBarber || activeBarber;
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !authUser?.id) {
+      return undefined;
+    }
+
+    let active = true;
+    const refreshUnreadChatCount = async () => {
+      const { data, error } = await supabase
+        .from('conversations')
+        .select('barber_unread_count')
+        .eq('barber_id', authUser.id);
+
+      if (error) {
+        console.error('Unable to load unread consultation count:', error);
+        return;
+      }
+
+      if (active) {
+        setUnreadChatSummary({
+          userId: authUser.id,
+          count: (data || []).reduce(
+            (total, conversation) => total + (Number(conversation.barber_unread_count) || 0),
+            0
+          )
+        });
+      }
+    };
+
+    refreshUnreadChatCount();
+    const channel = supabase
+      .channel(`dashboard-chat-unread:${authUser.id}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'conversations',
+        filter: `barber_id=eq.${authUser.id}`
+      }, refreshUnreadChatCount)
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.error(`Consultation unread Realtime subscription failed: ${status}`);
+        }
+      });
+
+    return () => {
+      active = false;
+      supabase.removeChannel(channel);
+    };
+  }, [authUser?.id]);
 
   // Sync Supabase Bookings on mount & setup realtime subscription
   useEffect(() => {
@@ -834,11 +885,19 @@ export default function BarberDashboard() {
           <button
             type="button"
             onClick={() => navigate('/barber/messages')}
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#285844] hover:bg-emerald-50 border border-emerald-200 transition-colors whitespace-nowrap shrink-0"
+            className="relative hidden md:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#285844] hover:bg-emerald-50 border border-emerald-200 transition-colors whitespace-nowrap shrink-0"
             title="Buka percakapan konsultasi"
           >
             <MessageCircle className="w-3.5 h-3.5 shrink-0" />
             <span className="hidden sm:inline">Pesan</span>
+            {unreadChatCount > 0 && (
+              <span
+                className="absolute -top-2 -right-2 min-w-5 h-5 px-1 rounded-full bg-red-600 text-white text-[10px] font-bold flex items-center justify-center shadow-sm"
+                aria-label={`${unreadChatCount} pesan belum dibaca`}
+              >
+                {unreadChatCount > 99 ? '99+' : unreadChatCount}
+              </span>
+            )}
           </button>
 
           {/* Open Public Bio */}
@@ -2760,6 +2819,21 @@ export default function BarberDashboard() {
         </div>
 
       </main>
+
+      <button
+        type="button"
+        onClick={() => navigate('/barber/messages')}
+        className="fixed md:hidden right-5 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-40 inline-flex items-center gap-2 rounded-full bg-[#285844] px-4 py-3 text-sm font-semibold text-white shadow-[0_5px_0_#173829,0_10px_22px_rgba(40,88,68,0.3)] transition hover:-translate-y-0.5 hover:bg-[#1E4334] active:translate-y-0"
+        aria-label={`Buka pesan${unreadChatCount > 0 ? `, ${unreadChatCount} belum dibaca` : ''}`}
+      >
+        <MessageCircle className="w-5 h-5" />
+        <span>Pesan</span>
+        {unreadChatCount > 0 && (
+          <span className="min-w-5 h-5 px-1 rounded-full bg-white text-[#285844] text-[10px] font-bold flex items-center justify-center shadow-sm">
+            {unreadChatCount > 99 ? '99+' : unreadChatCount}
+          </span>
+        )}
+      </button>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ MODAL: ADD / EDIT SERVICE ━━━ */}
