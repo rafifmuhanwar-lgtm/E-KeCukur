@@ -168,8 +168,12 @@ AS $$
 DECLARE
   v_name TEXT := regexp_replace(btrim(COALESCE(display_name, '')), '\s+', ' ', 'g');
   v_name_words TEXT[];
+  v_compact_name TEXT;
 BEGIN
-  IF char_length(v_name) < 2 OR char_length(v_name) > 60 OR v_name ~ '[0-9]' THEN
+  IF char_length(v_name) < 2
+    OR char_length(v_name) > 60
+    OR v_name !~ '^[[:alpha:]][[:alpha:][:space:].''-]*$'
+  THEN
     RETURN FALSE;
   END IF;
 
@@ -183,15 +187,56 @@ BEGIN
   )
   INTO v_name_words
   FROM unnest(regexp_split_to_array(lower(v_name), '\s+')) AS words(token);
+  v_compact_name := array_to_string(v_name_words, '');
 
-  RETURN NOT (v_name_words && ARRAY[
+  IF v_name_words && ARRAY[
+    'abc', 'admin', 'anjing', 'anonymous', 'apple', 'asdf', 'ayam', 'bakso',
+    'bantal', 'batu', 'benda', 'besi', 'bird', 'book', 'botol', 'bowl', 'chair',
+    'charger', 'chicken', 'coba', 'computer', 'cow', 'cup', 'dog', 'fish', 'gelas',
+    'goat', 'handphone', 'hello', 'ikan', 'kambing', 'kayu', 'keyboard', 'kelinci',
+    'kertas', 'kursi', 'kucing', 'lampu', 'laptop', 'meja', 'mie', 'monitor',
+    'monyet', 'mouse', 'mobil', 'motor', 'nasi', 'nama', 'orang', 'panda',
+    'pelanggan', 'pintu', 'piring', 'plastik', 'phone', 'qwerty', 'rabbit', 'random',
+    'roti', 'sapi', 'sendok', 'sepatu', 'table', 'tas', 'telur', 'test', 'testing',
+    'tiger', 'tikus', 'wkwk'
+  ]::TEXT[] THEN
+    RETURN FALSE;
+  END IF;
+
+  IF v_name_words && ARRAY[
     'ass', 'arse', 'asshole', 'bastard', 'bitch', 'bitches', 'bullshit', 'cock',
     'cocksucker', 'crap', 'cunt', 'dick', 'dicks', 'dickhead', 'fuck', 'fucker',
     'fucking', 'motherfucker', 'piss', 'pussy', 'shit', 'shitty', 'slut', 'whore',
-    'asu', 'bajingan', 'bangsat', 'brengsek', 'goblok', 'jancok', 'jancuk',
-    'kampret', 'keparat', 'kontol', 'memek', 'ngewe', 'ngentot', 'tai', 'tahi',
-    'tolol'
-  ]::TEXT[]);
+    'wtf', 'stfu', 'gtfo', 'lmfao', 'fml', 'ffs', 'bullsh', 'mofo', 'mf', 'smd',
+    'kys', 'pos', 'sob', 'ajg', 'anjg', 'asu', 'bajingan', 'bangsat', 'bgsat',
+    'bngst', 'brengsek', 'gblk', 'goblok', 'janc', 'jancuk', 'jancok', 'kampret',
+    'keparat', 'kntl', 'kontl', 'kontol', 'memek', 'memk', 'mmk', 'ngewe', 'ngentot',
+    'ngntd', 'ngntt', 'tai', 'tahi', 'tll', 'tolol'
+  ]::TEXT[] THEN
+    RETURN FALSE;
+  END IF;
+
+  IF v_compact_name = ANY(ARRAY[
+    'fuckyou', 'fuckoff', 'fucky', 'shithead', 'bullshit', 'wtf', 'stfu', 'gtfo'
+  ]::TEXT[]) THEN
+    RETURN FALSE;
+  END IF;
+
+  IF EXISTS (
+    SELECT 1
+    FROM unnest(v_name_words) AS words(word)
+    WHERE char_length(word) >= 3 AND word !~ '[aeiouy]'
+  ) THEN
+    RETURN FALSE;
+  END IF;
+
+  RETURN NOT EXISTS (
+    SELECT 1
+    FROM unnest(v_name_words) AS words(word)
+    WHERE word ~ '^(.{2,})\1+$'
+       OR word ~ '(qwerty|asdf|zxcv|hjkl|poiuy|lkjhg)'
+  )
+  AND regexp_replace(v_name, '\s', '', 'g') !~ '^(.)\1{2,}$';
 END;
 $$;
 

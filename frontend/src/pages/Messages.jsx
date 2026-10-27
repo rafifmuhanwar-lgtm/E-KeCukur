@@ -12,18 +12,29 @@ const CUSTOMER_MESSAGE_TEMPLATES = [
   'Apakah ada jadwal kosong untuk hari ini?'
 ];
 const INVALID_CUSTOMER_NAME_WORDS = new Set([
-  'abc', 'admin', 'anjing', 'anonymous', 'asdf', 'ayam', 'batu', 'bird', 'cat',
-  'chair', 'chicken', 'coba', 'computer', 'cow', 'dog', 'fish', 'goat', 'ikan',
-  'kambing', 'kelinci', 'kucing', 'laptop', 'meja', 'monyet', 'mobil', 'motor',
-  'pelanggan', 'phone', 'panda', 'qwerty', 'rabbit', 'sapi', 'table', 'test',
-  'testing', 'tiger', 'kursi'
+  'abc', 'admin', 'anjing', 'anonymous', 'apple', 'asdf', 'ayam', 'bakso',
+  'bantal', 'batu', 'benda', 'besi', 'bird', 'book', 'botol', 'bowl', 'chair',
+  'charger', 'chicken', 'coba', 'computer', 'cow', 'cup', 'dog', 'fish', 'gelas',
+  'goat', 'handphone', 'hello', 'ikan', 'kambing', 'kayu', 'keyboard', 'kelinci',
+  'kertas', 'kursi', 'kucing', 'lampu', 'laptop', 'meja', 'mie', 'monitor',
+  'monyet', 'mouse', 'mobil', 'motor', 'nasi', 'nama', 'orang', 'panda',
+  'pelanggan', 'pintu', 'piring', 'plastik', 'phone', 'qwerty', 'rabbit', 'random',
+  'roti', 'sapi', 'sendok', 'sepatu', 'table', 'tas', 'telur', 'test', 'testing',
+  'tiger', 'tikus', 'wkwk'
 ]);
 const INAPPROPRIATE_CUSTOMER_NAME_WORDS = new Set([
   'ass', 'arse', 'asshole', 'bastard', 'bitch', 'bitches', 'bullshit', 'cock',
   'cocksucker', 'crap', 'cunt', 'dick', 'dicks', 'dickhead', 'fuck', 'fucker',
   'fucking', 'motherfucker', 'piss', 'pussy', 'shit', 'shitty', 'slut', 'whore',
-  'asu', 'bajingan', 'bangsat', 'brengsek', 'kontol', 'memek', 'ngentot', 'ngewe',
-  'jancuk', 'jancok', 'kampret', 'keparat', 'tai', 'tahi', 'tolol', 'goblok'
+  'wtf', 'stfu', 'gtfo', 'lmfao', 'fml', 'ffs', 'bullsh', 'mofo', 'mf', 'smd',
+  'kys', 'pos', 'sob', 'ajg', 'anjg', 'asu', 'bajingan', 'bangsat', 'bgsat',
+  'bngst', 'brengsek', 'gblk', 'goblok', 'janc', 'jancuk', 'jancok', 'kampret',
+  'keparat', 'kntl', 'kontl', 'kontol', 'memek', 'memk', 'mmk', 'ngewe', 'ngentot',
+  'ngntd', 'ngntt', 'tai', 'tahi', 'tll', 'tolol'
+]);
+const INAPPROPRIATE_CUSTOMER_NAME_COMBINATIONS = new Set([
+  ...INAPPROPRIATE_CUSTOMER_NAME_WORDS,
+  'fuckyou', 'fuckoff', 'fucky', 'shithead', 'bullshit', 'wtf', 'stfu', 'gtfo'
 ]);
 
 const validateCustomerName = (value) => {
@@ -37,15 +48,27 @@ const validateCustomerName = (value) => {
     .normalize('NFD')
     .replace(/\p{M}/gu, '')
     .split(/\s+/)
-    .map((word) => word.replace(/[^a-z0-9]/g, ''));
+    .map((word) => word.replace(/[013457@$!]/g, (char) => ({
+      0: 'o', 1: 'i', 3: 'e', 4: 'a', 5: 's', 7: 't', '@': 'a', '$': 's', '!': 'i'
+    })[char] || char).replace(/[^a-z0-9]/g, ''));
+  const compactName = words.join('');
   if (words.some((word) => INVALID_CUSTOMER_NAME_WORDS.has(word))) {
     return 'Masukkan nama orang yang akan digunakan barber untuk menyapamu.';
   }
-  if (words.some((word) => INAPPROPRIATE_CUSTOMER_NAME_WORDS.has(word))) {
+  if (
+    words.some((word) => INAPPROPRIATE_CUSTOMER_NAME_WORDS.has(word))
+    || INAPPROPRIATE_CUSTOMER_NAME_COMBINATIONS.has(compactName)
+  ) {
     return 'Nama tidak boleh mengandung kata kasar atau tidak pantas.';
   }
   if (/^(.)\1{2,}$/u.test(name.replace(/\s/g, ''))) {
     return 'Masukkan nama yang valid.';
+  }
+  if (words.some((word) => word.length >= 3 && !/[aeiouy]/.test(word))) {
+    return 'Nama terlihat seperti teks acak. Masukkan nama yang biasa kamu gunakan.';
+  }
+  if (words.some((word) => /^(..+)\1+$/u.test(word) || /qwerty|asdf|zxcv|hjkl|poiuy|lkjhg/i.test(word))) {
+    return 'Nama terlihat seperti teks acak. Masukkan nama yang biasa kamu gunakan.';
   }
 
   return '';
