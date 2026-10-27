@@ -7,6 +7,7 @@ import CustomerBookings from './pages/customer/Bookings';
 import BookingFlow from './pages/customer/BookingFlow';
 import BarberDashboard from './pages/barber/Dashboard';
 import BarberBioLink from './pages/customer/BarberBioLink';
+import Messages from './pages/Messages';
 import { useStore } from './store';
 
 export default function App() {
@@ -31,12 +32,14 @@ export default function App() {
         <Route path="/customer/barbers/:id" element={<BarberBioLink />} />
         <Route path="/booking" element={<BookingFlow />} />
         <Route path="/customer/bookings" element={<CustomerBookings />} />
+        <Route path="/messages" element={<Messages />} />
         
         {/* Legacy staff route redirects to Barber Studio Dashboard */}
         <Route path="/staff/dashboard" element={<Navigate to="/barber/dashboard" replace />} />
         
         {/* Barber Creator Studio Dashboard */}
         <Route path="/barber/dashboard" element={<BarberDashboard />} />
+        <Route path="/barber/messages" element={<Messages barberMode />} />
 
         {/* Lynk.id Style Micro-site Personal Link (e.g. /b/reza or /reza) */}
         <Route path="/b/:id" element={<BarberBioLink />} />

@@ -1,5 +1,30 @@
 # React + Vite
 
+## Consultation chat setup
+
+The chat uses the existing Supabase Auth client and persists conversations and
+messages in Supabase. After the existing schema setup, run
+[`../backend/chat_migration.sql`](../backend/chat_migration.sql) in the Supabase
+SQL Editor. The root `supabase_schema_setup.sql` intentionally does not create
+chat tables. The migration adds the chat tables,
+Realtime publication membership, and participant-scoped RLS policies. It also
+replaces the existing unrestricted barber/user write policies so account links
+and chat roles cannot be changed by anonymous clients. If an earlier chat
+migration was already applied, run the updated migration again after enabling
+anonymous sign-in.
+
+No new environment variables are required. The frontend needs the existing
+`VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` configuration. To allow
+consultation without customer login, the Supabase project owner must enable
+Anonymous Sign-Ins under **Authentication → Sign In / Providers**. Guest chats
+use a persistent Supabase anonymous-auth session; the customer can provide
+their name and WhatsApp number later in the existing booking form. Barber and
+capster sign-in continues to use the existing studio login.
+
+The inbox is available to customers at `/messages` and to authenticated
+barber/capster accounts at `/barber/messages`. Consultation starts from an
+individual public profile with a database-linked barber account.
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

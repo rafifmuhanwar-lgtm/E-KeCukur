@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Scissors, 
@@ -57,10 +57,12 @@ const generateBookingCode = () => `ECK-${Math.floor(100 + Math.random() * 900)}`
 
 export default function BarberBioLink({ customBarber = null, isPreview = false }) {
   const appDomain = getAppDomain();
+  const navigate = useNavigate();
   const { id } = useParams();
 
   const barbers = useStore((state) => state.barbers);
   const activeBarber = useStore((state) => state.activeBarber);
+  const authUser = useStore((state) => state.authUser);
   const addBooking = useStore((state) => state.addBooking);
   const toggleLookbookLike = useStore((state) => state.toggleLookbookLike);
   const isLoading = useStore((state) => state.isLoading);
@@ -338,6 +340,25 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     if (prefilledNote) setNoteStyle(prefilledNote);
     setBookingSuccessData(null);
     setIsBookingOpen(true);
+  };
+
+  const hasConsultationAccount = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(barber?.user_id || '');
+
+  const handleConsultation = () => {
+    const barberUserId = barber?.user_id;
+    if (!hasConsultationAccount) return;
+
+    if (authUser?.id === barberUserId) {
+      navigate('/barber/messages');
+      return;
+    }
+
+    const destination = `/messages?barberId=${encodeURIComponent(barberUserId)}`;
+    if (authUser) {
+      navigate(destination);
+    } else {
+      navigate(destination);
+    }
   };
 
   const handleSubmitBooking = async (e) => {
@@ -694,6 +715,25 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               <div className={`inline-flex items-center gap-1.5 rounded-full ${isPreview ? 'text-[9.5px] mb-2 px-2.5 py-0.5' : 'text-xs mb-4 px-3.5 py-1'} font-semibold ${theme.badgeBg} ${theme.badgeText}`}>
                 <Clock className={`${isPreview ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'}`} />
                 <span>{barber.schedule}</span>
+              </div>
+            )}
+            {!isPreview && (
+              <div className="px-4 w-full max-w-sm mt-1 mb-4">
+                <button
+                  type="button"
+                  onClick={handleConsultation}
+                  disabled={!hasConsultationAccount}
+                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#285844] hover:bg-[#1E4334] text-white px-4 py-2.5 text-sm font-semibold shadow-sm transition-colors disabled:bg-neutral-300 disabled:text-neutral-600 disabled:cursor-not-allowed"
+                  title={!hasConsultationAccount ? 'Konsultasi belum tersedia untuk profil ini.' : 'Konsultasi langsung dengan pemilik profil'}
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Konsultasi</span>
+                </button>
+                {!hasConsultationAccount && (
+                  <p role="status" className="text-[11px] text-amber-700 mt-2">
+                    Akun pemilik profil belum terhubung, jadi konsultasi belum dapat dimulai.
+                  </p>
+                )}
               </div>
             )}
           </div>

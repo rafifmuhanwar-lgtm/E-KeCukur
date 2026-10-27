@@ -9,6 +9,8 @@
 -- 3. Izin RLS penuh untuk publik (anon & authenticated)
 -- 4. Storage Bucket 'avatars' untuk upload foto profil asli
 -- 5. Trigger otomatis auto-create profil ketika login / register via Email atau GOOGLE OAUTH
+-- Setelah setup ini, jalankan backend/chat_migration.sql untuk membuat tabel chat
+-- dan menerapkan RLS peserta percakapan. Skrip setup ini belum membuat tabel chat.
 -- ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 -- 1. Pastikan kolom pendukung di tabel barbers tersedia
@@ -131,7 +133,10 @@ BEGIN
       split_part(new.email, '@', 1)
     );
     v_phone := COALESCE(new.raw_user_meta_data->>'phone', '');
-    v_role := COALESCE(new.raw_user_meta_data->>'role', 'barber');
+    v_role := CASE
+      WHEN new.is_anonymous THEN 'customer'
+      ELSE COALESCE(new.raw_user_meta_data->>'role', 'barber')
+    END;
     
     -- Buat slug bio unik
     v_slug := COALESCE(
@@ -153,15 +158,17 @@ BEGIN
       ''
     );
 
-    -- Insert / Update ke tabel users
-    INSERT INTO public.users (id, email, name, role, phone)
-    VALUES (new.id, new.email, v_name, UPPER(v_role), v_phone)
-    ON CONFLICT (email) DO UPDATE SET 
-      name = COALESCE(public.users.name, v_name),
-      phone = COALESCE(public.users.phone, v_phone);
+    -- Anonymous chat identities live in auth.users and do not have an email.
+    IF NOT new.is_anonymous THEN
+      INSERT INTO public.users (id, email, name, role, phone)
+      VALUES (new.id, new.email, v_name, UPPER(v_role), v_phone)
+      ON CONFLICT (email) DO UPDATE SET
+        name = COALESCE(public.users.name, v_name),
+        phone = COALESCE(public.users.phone, v_phone);
+    END IF;
 
     -- Insert / Update ke tabel barbers jika role = barber
-    IF LOWER(v_role) = 'barber' THEN
+    IF LOWER(v_role) = 'barber' AND NOT new.is_anonymous THEN
       INSERT INTO public.barbers (
         user_id, name, email, phone, whatsapp, slug, specialty, bio, profile_photo, availability_status, account_status
       )

@@ -201,6 +201,7 @@ async function saveBarberPayloadToSupabase(barberId, payload) {
 }
 
 let bookingsChannel = null;
+let anonymousSessionRequest = null;
 
 export const useStore = create((set, get) => ({
   barbers: [],
@@ -253,6 +254,30 @@ export const useStore = create((set, get) => ({
   // Match barbershop profile dengan user yang sedang login (termasuk auto-provision untuk Google OAuth)
   matchActiveBarber: async (user) => {
     if (!user) return null;
+    if (user.is_anonymous) {
+      set({ activeBarber: null, activeBarberId: null });
+      return null;
+    }
+
+    if (isSupabaseConfigured) {
+      try {
+        const { data: userProfile, error } = await supabase
+          .from('users')
+          .select('role')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (error) throw error;
+        if (String(userProfile?.role || '').toUpperCase() === 'CUSTOMER') {
+          set({ activeBarber: null, activeBarberId: null });
+          return null;
+        }
+      } catch (err) {
+        console.warn('Unable to verify account role before barber matching:', err);
+        return null;
+      }
+    }
+
     const { barbers, services } = get();
 
     // 1. Cari di local state barbers berdasarkan user_id atau email
@@ -582,6 +607,71 @@ export const useStore = create((set, get) => ({
     }
   },
 
+  signUpCustomer: async ({ name, email, password }) => {
+    if (!isSupabaseConfigured) {
+      return { success: false, error: 'Koneksi Supabase belum terkonfigurasi.' };
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name: name.trim(),
+            role: 'customer'
+          }
+        }
+      });
+
+      if (error) throw error;
+      if (!data.user) throw new Error('Pendaftaran tidak mengembalikan data user.');
+
+      if (data.session) {
+        set({ authUser: data.user });
+      }
+
+      return { success: true, user: data.user, hasSession: Boolean(data.session) };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  verifyOtpCustomer: async ({ email, token }) => {
+    if (!isSupabaseConfigured) {
+      return { success: false, error: 'Koneksi Supabase belum terkonfigurasi.' };
+    }
+
+    try {
+      let { data, error } = await supabase.auth.verifyOtp({
+        email: email.trim(),
+        token: token.trim(),
+        type: 'signup'
+      });
+
+      if (error) {
+        const retry = await supabase.auth.verifyOtp({
+          email: email.trim(),
+          token: token.trim(),
+          type: 'email'
+        });
+        if (retry.error) throw retry.error;
+        data = retry.data;
+      }
+
+      if (!data?.user) throw new Error('Verifikasi tidak mengembalikan data user.');
+      set({ authUser: data.user });
+      return { success: true, session: data.session, user: data.user };
+    } catch (err) {
+      return {
+        success: false,
+        error: err.message === 'Token has expired or is invalid'
+          ? 'Kode OTP salah atau sudah kedaluwarsa. Silakan periksa kembali atau kirim ulang kode baru.'
+          : err.message || 'Gagal memverifikasi kode OTP.'
+      };
+    }
+  },
+
   verifyOtpBarber: async ({ email, token, slug, phone }) => {
     if (!isSupabaseConfigured) {
       return { success: false, error: 'Koneksi Supabase belum terkonfigurasi.' };
@@ -719,6 +809,57 @@ export const useStore = create((set, get) => ({
       return { success: true, user };
     } catch (err) {
       return { success: false, error: err.message };
+    }
+  },
+
+  signInCustomer: async (email, password) => {
+    if (!isSupabaseConfigured) {
+      return { success: false, error: 'Koneksi Supabase belum terkonfigurasi.' };
+    }
+
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      set({ authUser: data.user });
+      return { success: true, user: data.user };
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
+  },
+
+  ensureAnonymousCustomerSession: async () => {
+    if (!isSupabaseConfigured) {
+      return { success: false, error: 'Supabase belum dikonfigurasi untuk sesi konsultasi.' };
+    }
+
+    if (!anonymousSessionRequest) {
+      anonymousSessionRequest = (async () => {
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+        if (sessionError) throw sessionError;
+        if (sessionData.session?.user) return sessionData.session.user;
+
+        const { data, error } = await supabase.auth.signInAnonymously({
+          options: { data: { role: 'customer', name: 'Pelanggan' } }
+        });
+        if (error) {
+          if (/anonymous sign-ins? (are|is) disabled/i.test(error.message || '')) {
+            throw new Error('Sesi tamu belum diaktifkan di Supabase. Minta pemilik project mengaktifkan Anonymous Sign-Ins di Authentication > Sign In / Providers.');
+          }
+          throw error;
+        }
+        if (!data.user) throw new Error('Supabase tidak mengembalikan sesi pelanggan tamu.');
+        return data.user;
+      })();
+    }
+
+    try {
+      const user = await anonymousSessionRequest;
+      set({ authUser: user });
+      return { success: true, user };
+    } catch (err) {
+      return { success: false, error: err.message || 'Gagal memulai sesi konsultasi tamu.' };
+    } finally {
+      anonymousSessionRequest = null;
     }
   },
 

@@ -831,6 +831,17 @@ export default function BarberDashboard() {
           </div>
 
           {/* Open Public Bio */}
+          <button
+            type="button"
+            onClick={() => navigate('/barber/messages')}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-[#285844] hover:bg-emerald-50 border border-emerald-200 transition-colors whitespace-nowrap shrink-0"
+            title="Buka percakapan konsultasi"
+          >
+            <MessageCircle className="w-3.5 h-3.5 shrink-0" />
+            <span className="hidden sm:inline">Pesan</span>
+          </button>
+
+          {/* Open Public Bio */}
           <a
             href={publicUrl}
             target="_blank"

@@ -19,12 +19,27 @@ export default function Login({ defaultTab = 'login' }) {
   const appDomain = getAppDomain();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const isCustomerAudience = searchParams.get('audience') === 'customer';
+  const requestedReturnTo = searchParams.get('returnTo') || '';
+  const safeReturnTo = (() => {
+    try {
+      const url = new URL(requestedReturnTo, window.location.origin);
+      return url.origin === window.location.origin && url.pathname === '/messages'
+        ? `${url.pathname}${url.search}`
+        : '/messages';
+    } catch {
+      return '/messages';
+    }
+  })();
   const slugParam = searchParams.get('slug') || '';
   const modeParam = searchParams.get('mode') || (defaultTab === 'register' ? 'register' : 'login');
 
   const signInBarber = useStore((state) => state.signInBarber);
+  const signInCustomer = useStore((state) => state.signInCustomer);
   const signUpBarber = useStore((state) => state.signUpBarber);
+  const signUpCustomer = useStore((state) => state.signUpCustomer);
   const verifyOtpBarber = useStore((state) => state.verifyOtpBarber);
+  const verifyOtpCustomer = useStore((state) => state.verifyOtpCustomer);
   const resendOtp = useStore((state) => state.resendOtp);
 
   // Auth Mode: 'login' | 'register'
@@ -36,6 +51,7 @@ export default function Login({ defaultTab = 'login' }) {
 
   // Form Fields - Register
   const [regSlug, setRegSlug] = useState(slugParam);
+  const [regName, setRegName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -51,6 +67,7 @@ export default function Login({ defaultTab = 'login' }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
   const [googleLoading, setGoogleLoading] = useState(false);
+  const postLoginPath = isCustomerAudience ? safeReturnTo : '/barber/dashboard';
 
   // Countdown timer effect for OTP resend
   useEffect(() => {
@@ -89,11 +106,13 @@ export default function Login({ defaultTab = 'login' }) {
     setSuccessMsg('');
     setIsLoading(true);
 
-    const res = await signInBarber(loginEmail.trim(), loginPassword);
+    const res = isCustomerAudience
+      ? await signInCustomer(loginEmail.trim(), loginPassword)
+      : await signInBarber(loginEmail.trim(), loginPassword);
     setIsLoading(false);
 
     if (res.success) {
-      navigate('/barber/dashboard');
+      navigate(postLoginPath);
     } else {
       setErrorMsg(
         res.error === 'Invalid login credentials'
@@ -152,6 +171,45 @@ export default function Login({ defaultTab = 'login' }) {
     }
   };
 
+  const handleCustomerRegister = async (e) => {
+    e.preventDefault();
+    setErrorMsg('');
+    setSuccessMsg('');
+
+    if (!regName.trim()) {
+      setErrorMsg('Nama wajib diisi.');
+      return;
+    }
+    if (regPassword.length < 6) {
+      setErrorMsg('Kata sandi minimal 6 karakter.');
+      return;
+    }
+
+    setIsLoading(true);
+    const res = await signUpCustomer({
+      name: regName.trim(),
+      email: regEmail.trim(),
+      password: regPassword
+    });
+    setIsLoading(false);
+
+    if (res.success) {
+      if (res.hasSession) {
+        navigate(safeReturnTo);
+      } else {
+        setOtpStep(true);
+        setOtpTimer(60);
+        setSuccessMsg(`Kode OTP 6 digit telah dikirimkan ke email ${regEmail.trim()}. Silakan cek kotak masuk atau spam.`);
+      }
+    } else {
+      setErrorMsg(
+        res.error?.includes('already registered')
+          ? 'Email ini sudah terdaftar. Silakan masuk.'
+          : res.error || 'Gagal membuat akun pelanggan.'
+      );
+    }
+  };
+
   // Handle Verify OTP
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
@@ -165,17 +223,19 @@ export default function Login({ defaultTab = 'login' }) {
 
     setIsLoading(true);
 
-    const res = await verifyOtpBarber({
-      email: regEmail.trim(),
-      token: otpCode.trim(),
-      slug: regSlug.trim().toLowerCase(),
-      phone: regPhone.trim()
-    });
+    const res = isCustomerAudience
+      ? await verifyOtpCustomer({ email: regEmail.trim(), token: otpCode.trim() })
+      : await verifyOtpBarber({
+        email: regEmail.trim(),
+        token: otpCode.trim(),
+        slug: regSlug.trim().toLowerCase(),
+        phone: regPhone.trim()
+      });
 
     setIsLoading(false);
 
     if (res.success) {
-      navigate('/barber/dashboard');
+      navigate(postLoginPath);
     } else {
       setErrorMsg(res.error || 'Verifikasi kode OTP gagal.');
     }
@@ -212,12 +272,12 @@ export default function Login({ defaultTab = 'login' }) {
         token: response.credential,
       });
       if (error) throw error;
-      navigate('/barber/dashboard');
+      navigate(postLoginPath);
     } catch (err) {
       setGoogleLoading(false);
       setErrorMsg(err.message || 'Gagal login melalui Google ID Token.');
     }
-  }, [navigate]);
+  }, [navigate, postLoginPath]);
 
   useEffect(() => {
     const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '239781382181-sk41bl7t8ovgl98e04j13tsj0crevnqi.apps.googleusercontent.com').trim();
@@ -271,7 +331,7 @@ export default function Login({ defaultTab = 'login' }) {
         const { error } = await supabase.auth.signInWithOAuth({
           provider: 'google',
           options: {
-            redirectTo: `${window.location.origin}/barber/dashboard`,
+            redirectTo: `${window.location.origin}${postLoginPath}`,
             queryParams: {
               access_type: 'offline',
               prompt: 'consent'
@@ -302,14 +362,18 @@ export default function Login({ defaultTab = 'login' }) {
 
         <div className="flex items-center gap-2 text-xs">
           <span className="text-neutral-500 hidden sm:inline">
-            {authMode === 'login' ? 'Belum punya akun studio?' : 'Sudah terdaftar?'}
+            {authMode === 'login'
+              ? isCustomerAudience ? 'Belum punya akun pelanggan?' : 'Belum punya akun studio?'
+              : 'Sudah terdaftar?'}
           </span>
           <button
             type="button"
             onClick={() => switchAuthMode(authMode === 'login' ? 'register' : 'login')}
             className="font-semibold text-[#171717] hover:text-[#285844] underline decoration-neutral-300 underline-offset-4 cursor-pointer transition-colors"
           >
-            {authMode === 'login' ? 'Daftar Gratis' : 'Masuk Sekarang'}
+            {authMode === 'login'
+              ? isCustomerAudience ? 'Daftar Pelanggan' : 'Daftar Gratis'
+              : 'Masuk Sekarang'}
           </button>
         </div>
       </header>
@@ -328,15 +392,19 @@ export default function Login({ defaultTab = 'login' }) {
                   {otpStep
                     ? 'Verifikasi Kode OTP'
                     : authMode === 'login' 
-                    ? 'Masuk ke Studio Capster & Barber' 
-                    : 'Buat Link Bio Capster & Barber'}
+                  ? isCustomerAudience ? 'Masuk untuk Konsultasi' : 'Masuk ke Studio Capster & Barber'
+                  : isCustomerAudience ? 'Buat Akun Pelanggan' : 'Buat Link Bio Capster & Barber'}
                 </h1>
                 <p className="text-xs text-neutral-500 mt-1">
                   {otpStep
                     ? 'Masukkan 6 digit kode OTP yang telah dikirim ke email Anda'
-                    : authMode === 'login' 
-                    ? 'Kelola jadwal, profil bio link, dan antrean booking bisnismu' 
-                    : 'Dapatkan 1 link untuk seluruh info tarif, portofolio, dan jadwalmu'}
+                    : authMode === 'login'
+                    ? isCustomerAudience
+                      ? 'Masuk atau daftar untuk melanjutkan percakapan dengan barber pilihanmu.'
+                      : 'Kelola jadwal, profil bio link, dan antrean booking bisnismu'
+                    : isCustomerAudience
+                      ? 'Buat akun pelanggan untuk berkonsultasi langsung dengan barber dan capster.'
+                      : 'Dapatkan 1 link untuk seluruh info tarif, portofolio, dan jadwalmu'}
                 </p>
               </div>
 
@@ -411,7 +479,7 @@ export default function Login({ defaultTab = 'login' }) {
                         </>
                       ) : (
                         <>
-                          <span>Verifikasi & Masuk Dashboard</span>
+                          <span>{isCustomerAudience ? 'Verifikasi & Lanjutkan' : 'Verifikasi & Masuk Dashboard'}</span>
                           <ArrowRight className="w-3.5 h-3.5" />
                         </>
                       )}
@@ -445,7 +513,7 @@ export default function Login({ defaultTab = 'login' }) {
               ) : (
                 <>
                   {/* Google Direct Sign-In Container (Renders official Google Button without Supabase redirect) */}
-                  <div className="w-full flex flex-col items-center justify-center">
+                  {!isCustomerAudience && <div className="w-full flex flex-col items-center justify-center">
                     <div 
                       ref={googleBtnContainerRef}
                       className={`w-full flex justify-center ${gisLoaded && !googleLoading ? 'block' : 'hidden'} min-h-[44px]`}
@@ -479,17 +547,19 @@ export default function Login({ defaultTab = 'login' }) {
                         )}
                       </button>
                     )}
-                  </div>
+                  </div>}
 
                   {/* Minimal Divider */}
-                  <div className="relative my-4 text-center">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-neutral-200" />
+                  {!isCustomerAudience && (
+                    <div className="relative my-4 text-center">
+                      <div className="absolute inset-0 flex items-center">
+                        <div className="w-full border-t border-neutral-200" />
+                      </div>
+                      <span className="relative px-3 bg-white text-[10px] uppercase tracking-wider font-semibold text-neutral-400">
+                        atau dengan email
+                      </span>
                     </div>
-                    <span className="relative px-3 bg-white text-[10px] uppercase tracking-wider font-semibold text-neutral-400">
-                      atau dengan email
-                    </span>
-                  </div>
+                  )}
 
                   {/* BARBER: LOGIN FORM */}
                   {authMode === 'login' && (
@@ -533,7 +603,7 @@ export default function Login({ defaultTab = 'login' }) {
                             <span>Memverifikasi...</span>
                           </>
                         ) : (
-                          <span>Masuk ke Dashboard Studio</span>
+                          <span>{isCustomerAudience ? 'Masuk & Buka Konsultasi' : 'Masuk ke Dashboard Studio'}</span>
                         )}
                       </button>
                     </form>
@@ -541,7 +611,20 @@ export default function Login({ defaultTab = 'login' }) {
 
                   {/* BARBER: REGISTER FORM */}
                   {authMode === 'register' && (
-                    <form onSubmit={handleBarberRegister} className="space-y-3">
+                    <form onSubmit={isCustomerAudience ? handleCustomerRegister : handleBarberRegister} className="space-y-3">
+                      {isCustomerAudience ? (
+                        <div>
+                          <label className="text-xs font-medium text-neutral-700 block mb-1">Nama</label>
+                          <input
+                            type="text"
+                            required
+                            value={regName}
+                            onChange={(e) => setRegName(e.target.value)}
+                            placeholder="Nama lengkap"
+                            className="w-full text-xs px-3 py-2.5 bg-white border border-neutral-200 rounded-lg outline-none focus:border-[#171717] focus:ring-1 focus:ring-[#171717] text-[#171717] transition-all"
+                          />
+                        </div>
+                      ) : (
                       <div>
                         <label className="text-xs font-medium text-neutral-700 block mb-1">
                           Alamat Link Bio
@@ -560,8 +643,10 @@ export default function Login({ defaultTab = 'login' }) {
                           />
                         </div>
                       </div>
+                      )}
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className={isCustomerAudience ? 'space-y-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-2.5'}>
+                        {!isCustomerAudience && (
                         <div>
                           <label className="text-xs font-medium text-neutral-700 block mb-1">
                             Nomor WhatsApp
@@ -574,6 +659,7 @@ export default function Login({ defaultTab = 'login' }) {
                             className="w-full text-xs px-3 py-2.5 bg-white border border-neutral-200 rounded-lg outline-none focus:border-[#171717] focus:ring-1 focus:ring-[#171717] text-[#171717] transition-all"
                           />
                         </div>
+                        )}
                         <div>
                           <label className="text-xs font-medium text-neutral-700 block mb-1">
                             Email
@@ -582,7 +668,7 @@ export default function Login({ defaultTab = 'login' }) {
                             type="email"
                             required
                             value={regEmail}
-                            onChange={handleEmailChange}
+                            onChange={isCustomerAudience ? (e) => setRegEmail(e.target.value) : handleEmailChange}
                             placeholder="nama@email.com"
                             className="w-full text-xs px-3 py-2.5 bg-white border border-neutral-200 rounded-lg outline-none focus:border-[#171717] focus:ring-1 focus:ring-[#171717] text-[#171717] transition-all"
                           />
@@ -612,7 +698,7 @@ export default function Login({ defaultTab = 'login' }) {
                         {isLoading ? (
                           <>
                             <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Mendaftarkan & Mengirim OTP...</span>
+                            <span>{isCustomerAudience ? 'Membuat akun & Mengirim OTP...' : 'Mendaftarkan & Mengirim OTP...'}</span>
                           </>
                         ) : (
                           <>
