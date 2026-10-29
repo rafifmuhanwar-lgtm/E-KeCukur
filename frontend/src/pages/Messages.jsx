@@ -124,6 +124,7 @@ export default function Messages({ barberMode = false }) {
   const [realtimeStatus, setRealtimeStatus] = useState('connecting');
   const [typingStatus, setTypingStatus] = useState({ conversationId: '', userId: '' });
   const messageListRef = useRef(null);
+  const textareaRef = useRef(null);
   const typingChannelRef = useRef(null);
   const typingChannelReadyRef = useRef(false);
   const typingTimeoutRef = useRef(null);
@@ -427,8 +428,17 @@ export default function Messages({ barberMode = false }) {
     });
   }, [authUserId]);
 
+  const adjustTextareaHeight = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    textarea.style.height = 'auto';
+    const newHeight = Math.min(Math.max(textarea.scrollHeight, 44), 120);
+    textarea.style.height = `${newHeight}px`;
+  }, []);
+
   const handleMessageInput = (event) => {
     setMessageText(event.target.value);
+    adjustTextareaHeight();
     const now = Date.now();
     if (now - lastTypingBroadcastAtRef.current >= 700) {
       broadcastTypingStatus(true);
@@ -533,11 +543,36 @@ export default function Messages({ barberMode = false }) {
     };
   }, [authUser?.id, loadConversations, pageReady]);
 
-  useEffect(() => {
+  const scrollToBottom = useCallback((smooth = false) => {
     if (messageListRef.current) {
-      messageListRef.current.scrollTop = messageListRef.current.scrollHeight;
+      messageListRef.current.scrollTo({
+        top: messageListRef.current.scrollHeight,
+        behavior: smooth ? 'smooth' : 'auto'
+      });
     }
-  }, [visibleMessages]);
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom(false);
+  }, [visibleMessages, scrollToBottom]);
+
+  // Handle keyboard appearance / viewport resizing on mobile devices
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.visualViewport) return undefined;
+
+    const handleViewportChange = () => {
+      scrollToBottom(true);
+    };
+
+    const viewport = window.visualViewport;
+    viewport.addEventListener('resize', handleViewportChange);
+    viewport.addEventListener('scroll', handleViewportChange);
+
+    return () => {
+      viewport.removeEventListener('resize', handleViewportChange);
+      viewport.removeEventListener('scroll', handleViewportChange);
+    };
+  }, [scrollToBottom]);
 
   const selectConversation = (conversation) => {
     setError('');
@@ -569,6 +604,10 @@ export default function Messages({ barberMode = false }) {
         });
       if (sendError) throw sendError;
       setMessageText('');
+      if (textareaRef.current) {
+        textareaRef.current.style.height = 'auto';
+      }
+      setTimeout(() => scrollToBottom(true), 50);
       await Promise.all([
         loadMessages(selectedConversation.id),
         loadConversations()
@@ -681,19 +720,19 @@ export default function Messages({ barberMode = false }) {
 
   if (requiresCustomerName) {
     return (
-      <main className="min-h-[100dvh] bg-[#F7F6F2] px-4 py-8 flex items-center justify-center">
+      <main className="h-[100dvh] min-h-0 bg-[#F7F6F2] px-4 py-4 sm:py-8 flex items-center justify-center overflow-y-auto overscroll-contain">
         <form
           onSubmit={saveCustomerName}
-          className="w-full max-w-md rounded-3xl border border-[#DCE7DF] bg-white p-6 sm:p-8 shadow-[0_18px_45px_rgba(40,88,68,0.14),0_5px_12px_rgba(40,88,68,0.08)]"
+          className="w-full max-w-md my-auto rounded-3xl border border-[#DCE7DF] bg-white p-5 sm:p-8 shadow-[0_18px_45px_rgba(40,88,68,0.14),0_5px_12px_rgba(40,88,68,0.08)]"
         >
-          <span className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E7EFE9] text-[#285844] shadow-[0_3px_0_#D7E5DA]">
+          <span className="mx-auto mb-3 sm:mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-[#E7EFE9] text-[#285844] shadow-[0_3px_0_#D7E5DA]">
             <UserRound className="h-6 w-6" />
           </span>
-          <h1 className="text-center text-xl font-bold text-[#171717]">Sebelum mulai konsultasi</h1>
-          <p className="mt-2 text-center text-sm leading-relaxed text-neutral-500">
+          <h1 className="text-center text-lg sm:text-xl font-bold text-[#171717]">Sebelum mulai konsultasi</h1>
+          <p className="mt-1.5 sm:mt-2 text-center text-xs sm:text-sm leading-relaxed text-neutral-500">
             Masukkan nama yang biasa kamu gunakan agar barber atau capster tahu siapa yang menghubunginya.
           </p>
-          <label htmlFor="customer-chat-name" className="mt-6 mb-2 block text-sm font-semibold text-[#285844]">
+          <label htmlFor="customer-chat-name" className="mt-5 sm:mt-6 mb-2 block text-xs sm:text-sm font-semibold text-[#285844]">
             Nama kamu
           </label>
           <input
@@ -707,10 +746,10 @@ export default function Messages({ barberMode = false }) {
               if (error) setError('');
             }}
             placeholder="Contoh: Budi Santoso"
-            className="w-full rounded-xl border border-[#D5E1D8] bg-[#F8FAF8] px-4 py-3 text-base outline-none transition focus:border-[#72927F] focus:bg-white focus:ring-4 focus:ring-[#285844]/10"
+            className="w-full rounded-xl border border-[#D5E1D8] bg-[#F8FAF8] px-4 py-3 text-[16px] sm:text-base outline-none transition focus:border-[#72927F] focus:bg-white focus:ring-4 focus:ring-[#285844]/10"
             aria-describedby="customer-name-help"
           />
-          <p id="customer-name-help" className="mt-2 text-xs leading-relaxed text-neutral-500">
+          <p id="customer-name-help" className="mt-1.5 text-xs leading-relaxed text-neutral-500">
             Nama ini akan terlihat oleh barber/capster di percakapan. Tidak perlu login atau memberikan data lain.
           </p>
           {customerName.trim() && customerNameError && (
@@ -725,7 +764,7 @@ export default function Messages({ barberMode = false }) {
             {savingCustomerName && <LoaderCircle className="h-4 w-4 animate-spin" />}
             Lanjut ke konsultasi
           </button>
-          <p className="mt-4 text-center text-[11px] leading-relaxed text-neutral-400">
+          <p className="mt-3 text-center text-[11px] leading-relaxed text-neutral-400">
             Gunakan nama yang pantas. Tanpa verifikasi tambahan, kami tidak dapat memastikan nama ini adalah nama legalmu.
           </p>
         </form>
@@ -859,9 +898,9 @@ export default function Messages({ barberMode = false }) {
                 </header>
 
                 {/* 24-Hour Message Retention Banner */}
-                <div className="bg-[#EEF5F0] border-b border-[#D7E5DC] px-3.5 py-1.5 flex items-center justify-center gap-1.5 text-center text-[11px] font-medium text-[#285844] shadow-xs">
+                <div className="shrink-0 bg-[#EEF5F0] border-b border-[#D7E5DC] px-3.5 py-1.5 flex items-center justify-center gap-1.5 text-center text-[11px] font-medium text-[#285844] shadow-xs">
                   <Clock className="w-3.5 h-3.5 shrink-0 text-[#397457]" />
-                  <span>Pesan konsultasi otomatis terhapus setelah 24 jam untuk menjaga privasi &amp; penyimpanan</span>
+                  <span className="truncate sm:whitespace-normal">Pesan konsultasi otomatis terhapus setelah 24 jam untuk menjaga privasi &amp; penyimpanan</span>
                 </div>
 
                 {(routeError || error) && (
@@ -905,7 +944,7 @@ export default function Messages({ barberMode = false }) {
                   })}
                 </div>
 
-                <form onSubmit={sendMessage} className="shrink-0 px-3 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-4 border-t border-[#DCE7DF] bg-gradient-to-b from-[#F4F8F5] to-white shadow-[0_-6px_16px_rgba(40,88,68,0.08)]">
+                <form onSubmit={sendMessage} className="shrink-0 px-3 pt-2.5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-4 border-t border-[#DCE7DF] bg-gradient-to-b from-[#F4F8F5] to-white shadow-[0_-6px_16px_rgba(40,88,68,0.08)]">
                   {(routeError || error) && <p role="alert" className="text-xs text-red-700 mb-2">{routeError || error}</p>}
                   {!barberMode && visibleMessages.length === 0 && (
                     <div className="max-w-5xl min-w-0 mx-auto mb-2 sm:mb-3">
@@ -915,7 +954,13 @@ export default function Messages({ barberMode = false }) {
                           <button
                             key={template}
                             type="button"
-                            onClick={() => setMessageText(template)}
+                            onClick={() => {
+                              setMessageText(template);
+                              setTimeout(adjustTextareaHeight, 0);
+                              if (textareaRef.current) {
+                                textareaRef.current.focus();
+                              }
+                            }}
                             className="shrink-0 rounded-full border border-[#C9DBCE] bg-white px-3 py-2 text-left text-[11px] font-medium text-[#285844] shadow-[0_2px_0_#E0EAE2,0_4px_8px_rgba(40,88,68,0.06)] transition hover:-translate-y-0.5 hover:bg-[#F2F8F3] hover:shadow-[0_3px_0_#D7E5DA,0_6px_10px_rgba(40,88,68,0.1)]"
                           >
                             {template}
@@ -926,8 +971,13 @@ export default function Messages({ barberMode = false }) {
                   )}
                   <div className="flex items-end gap-2 max-w-5xl min-w-0 mx-auto">
                     <textarea
+                      ref={textareaRef}
                       value={messageText}
                       onChange={handleMessageInput}
+                      onFocus={() => {
+                        setTimeout(() => scrollToBottom(true), 150);
+                        setTimeout(() => scrollToBottom(true), 350);
+                      }}
                       onBlur={() => {
                         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
                         broadcastTypingStatus(false);
@@ -943,7 +993,7 @@ export default function Messages({ barberMode = false }) {
                       rows={1}
                       placeholder="Tulis pesan..."
                       aria-label="Tulis pesan"
-                      className="min-h-11 max-h-28 sm:max-h-32 min-w-0 flex-1 resize-none sm:resize-y overflow-y-auto rounded-xl border border-[#D5E1D8] bg-white px-3.5 sm:px-4 py-3 text-sm outline-none shadow-[inset_0_2px_5px_rgba(40,88,68,0.07),0_2px_0_rgba(255,255,255,0.9)] transition focus:border-[#72927F] focus:ring-4 focus:ring-[#285844]/10"
+                      className="min-h-11 max-h-28 sm:max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[#D5E1D8] bg-white px-3.5 sm:px-4 py-2.5 sm:py-3 text-[16px] sm:text-sm leading-relaxed text-[#171717] outline-none shadow-[inset_0_2px_5px_rgba(40,88,68,0.07),0_2px_0_rgba(255,255,255,0.9)] transition focus:border-[#72927F] focus:ring-4 focus:ring-[#285844]/10"
                     />
                     <button
                       type="submit"
