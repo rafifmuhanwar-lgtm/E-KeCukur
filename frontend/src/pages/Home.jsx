@@ -331,15 +331,15 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Mobile Drawer Menu attached inside sticky nav with GPU acceleration */}
+        {/* Mobile Drawer Menu floating overlay (does NOT push content down) */}
         <AnimatePresence>
           {mobileMenuOpen && (
             <motion.div
-              initial={{ opacity: 0, y: -10 }}
+              initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
+              exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.15, ease: 'easeOut' }}
-              className="md:hidden border-t border-neutral-200/90 bg-[#F7F6F2] px-5 py-4 space-y-4 shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto transform-gpu will-change-transform"
+              className="absolute top-full left-0 right-0 md:hidden border-t border-neutral-200/90 bg-[#F7F6F2] px-5 py-5 space-y-4 shadow-2xl max-h-[calc(100vh-4rem)] overflow-y-auto transform-gpu will-change-transform z-50"
             >
               <div className="flex flex-col gap-1 text-sm font-semibold text-neutral-800">
                 <a 

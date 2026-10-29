@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Check, CheckCheck, LoaderCircle, MessageCircle, Send, UserRound } from 'lucide-react';
+import { ArrowLeft, Check, CheckCheck, Clock, LoaderCircle, MessageCircle, Send, UserRound } from 'lucide-react';
 import { useStore } from '../store';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
@@ -143,21 +143,35 @@ export default function Messages({ barberMode = false }) {
       : '';
 
   const loadConversations = useCallback(async () => {
+    // Jalankan auto-cleanup di database (retensi 24 jam)
+    supabase.rpc('cleanup_expired_chat').catch(() => {});
+
     const { data, error: queryError } = await supabase
       .from('conversations')
       .select('*')
       .order('last_message_at', { ascending: false, nullsFirst: false });
 
     if (queryError) throw new Error(getChatErrorMessage(queryError));
-    setConversations(data || []);
-    return data || [];
+
+    // Filter percakapan aktif dalam 24 jam terakhir (1 hari)
+    const now = Date.now();
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const activeConversations = (data || []).filter((conv) => {
+      const timestamp = conv.last_message_at || conv.created_at;
+      return !timestamp || (now - new Date(timestamp).getTime()) < ONE_DAY_MS;
+    });
+
+    setConversations(activeConversations);
+    return activeConversations;
   }, [setConversations]);
 
   const loadMessages = useCallback(async (conversationId) => {
+    const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data, error: queryError } = await supabase
       .from('messages')
       .select('id, conversation_id, sender_id, body, created_at, read_at')
       .eq('conversation_id', conversationId)
+      .gte('created_at', cutoffIso)
       .order('created_at', { ascending: true });
 
     if (queryError) {
@@ -408,9 +422,15 @@ export default function Messages({ barberMode = false }) {
     if (!selectedConversationId || !pageReady) return undefined;
     let active = true;
 
-    loadMessages(selectedConversationId).then(loadConversations).catch((loadError) => {
-      if (active) setError(getChatErrorMessage(loadError));
-    });
+    const syncCurrentMessages = async () => {
+      try {
+        await loadMessages(selectedConversationId);
+        if (active) await loadConversations();
+      } catch (loadError) {
+        if (active) setError(getChatErrorMessage(loadError));
+      }
+    };
+    syncCurrentMessages();
 
     const channel = supabase
       .channel(`chat:${selectedConversationId}`)
@@ -681,7 +701,7 @@ export default function Messages({ barberMode = false }) {
             <div className="relative z-[1] px-5 py-4 border-b border-[#DCE7DF] bg-gradient-to-b from-white to-[#F4F8F5] shadow-[0_4px_12px_rgba(40,88,68,0.07)]">
               <h1 className="text-lg font-bold">Percakapan</h1>
               <p className="text-xs text-neutral-500 mt-1">
-                {barberMode ? 'Konsultasi yang masuk ke profilmu' : 'Konsultasi dengan barber pilihanmu'}
+                {barberMode ? 'Konsultasi 24 jam yang masuk ke profilmu' : 'Konsultasi 24 jam dengan barber pilihanmu'}
               </p>
             </div>
             <div className="flex-1 overflow-y-auto">
@@ -786,6 +806,12 @@ export default function Messages({ barberMode = false }) {
                   </div>
                 </header>
 
+                {/* 24-Hour Message Retention Banner */}
+                <div className="bg-[#EEF5F0] border-b border-[#D7E5DC] px-3.5 py-1.5 flex items-center justify-center gap-1.5 text-center text-[11px] font-medium text-[#285844] shadow-xs">
+                  <Clock className="w-3.5 h-3.5 shrink-0 text-[#397457]" />
+                  <span>Pesan konsultasi otomatis terhapus setelah 24 jam untuk menjaga privasi &amp; penyimpanan</span>
+                </div>
+
                 {(routeError || error) && (
                   <p role="alert" className="px-4 py-2 bg-amber-50 text-amber-800 text-xs border-b border-amber-100">
                     {routeError || error}
@@ -801,7 +827,7 @@ export default function Messages({ barberMode = false }) {
                     <div className="h-full min-h-40 flex flex-col items-center justify-center text-center">
                       <MessageCircle className="w-8 h-8 text-[#8BA797] mb-3" />
                       <p className="text-sm font-semibold">Percakapan dimulai di sini</p>
-                      <p className="text-xs text-neutral-500 mt-1">Kirim pertanyaan pertama untuk memulai konsultasi.</p>
+                      <p className="text-xs text-neutral-500 mt-1">Kirim pertanyaan pertama untuk konsultasi. Pesan otomatis terhapus dalam 24 jam.</p>
                     </div>
                   ) : visibleMessages.map((message) => {
                     const isOwnMessage = message.sender_id === authUser?.id;

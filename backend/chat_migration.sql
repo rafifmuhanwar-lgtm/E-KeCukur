@@ -31,8 +31,14 @@ CREATE INDEX IF NOT EXISTS conversations_customer_recent_idx
   ON public.conversations (customer_id, last_message_at DESC);
 CREATE INDEX IF NOT EXISTS conversations_barber_recent_idx
   ON public.conversations (barber_id, last_message_at DESC);
+CREATE INDEX IF NOT EXISTS conversations_last_message_at_idx
+  ON public.conversations (last_message_at);
+CREATE INDEX IF NOT EXISTS conversations_created_at_idx
+  ON public.conversations (created_at);
 CREATE INDEX IF NOT EXISTS messages_conversation_recent_idx
   ON public.messages (conversation_id, created_at);
+CREATE INDEX IF NOT EXISTS messages_created_at_idx
+  ON public.messages (created_at);
 
 -- Keep anonymous Supabase auth sessions as guest customers, never as barbers.
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
@@ -308,6 +314,13 @@ BEGIN
         + CASE WHEN NEW.sender_id <> barber_id THEN 1 ELSE 0 END
   WHERE id = NEW.conversation_id;
 
+  -- Pembersihan berkala otomatis (retensi 24 jam / 1 hari)
+  BEGIN
+    PERFORM public.cleanup_expired_chat_messages(INTERVAL '1 day');
+  EXCEPTION WHEN OTHERS THEN
+    NULL;
+  END;
+
   RETURN NEW;
 END;
 $$;
@@ -370,6 +383,61 @@ BEGIN
   SET customer_name = v_name
   WHERE customer_id = auth.uid();
 END;
+$$;
+
+-- Pembersihan otomatis pesan & obrolan kadaluarsa (> 1 hari / 24 jam)
+CREATE OR REPLACE FUNCTION public.cleanup_expired_chat_messages(
+  p_retention_interval INTERVAL DEFAULT INTERVAL '1 day'
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+  v_deleted_messages INT := 0;
+  v_deleted_conversations INT := 0;
+  v_cutoff TIMESTAMPTZ;
+BEGIN
+  v_cutoff := NOW() - p_retention_interval;
+
+  -- 1. Hapus pesan yang sudah lebih dari 24 jam
+  WITH del_m AS (
+    DELETE FROM public.messages
+    WHERE created_at < v_cutoff
+    RETURNING id
+  )
+  SELECT count(*) INTO v_deleted_messages FROM del_m;
+
+  -- 2. Hapus percakapan yang sudah lebih dari 24 jam tidak ada aktivitas pesan baru
+  WITH del_c AS (
+    DELETE FROM public.conversations
+    WHERE (
+      last_message_at < v_cutoff
+      OR (last_message_at IS NULL AND created_at < v_cutoff)
+    )
+    RETURNING id
+  )
+  SELECT count(*) INTO v_deleted_conversations FROM del_c;
+
+  RETURN jsonb_build_object(
+    'success', true,
+    'deleted_messages', v_deleted_messages,
+    'deleted_conversations', v_deleted_conversations,
+    'retention_interval', p_retention_interval::TEXT,
+    'cutoff_time', v_cutoff,
+    'executed_at', NOW()
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cleanup_expired_chat()
+RETURNS JSONB
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+  SELECT public.cleanup_expired_chat_messages(INTERVAL '1 day');
 $$;
 
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
@@ -508,6 +576,10 @@ REVOKE ALL ON FUNCTION public.mark_conversation_read(UUID) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.mark_conversation_read(UUID) TO authenticated;
 REVOKE ALL ON FUNCTION public.update_my_chat_display_name(TEXT) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.update_my_chat_display_name(TEXT) TO authenticated;
+REVOKE ALL ON FUNCTION public.cleanup_expired_chat_messages(INTERVAL) FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.cleanup_expired_chat() FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.cleanup_expired_chat_messages(INTERVAL) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION public.cleanup_expired_chat() TO authenticated, anon;
 
 DO $$
 BEGIN
@@ -528,6 +600,33 @@ BEGIN
     ) THEN
       ALTER PUBLICATION supabase_realtime ADD TABLE public.messages;
     END IF;
+  END IF;
+END;
+$$;
+
+-- Setup pembersihan otomatis per jam jika ekstensi pg_cron tersedia
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM pg_extension WHERE extname = 'pg_cron'
+  ) OR EXISTS (
+    SELECT 1 FROM pg_available_extensions WHERE name = 'pg_cron'
+  ) THEN
+    BEGIN
+      CREATE EXTENSION IF NOT EXISTS pg_cron WITH SCHEMA extensions;
+
+      IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'auto_cleanup_expired_chat_hourly') THEN
+        PERFORM cron.unschedule('auto_cleanup_expired_chat_hourly');
+      END IF;
+
+      PERFORM cron.schedule(
+        'auto_cleanup_expired_chat_hourly',
+        '0 * * * *',
+        'SELECT public.cleanup_expired_chat_messages(INTERVAL ''1 day'');'
+      );
+    EXCEPTION WHEN OTHERS THEN
+      RAISE NOTICE 'pg_cron auto schedule notice: %', SQLERRM;
+    END;
   END IF;
 END;
 $$;
