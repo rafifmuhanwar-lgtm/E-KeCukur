@@ -25,11 +25,12 @@ CREATE OR REPLACE FUNCTION public.cleanup_expired_chat_messages(
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, auth, pg_temp
 AS $$
 DECLARE
   v_deleted_messages INT := 0;
   v_deleted_conversations INT := 0;
+  v_deleted_users INT := 0;
   v_cutoff TIMESTAMPTZ;
 BEGIN
   v_cutoff := NOW() - p_retention_interval;
@@ -55,10 +56,26 @@ BEGIN
   )
   SELECT count(*) INTO v_deleted_conversations FROM del_c;
 
+  -- C. Hapus akun tamu anonim (is_anonymous = true) yang dibuat lebih dari 24 jam lalu
+  --    agar tabel auth.users Supabase tetap bersih tanpa penumpukan ID tamu lama.
+  --    Relasi ON DELETE CASCADE juga otomatis menyapu sisa data relasinya jika ada.
+  BEGIN
+    WITH del_u AS (
+      DELETE FROM auth.users
+      WHERE is_anonymous = true
+        AND created_at < v_cutoff
+      RETURNING id
+    )
+    SELECT count(*) INTO v_deleted_users FROM del_u;
+  EXCEPTION WHEN OTHERS THEN
+    v_deleted_users := 0;
+  END;
+
   RETURN jsonb_build_object(
     'success', true,
     'deleted_messages', v_deleted_messages,
     'deleted_conversations', v_deleted_conversations,
+    'deleted_anonymous_users', v_deleted_users,
     'retention_interval', p_retention_interval::TEXT,
     'cutoff_time', v_cutoff,
     'executed_at', NOW()

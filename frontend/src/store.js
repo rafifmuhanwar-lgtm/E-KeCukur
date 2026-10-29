@@ -222,7 +222,16 @@ export const useStore = create((set, get) => ({
     if (isSupabaseConfigured) {
       try {
         const { data: sessionData } = await supabase.auth.getSession();
-        const user = sessionData?.session?.user || null;
+        let user = sessionData?.session?.user || null;
+        if (user?.is_anonymous) {
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          if (userError || !userData?.user) {
+            await supabase.auth.signOut().catch(() => {});
+            user = null;
+          } else {
+            user = userData.user;
+          }
+        }
         set({ authUser: user });
 
         // Listen perubahan auth (login / logout di tab lain)
@@ -836,7 +845,19 @@ export const useStore = create((set, get) => ({
       anonymousSessionRequest = (async () => {
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
         if (sessionError) throw sessionError;
-        if (sessionData.session?.user) return sessionData.session.user;
+
+        if (sessionData.session?.user) {
+          if (!sessionData.session.user.is_anonymous) {
+            return sessionData.session.user;
+          }
+          // Verifikasi apakah akun tamu masih aktif di database (belum dihapus oleh cleanup 24 jam)
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          if (!userError && userData?.user) {
+            return userData.user;
+          }
+          // Jika akun tamu sudah dihapus dari server, reset sesi lokal
+          await supabase.auth.signOut().catch(() => {});
+        }
 
         const { data, error } = await supabase.auth.signInAnonymously({
           options: { data: { role: 'customer', name: 'Pelanggan' } }
