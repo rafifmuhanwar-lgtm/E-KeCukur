@@ -3,18 +3,13 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
   Check,
-  CheckCheck,
   Clock,
-  CornerUpLeft,
   Download,
   Image as ImageIcon,
   LoaderCircle,
   MessageCircle,
-  Mic,
   Search,
   Send,
-  Smile,
-  Trash2,
   UserRound,
   X,
   Zap
@@ -23,13 +18,10 @@ import { useStore } from '../store';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 import {
   BARBER_QUICK_REPLIES,
-  EMOJI_OPTIONS,
-  formatAudioDuration,
   getDateSeparatorLabel,
   parseMessagePayload,
-  uploadChatMedia
+  uploadChatImage
 } from '../lib/chatMedia';
-import VoiceNotePlayer from '../components/chat/VoiceNotePlayer';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMPTY_MESSAGES = [];
@@ -154,24 +146,17 @@ export default function Messages({ barberMode = false }) {
     typeof window !== 'undefined' && window.visualViewport ? window.visualViewport.height : null
   ));
 
-  // WhatsApp-style feature states
+  // WhatsApp-style feature states (Cleaned & Focused)
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [replyingTo, setReplyingTo] = useState(null);
-  const [activeReactionMessageId, setActiveReactionMessageId] = useState(null);
   const [isQuickReplyOpen, setIsQuickReplyOpen] = useState(false);
   const [activeLightboxImage, setActiveLightboxImage] = useState(null);
 
-  // Image upload preview state
+  // Photo Attachment states (Fitur 1)
   const [imagePreviewFile, setImagePreviewFile] = useState(null);
   const [imagePreviewUrl, setImagePreviewUrl] = useState('');
   const [imageCaption, setImageCaption] = useState('');
   const [isUploadingImage, setIsUploadingImage] = useState(false);
-
-  // Voice note recording states
-  const [isRecording, setIsRecording] = useState(false);
-  const [recordingDuration, setRecordingDuration] = useState(0);
-  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
 
   const messageListRef = useRef(null);
   const textareaRef = useRef(null);
@@ -181,11 +166,6 @@ export default function Messages({ barberMode = false }) {
   const typingTimeoutRef = useRef(null);
   const remoteTypingTimeoutRef = useRef(null);
   const lastTypingBroadcastAtRef = useRef(0);
-
-  // Voice note recorder refs
-  const mediaRecorderRef = useRef(null);
-  const recordingTimerRef = useRef(null);
-  const audioChunksRef = useRef([]);
 
   useEffect(() => {
     // Lock body scrolling when in chat to prevent mobile browser from pushing the page up
@@ -498,7 +478,7 @@ export default function Messages({ barberMode = false }) {
   const messagesLoading = Boolean(selectedConversationId && selectedConversationId !== loadedConversationId);
   const visibleMessages = selectedConversationId === loadedConversationId ? messages : EMPTY_MESSAGES;
 
-  // Filter messages when search is active
+  // Fitur 10: Pencarian Pesan di Dalam Chat
   const filteredMessages = useMemo(() => {
     if (!searchQuery.trim()) return visibleMessages;
     const q = searchQuery.toLowerCase();
@@ -518,17 +498,6 @@ export default function Messages({ barberMode = false }) {
       payload: { userId: authUserId, isTyping }
     }).catch(() => {});
   }, [authUserId]);
-
-  const broadcastReaction = useCallback((messageId, reactions) => {
-    const channel = typingChannelRef.current;
-    if (!channel || !typingChannelReadyRef.current) return;
-
-    channel.send({
-      type: 'broadcast',
-      event: 'reaction',
-      payload: { messageId, reactions }
-    }).catch(() => {});
-  }, []);
 
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -589,15 +558,6 @@ export default function Messages({ barberMode = false }) {
               ? { conversationId: '', userId: '' }
               : current
           ));
-        }
-      })
-      .on('broadcast', { event: 'reaction' }, ({ payload }) => {
-        if (payload?.messageId && payload?.reactions) {
-          setMessages((prev) => prev.map((msg) => (
-            msg.id === payload.messageId
-              ? { ...msg, reactions: payload.reactions }
-              : msg
-          )));
         }
       })
       .on('postgres_changes', {
@@ -694,14 +654,13 @@ export default function Messages({ barberMode = false }) {
 
   const selectConversation = (conversation) => {
     setError('');
-    setReplyingTo(null);
     setSearchQuery('');
     setIsSearchOpen(false);
     const basePath = barberMode ? '/barber/messages' : '/messages';
     navigate(`${basePath}?conversationId=${encodeURIComponent(conversation.id)}`);
   };
 
-  // ─── SEND TEXT MESSAGE (WITH OPTIONAL REPLY) ───
+  // ─── SEND TEXT MESSAGE ───
   const sendMessage = async (event) => {
     if (event) event.preventDefault();
     const bodyText = messageText.trim();
@@ -717,41 +676,14 @@ export default function Messages({ barberMode = false }) {
     broadcastTypingStatus(false);
     lastTypingBroadcastAtRef.current = 0;
 
-    const currentReply = replyingTo;
-    setReplyingTo(null);
-
-    const messagePayload = {
-      text: bodyText,
-      replyTo: currentReply
-    };
-    const bodyString = currentReply ? JSON.stringify(messagePayload) : bodyText;
-
     try {
-      let sendError = null;
-      try {
-        const res = await supabase
-          .from('messages')
-          .insert({
-            conversation_id: selectedConversation.id,
-            sender_id: authUser.id,
-            body: bodyString,
-            reply_to: currentReply
-          });
-        sendError = res.error;
-      } catch (insertErr) {
-        sendError = insertErr;
-      }
-
-      if (sendError && sendError.code === 'PGRST204') {
-        const { error: fallbackError } = await supabase
-          .from('messages')
-          .insert({
-            conversation_id: selectedConversation.id,
-            sender_id: authUser.id,
-            body: bodyString
-          });
-        sendError = fallbackError;
-      }
+      const { error: sendError } = await supabase
+        .from('messages')
+        .insert({
+          conversation_id: selectedConversation.id,
+          sender_id: authUser.id,
+          body: bodyText
+        });
 
       if (sendError) throw sendError;
 
@@ -771,21 +703,17 @@ export default function Messages({ barberMode = false }) {
     }
   };
 
-  // ─── SEND MEDIA MESSAGE (IMAGE / VOICE NOTE) ───
-  const sendMediaMessage = async ({ mediaUrl, mediaType, text = '', audioDuration = 0 }) => {
+  // ─── SEND IMAGE MESSAGE (FITUR 1) ───
+  const sendImageMessage = async (mediaUrl, caption = '') => {
     if (!mediaUrl || !selectedConversation || !authUser) return;
 
     setSending(true);
     setError('');
-    const currentReply = replyingTo;
-    setReplyingTo(null);
 
     const payload = {
-      text: text.trim(),
+      text: caption.trim(),
       mediaUrl,
-      mediaType,
-      audioDuration,
-      replyTo: currentReply
+      mediaType: 'image'
     };
     const bodyString = JSON.stringify(payload);
 
@@ -799,9 +727,7 @@ export default function Messages({ barberMode = false }) {
             sender_id: authUser.id,
             body: bodyString,
             media_url: mediaUrl,
-            media_type: mediaType,
-            audio_duration: audioDuration || null,
-            reply_to: currentReply
+            media_type: 'image'
           });
         sendError = res.error;
       } catch (err) {
@@ -856,14 +782,10 @@ export default function Messages({ barberMode = false }) {
     setIsUploadingImage(true);
     setError('');
     try {
-      const res = await uploadChatMedia(imagePreviewFile, 'image', authUser.id);
+      const res = await uploadChatImage(imagePreviewFile, authUser.id);
       if (!res?.url) throw new Error('Gagal mengunggah gambar referensi.');
 
-      await sendMediaMessage({
-        mediaUrl: res.url,
-        mediaType: 'image',
-        text: imageCaption
-      });
+      await sendImageMessage(res.url, imageCaption);
 
       if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
       setImagePreviewFile(null);
@@ -881,160 +803,6 @@ export default function Messages({ barberMode = false }) {
     setImagePreviewFile(null);
     setImagePreviewUrl('');
     setImageCaption('');
-  };
-
-  // ─── VOICE NOTE (VN) RECORDING HANDLERS ───
-  const startRecording = async () => {
-    setError('');
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('Browser Anda tidak mendukung perekaman suara.');
-      }
-
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      audioChunksRef.current = [];
-
-      let mimeType = 'audio/webm';
-      if (!MediaRecorder.isTypeSupported('audio/webm')) {
-        mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
-      }
-
-      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
-      mediaRecorderRef.current = mediaRecorder;
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data && event.data.size > 0) {
-          audioChunksRef.current.push(event.data);
-        }
-      };
-
-      mediaRecorder.start(200);
-      setIsRecording(true);
-      setRecordingDuration(0);
-
-      recordingTimerRef.current = setInterval(() => {
-        setRecordingDuration((prev) => prev + 1);
-      }, 1000);
-    } catch (micErr) {
-      console.warn('Microphone permission error:', micErr);
-      setError('Izin mikrofon diperlukan untuk merekam pesan suara.');
-    }
-  };
-
-  const stopAndSendRecording = async () => {
-    const recorder = mediaRecorderRef.current;
-    if (!recorder || !isRecording) return;
-
-    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-    setIsRecording(false);
-    setIsProcessingAudio(true);
-
-    const duration = recordingDuration;
-
-    recorder.onstop = async () => {
-      try {
-        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
-        recorder.stream.getTracks().forEach((track) => track.stop());
-
-        if (duration < 1) {
-          setIsProcessingAudio(false);
-          return;
-        }
-
-        const res = await uploadChatMedia(audioBlob, 'audio', authUser.id);
-        if (!res?.url) throw new Error('Gagal mengunggah pesan suara.');
-
-        await sendMediaMessage({
-          mediaUrl: res.url,
-          mediaType: 'audio',
-          audioDuration: duration
-        });
-      } catch (err) {
-        setError(getChatErrorMessage(err));
-      } finally {
-        setIsProcessingAudio(false);
-        setRecordingDuration(0);
-        audioChunksRef.current = [];
-        mediaRecorderRef.current = null;
-      }
-    };
-
-    recorder.stop();
-  };
-
-  const cancelRecording = () => {
-    const recorder = mediaRecorderRef.current;
-    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
-    if (recorder) {
-      recorder.stream.getTracks().forEach((track) => track.stop());
-    }
-    setIsRecording(false);
-    setRecordingDuration(0);
-    audioChunksRef.current = [];
-    mediaRecorderRef.current = null;
-  };
-
-  // ─── EMOJI REACTION HANDLER ───
-  const toggleReaction = async (messageId, emoji) => {
-    setActiveReactionMessageId(null);
-    const targetMsg = messages.find((m) => m.id === messageId);
-    if (!targetMsg || !authUser?.id) return;
-
-    const payload = parseMessagePayload(targetMsg);
-    const currentReactions = { ...(targetMsg.reactions || payload.reactions || {}) };
-    const currentList = Array.isArray(currentReactions[emoji]) ? [...currentReactions[emoji]] : [];
-    const userIndex = currentList.indexOf(authUser.id);
-
-    if (userIndex > -1) {
-      currentList.splice(userIndex, 1);
-    } else {
-      currentList.push(authUser.id);
-    }
-
-    if (currentList.length > 0) {
-      currentReactions[emoji] = currentList;
-    } else {
-      delete currentReactions[emoji];
-    }
-
-    // Optimistic UI update
-    setMessages((prev) => prev.map((m) => {
-      if (m.id !== messageId) return m;
-      const parsed = parseMessagePayload(m);
-      return {
-        ...m,
-        reactions: currentReactions,
-        body: JSON.stringify({ ...parsed, reactions: currentReactions })
-      };
-    }));
-
-    broadcastReaction(messageId, currentReactions);
-
-    try {
-      await supabase
-        .from('messages')
-        .update({ reactions: currentReactions })
-        .eq('id', messageId);
-    } catch (err) {
-      console.warn('Update reaction error:', err);
-    }
-  };
-
-  // ─── REPLY TO MESSAGE HANDLER ───
-  const handleStartReply = (message, parsed) => {
-    const isOwn = message.sender_id === authUser?.id;
-    const senderName = isOwn ? 'Kamu' : (currentParticipant?.name || 'Lawan Bicara');
-    setReplyingTo({
-      id: message.id,
-      text: parsed.text || (parsed.mediaType === 'image' ? '📷 Foto' : parsed.mediaType === 'audio' ? '🎤 Pesan Suara' : ''),
-      senderId: message.sender_id,
-      senderName,
-      mediaType: parsed.mediaType,
-      mediaUrl: parsed.mediaUrl
-    });
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-    }
   };
 
   const saveCustomerName = async (event) => {
@@ -1280,7 +1048,7 @@ export default function Messages({ barberMode = false }) {
           <section className={`${selectedConversationId || !barberMode ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-1 flex-col relative`}>
             {selectedConversation && currentParticipant ? (
               <>
-                {/* ─── CHAT HEADER WITH SEARCH & WHATSAPP STATUS ─── */}
+                {/* ─── CHAT HEADER WITH SEARCH & TYPING LABEL (FITUR 7 & 10) ─── */}
                 <header className="relative z-[2] h-[64px] sm:h-[72px] shrink-0 border-b border-[#DCE7DF] px-3 sm:px-6 flex items-center justify-between bg-gradient-to-b from-white to-[#F4F8F5] shadow-[0_5px_14px_rgba(40,88,68,0.09)]">
                   <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                     <button
@@ -1302,6 +1070,7 @@ export default function Messages({ barberMode = false }) {
                     )}
                     <div className="min-w-0">
                       <h2 className="truncate text-sm font-bold text-[#171717]">{currentParticipant.name}</h2>
+                      {/* Fitur 7: Label Mengetik Saja */}
                       <p className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-neutral-500 truncate">
                         {isOtherParticipantTyping ? (
                           <span className="text-emerald-700 font-semibold flex items-center gap-1">
@@ -1317,10 +1086,7 @@ export default function Messages({ barberMode = false }) {
                             </span>
                           </span>
                         ) : realtimeStatus === 'connected' ? (
-                          <span className="text-emerald-700 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
-                            <span>Online</span>
-                          </span>
+                          <span className="text-neutral-500">Percakapan aktif</span>
                         ) : (
                           <span>Pembaruan langsung offline</span>
                         )}
@@ -1329,6 +1095,7 @@ export default function Messages({ barberMode = false }) {
                   </div>
 
                   <div className="flex items-center gap-1">
+                    {/* Fitur 10: Toggle Pencarian Pesan */}
                     <button
                       type="button"
                       onClick={() => {
@@ -1355,7 +1122,7 @@ export default function Messages({ barberMode = false }) {
                       autoFocus
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Cari obrolan / teks..."
+                      placeholder="Cari obrolan..."
                       className="flex-1 bg-white border border-[#D5E1D8] rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[#72927F]"
                     />
                     {searchQuery && (
@@ -1389,7 +1156,7 @@ export default function Messages({ barberMode = false }) {
                   </p>
                 )}
 
-                {/* ─── MESSAGE LIST TIMELINE (WITH DATE SEPARATORS) ─── */}
+                {/* ─── MESSAGE LIST TIMELINE (WITH DATE SEPARATORS - FITUR 11) ─── */}
                 <div ref={messageListRef} className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain touch-pan-y px-3 sm:px-8 py-4 sm:py-6 space-y-3 sm:space-y-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#EAF3EC] via-[#F8FBF8] to-[#F3F5F1]">
                   {messagesLoading && visibleMessages.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-xs text-neutral-400">
@@ -1410,17 +1177,14 @@ export default function Messages({ barberMode = false }) {
                     const isOwnMessage = message.sender_id === authUser?.id;
                     const parsed = parseMessagePayload(message);
 
-                    // Fitur 11: Date Separator comparison
+                    // Fitur 11: Pemisah Tanggal (Date Separator)
                     const currentDateLabel = getDateSeparatorLabel(message.created_at);
                     const prevMessage = index > 0 ? filteredMessages[index - 1] : null;
                     const prevDateLabel = prevMessage ? getDateSeparatorLabel(prevMessage.created_at) : '';
                     const showDateSeparator = currentDateLabel && currentDateLabel !== prevDateLabel;
 
-                    const reactionsList = Object.entries(parsed.reactions || {});
-
                     return (
                       <React.Fragment key={message.id}>
-                        {/* Date Separator Pill */}
                         {showDateSeparator && (
                           <div className="flex items-center justify-center my-3 select-none">
                             <span className="px-3 py-1 rounded-full bg-[#E5EDE7] text-[#285844] text-[10px] font-bold tracking-wide uppercase shadow-2xs border border-[#D5E1D8]">
@@ -1429,79 +1193,13 @@ export default function Messages({ barberMode = false }) {
                           </div>
                         )}
 
-                        <div id={`msg-${message.id}`} className={`group relative flex min-w-0 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
-                          {/* Hover / Tap Actions (Balas & Reaksi Emoji) */}
-                          <div className={`absolute top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 z-10 ${
-                            isOwnMessage ? '-left-20' : '-right-20'
-                          }`}>
-                            <button
-                              type="button"
-                              onClick={() => handleStartReply(message, parsed)}
-                              className="w-7 h-7 rounded-full bg-white border border-[#DCE7DF] text-neutral-600 hover:text-[#285844] flex items-center justify-center shadow-xs transition"
-                              title="Balas pesan ini"
-                              aria-label="Balas pesan"
-                            >
-                              <CornerUpLeft className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setActiveReactionMessageId((prev) => prev === message.id ? null : message.id)}
-                              className="w-7 h-7 rounded-full bg-white border border-[#DCE7DF] text-neutral-600 hover:text-[#285844] flex items-center justify-center shadow-xs transition"
-                              title="Beri reaksi"
-                              aria-label="Beri reaksi"
-                            >
-                              <Smile className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-                          {/* Emoji Reaction Selector Popup (Fitur 4) */}
-                          {activeReactionMessageId === message.id && (
-                            <div className={`absolute -top-11 z-20 flex items-center gap-1 bg-white border border-[#C9DBCE] rounded-full px-2 py-1 shadow-md animate-in fade-in zoom-in-95 ${
-                              isOwnMessage ? 'right-0' : 'left-0'
-                            }`}>
-                              {EMOJI_OPTIONS.map((emoji) => (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  onClick={() => toggleReaction(message.id, emoji)}
-                                  className="w-7 h-7 rounded-full hover:bg-neutral-100 flex items-center justify-center text-sm transition transform hover:scale-125"
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-
+                        <div id={`msg-${message.id}`} className={`flex min-w-0 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
                           <div className={`max-w-[88%] sm:max-w-[70%] min-w-0 rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 transition-transform duration-200 ${
                             isOwnMessage
                               ? 'bg-gradient-to-br from-[#397457] via-[#285844] to-[#214A38] text-white rounded-br-md shadow-[0_5px_0_#193B2C,0_9px_18px_rgba(40,88,68,0.23),inset_0_1px_0_rgba(255,255,255,0.18)]'
                               : 'bg-gradient-to-br from-white to-[#F7FAF7] border border-[#DCE7DF] text-[#171717] rounded-bl-md shadow-[0_4px_0_#E4EBE5,0_8px_16px_rgba(35,67,48,0.10),inset_0_1px_0_rgba(255,255,255,0.95)]'
                           }`}>
-                            {/* Quote Reply Card inside bubble (Fitur 3) */}
-                            {parsed.replyTo && (
-                              <div
-                                onClick={() => {
-                                  const targetElem = document.getElementById(`msg-${parsed.replyTo.id}`);
-                                  if (targetElem) {
-                                    targetElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                  }
-                                }}
-                                className={`mb-2 rounded-xl p-2 text-xs border-l-4 cursor-pointer select-none transition ${
-                                  isOwnMessage
-                                    ? 'bg-black/20 border-white text-emerald-100 hover:bg-black/30'
-                                    : 'bg-[#EEF5F0] border-[#285844] text-neutral-700 hover:bg-[#E5EFE8]'
-                                }`}
-                              >
-                                <p className="font-bold text-[11px] truncate">
-                                  {parsed.replyTo.senderName || 'Balasan'}
-                                </p>
-                                <p className="truncate text-[10.5px] opacity-90 mt-0.5">
-                                  {parsed.replyTo.text || (parsed.replyTo.mediaType === 'image' ? '📷 Foto' : '🎤 Pesan Suara')}
-                                </p>
-                              </div>
-                            )}
-
-                            {/* Image Attachment (Fitur 1) */}
+                            {/* Fitur 1: Foto Referensi di Bubble Chat */}
                             {parsed.mediaType === 'image' && parsed.mediaUrl && (
                               <div className="mb-2 overflow-hidden rounded-xl bg-black/5">
                                 <img
@@ -1514,16 +1212,7 @@ export default function Messages({ barberMode = false }) {
                               </div>
                             )}
 
-                            {/* Voice Note Player (Fitur 2) */}
-                            {parsed.mediaType === 'audio' && parsed.mediaUrl && (
-                              <VoiceNotePlayer
-                                src={parsed.mediaUrl}
-                                duration={parsed.audioDuration}
-                                isOwnMessage={isOwnMessage}
-                              />
-                            )}
-
-                            {/* Text message content with optional search highlight (Fitur 10) */}
+                            {/* Teks Pesan dengan Search Highlight */}
                             {parsed.text && (
                               <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
                                 {searchQuery && parsed.text.toLowerCase().includes(searchQuery.toLowerCase()) ? (
@@ -1544,52 +1233,20 @@ export default function Messages({ barberMode = false }) {
                               </p>
                             )}
 
-                            {/* Footer: Time and Checkmarks */}
+                            {/* Waktu Pesan & Centang Simpel */}
                             <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
                               isOwnMessage ? 'text-emerald-100' : 'text-neutral-400'
                             }`}>
                               <span>{formatMessageTime(message.created_at)}</span>
-                              {isOwnMessage && (message.read_at
-                                ? <CheckCheck className="w-3.5 h-3.5 text-[#43C5FF]" aria-label="Pesan sudah dibaca" />
-                                : <Check className="w-3 h-3" aria-label="Pesan terkirim" />)}
+                              {isOwnMessage && <Check className="w-3.5 h-3.5" aria-label="Terkirim" />}
                             </div>
-
-                            {/* Emoji Reactions Pills at bottom of bubble (Fitur 4) */}
-                            {reactionsList.length > 0 && (
-                              <div className="mt-1 -mb-1 flex flex-wrap gap-1 pt-1 border-t border-white/10">
-                                {reactionsList.map(([emoji, userIds]) => {
-                                  const count = Array.isArray(userIds) ? userIds.length : 0;
-                                  if (count === 0) return null;
-                                  const isUserReacted = Array.isArray(userIds) && userIds.includes(authUser?.id);
-                                  return (
-                                    <button
-                                      key={emoji}
-                                      type="button"
-                                      onClick={() => toggleReaction(message.id, emoji)}
-                                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
-                                        isUserReacted
-                                          ? isOwnMessage
-                                            ? 'bg-white text-[#285844] shadow-xs'
-                                            : 'bg-[#285844] text-white shadow-xs'
-                                          : isOwnMessage
-                                            ? 'bg-white/20 text-white'
-                                            : 'bg-neutral-100 text-neutral-700'
-                                      }`}
-                                    >
-                                      <span>{emoji}</span>
-                                      <span>{count}</span>
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            )}
                           </div>
                         </div>
                       </React.Fragment>
                     );
                   })}
 
-                  {/* Typing Indicator Bubble at bottom of messages (Fitur 7) */}
+                  {/* Typing Indicator Bubble di Bawah Pesan (Fitur 7) */}
                   {isOtherParticipantTyping && (
                     <div className="flex justify-start">
                       <div className="rounded-2xl rounded-bl-xs bg-white border border-[#DCE7DF] px-3.5 py-2 shadow-xs flex items-center gap-1.5 text-xs text-neutral-500">
@@ -1645,7 +1302,7 @@ export default function Messages({ barberMode = false }) {
                   </div>
                 )}
 
-                {/* ─── IMAGE PREVIEW DIALOG BEFORE SENDING (FITUR 1) ─── */}
+                {/* ─── PRATINJAU FOTO SEBELUM KIRIM (FITUR 1) ─── */}
                 {imagePreviewFile && (
                   <div className="shrink-0 bg-white border-t border-[#DCE7DF] p-3 sm:p-4 shadow-lg flex items-center gap-3">
                     <img
@@ -1685,31 +1342,9 @@ export default function Messages({ barberMode = false }) {
                   </div>
                 )}
 
-                {/* ─── REPLY QUOTE BANNER ABOVE INPUT (FITUR 3) ─── */}
-                {replyingTo && (
-                  <div className="shrink-0 bg-[#F2F8F3] border-t border-l-4 border-l-[#285844] border-t-[#DCE7DF] px-3.5 py-2 flex items-center justify-between shadow-2xs">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-bold text-[#285844] truncate">
-                        Membalas {replyingTo.senderName}
-                      </p>
-                      <p className="text-xs text-neutral-600 truncate mt-0.5">
-                        {replyingTo.text}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setReplyingTo(null)}
-                      className="p-1 text-neutral-400 hover:text-neutral-700 rounded-lg"
-                      title="Batalkan balasan"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-
-                {/* ─── CHAT INPUT & VOICE NOTE BAR ─── */}
+                {/* ─── INPUT CHAT FORM ─── */}
                 <form onSubmit={sendMessage} className="shrink-0 px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-3 border-t border-[#DCE7DF] bg-gradient-to-b from-[#F4F8F5] to-white shadow-[0_-6px_16px_rgba(40,88,68,0.08)]">
-                  {/* Hidden file input for photos */}
+                  {/* File input untuk memilih foto */}
                   <input
                     type="file"
                     ref={fileInputRef}
@@ -1741,115 +1376,72 @@ export default function Messages({ barberMode = false }) {
                     </div>
                   )}
 
-                  {/* Input Row or Recording Active Row (Fitur 2) */}
-                  {isRecording ? (
-                    <div className="flex items-center justify-between gap-3 max-w-5xl mx-auto py-1">
-                      <div className="flex items-center gap-2 text-red-600 font-semibold text-xs animate-pulse">
-                        <span className="w-3 h-3 rounded-full bg-red-600 inline-block" />
-                        <span>Merekam suara... {formatAudioDuration(recordingDuration)}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={cancelRecording}
-                          className="w-10 h-10 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition"
-                          title="Batalkan rekaman"
-                          aria-label="Batalkan rekaman"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={stopAndSendRecording}
-                          className="w-10 h-10 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center shadow-md transition"
-                          title="Kirim pesan suara"
-                          aria-label="Kirim pesan suara"
-                        >
-                          <Send className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-end gap-1.5 sm:gap-2 max-w-5xl min-w-0 mx-auto">
-                      {/* Barber Quick Replies Button (Fitur 9) */}
-                      {barberMode && (
-                        <button
-                          type="button"
-                          onClick={() => setIsQuickReplyOpen((prev) => !prev)}
-                          className={`w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl border flex items-center justify-center transition ${
-                            isQuickReplyOpen
-                              ? 'bg-[#285844] text-white border-[#285844]'
-                              : 'border-[#D5E1D8] bg-white text-[#285844] hover:bg-[#F2F8F3]'
-                          }`}
-                          title="Balasan Cepat Barber"
-                          aria-label="Balasan Cepat"
-                        >
-                          <Zap className="w-4 h-4 fill-current" />
-                        </button>
-                      )}
-
-                      {/* Photo Attachment Button (Fitur 1) */}
+                  <div className="flex items-end gap-1.5 sm:gap-2 max-w-5xl min-w-0 mx-auto">
+                    {/* Tombol Balasan Cepat Barber (Fitur 9) */}
+                    {barberMode && (
                       <button
                         type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl border border-[#D5E1D8] bg-white hover:bg-[#F2F8F3] text-[#285844] flex items-center justify-center transition shadow-2xs"
-                        title="Kirim Foto Referensi"
-                        aria-label="Kirim Foto"
+                        onClick={() => setIsQuickReplyOpen((prev) => !prev)}
+                        className={`w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl border flex items-center justify-center transition ${
+                          isQuickReplyOpen
+                            ? 'bg-[#285844] text-white border-[#285844]'
+                            : 'border-[#D5E1D8] bg-white text-[#285844] hover:bg-[#F2F8F3]'
+                        }`}
+                        title="Balasan Cepat Barber"
+                        aria-label="Balasan Cepat"
                       >
-                        <ImageIcon className="w-4 h-4" />
+                        <Zap className="w-4 h-4 fill-current" />
                       </button>
+                    )}
 
-                      {/* Message Textarea */}
-                      <textarea
-                        ref={textareaRef}
-                        value={messageText}
-                        onChange={handleMessageInput}
-                        onFocus={() => {
-                          setTimeout(() => scrollToBottom(true), 150);
-                          setTimeout(() => scrollToBottom(true), 350);
-                        }}
-                        onBlur={() => {
-                          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                          broadcastTypingStatus(false);
-                          lastTypingBroadcastAtRef.current = 0;
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && !event.shiftKey) {
-                            event.preventDefault();
-                            event.currentTarget.form?.requestSubmit();
-                          }
-                        }}
-                        maxLength={4000}
-                        rows={1}
-                        placeholder={replyingTo ? `Balas ${replyingTo.senderName}...` : 'Tulis pesan...'}
-                        aria-label="Tulis pesan"
-                        className="min-h-10 sm:min-h-11 max-h-28 sm:max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[#D5E1D8] bg-white px-3 sm:px-4 py-2 sm:py-2.5 text-[16px] sm:text-sm leading-relaxed text-[#171717] outline-none shadow-[inset_0_2px_5px_rgba(40,88,68,0.07),0_2px_0_rgba(255,255,255,0.9)] transition focus:border-[#72927F] focus:ring-4 focus:ring-[#285844]/10"
-                      />
+                    {/* Tombol Lampirkan Foto (Fitur 1) */}
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl border border-[#D5E1D8] bg-white hover:bg-[#F2F8F3] text-[#285844] flex items-center justify-center transition shadow-2xs"
+                      title="Kirim Foto Referensi"
+                      aria-label="Kirim Foto"
+                    >
+                      <ImageIcon className="w-4 h-4" />
+                    </button>
 
-                      {/* Voice Note Button (Fitur 2) or Send Button */}
-                      {!messageText.trim() ? (
-                        <button
-                          type="button"
-                          onClick={startRecording}
-                          disabled={isProcessingAudio}
-                          className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-[#285844] hover:bg-[#1E4334] text-white flex items-center justify-center shadow-[0_3px_0_#173829,0_5px_10px_rgba(40,88,68,0.22)] transition active:translate-y-0.5"
-                          title="Rekam Pesan Suara"
-                          aria-label="Rekam Suara"
-                        >
-                          <Mic className="w-4 h-4" />
-                        </button>
-                      ) : (
-                        <button
-                          type="submit"
-                          disabled={sending}
-                          className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-gradient-to-br from-[#397457] to-[#1E4334] hover:brightness-105 text-white flex items-center justify-center shadow-[0_3px_0_#173829,0_5px_10px_rgba(40,88,68,0.22)] transition active:translate-y-0.5 disabled:opacity-50"
-                          aria-label="Kirim pesan"
-                        >
-                          {sending ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                        </button>
-                      )}
-                    </div>
-                  )}
+                    {/* Textarea Pesan */}
+                    <textarea
+                      ref={textareaRef}
+                      value={messageText}
+                      onChange={handleMessageInput}
+                      onFocus={() => {
+                        setTimeout(() => scrollToBottom(true), 150);
+                        setTimeout(() => scrollToBottom(true), 350);
+                      }}
+                      onBlur={() => {
+                        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                        broadcastTypingStatus(false);
+                        lastTypingBroadcastAtRef.current = 0;
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' && !event.shiftKey) {
+                          event.preventDefault();
+                          event.currentTarget.form?.requestSubmit();
+                        }
+                      }}
+                      maxLength={4000}
+                      rows={1}
+                      placeholder="Tulis pesan..."
+                      aria-label="Tulis pesan"
+                      className="min-h-10 sm:min-h-11 max-h-28 sm:max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[#D5E1D8] bg-white px-3 sm:px-4 py-2 sm:py-2.5 text-[16px] sm:text-sm leading-relaxed text-[#171717] outline-none shadow-[inset_0_2px_5px_rgba(40,88,68,0.07),0_2px_0_rgba(255,255,255,0.9)] transition focus:border-[#72927F] focus:ring-4 focus:ring-[#285844]/10"
+                    />
+
+                    {/* Tombol Kirim */}
+                    <button
+                      type="submit"
+                      disabled={sending || !messageText.trim()}
+                      className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-gradient-to-br from-[#397457] to-[#1E4334] hover:brightness-105 text-white flex items-center justify-center shadow-[0_3px_0_#173829,0_5px_10px_rgba(40,88,68,0.22)] transition active:translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                      aria-label="Kirim pesan"
+                    >
+                      {sending ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    </button>
+                  </div>
 
                   <p className="max-w-5xl mx-auto text-[10px] text-neutral-400 mt-1 hidden sm:block">
                     Enter untuk mengirim · Shift+Enter untuk baris baru · Klik foto untuk memperbesar
