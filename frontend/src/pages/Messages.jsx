@@ -311,9 +311,18 @@ export default function Messages({ barberMode = false }) {
 
       if (findError) throw findError;
       if (!conversation) {
+        const clientCustomerName = authUser.user_metadata?.name || customerName || '';
+        const insertPayload = {
+          customer_id: authUser.id,
+          barber_id: barber.user_id
+        };
+        if (clientCustomerName && clientCustomerName !== 'Pelanggan') {
+          insertPayload.customer_name = clientCustomerName;
+        }
+
         const { data: inserted, error: insertError } = await supabase
           .from('conversations')
-          .insert({ customer_id: authUser.id, barber_id: barber.user_id })
+          .insert(insertPayload)
           .select('*')
           .single();
 
@@ -333,6 +342,13 @@ export default function Messages({ barberMode = false }) {
         }
       }
 
+      // Pastikan jika percakapan sudah ada tapi customer_name masih kosong atau 'Pelanggan', kita sinkronkan sekarang
+      const activeName = authUser.user_metadata?.name || customerName;
+      if (conversation && activeName && activeName !== 'Pelanggan' && (!conversation.customer_name || conversation.customer_name === 'Pelanggan')) {
+        await supabase.rpc('update_my_chat_display_name', { display_name: activeName }).catch(() => {});
+        conversation.customer_name = activeName;
+      }
+
       if (!active || !conversation) return;
       await loadConversations();
       setBarberProfileSlug(barber.slug || '');
@@ -347,7 +363,7 @@ export default function Messages({ barberMode = false }) {
     return () => {
       active = false;
     };
-  }, [authUser, barberMode, loadConversations, navigate, pageReady, requestedBarberId, requiresCustomerName]);
+  }, [authUser, barberMode, customerName, loadConversations, navigate, pageReady, requestedBarberId, requiresCustomerName]);
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConversationId) || null,
@@ -576,12 +592,28 @@ export default function Messages({ barberMode = false }) {
       if (!data.user) throw new Error('Nama tidak berhasil disimpan pada sesi pelanggan.');
       useStore.setState({ authUser: data.user });
 
+      // Refresh auth session agar token JWT memuat user_metadata terbaru
+      await supabase.auth.refreshSession().catch(() => {});
+
       const { error: rpcError } = await supabase.rpc('update_my_chat_display_name', {
         display_name: name
       });
-      if (rpcError) throw rpcError;
+      if (rpcError) console.warn('update_my_chat_display_name error:', rpcError);
 
       setAccount((currentAccount) => currentAccount ? { ...currentAccount, name } : currentAccount);
+
+      // Jika ada requestedBarberId dan percakapan belum ada, buat/update langsung dengan nama pelanggan
+      if (requestedBarberId && UUID_PATTERN.test(requestedBarberId)) {
+        await supabase
+          .from('conversations')
+          .upsert({
+            customer_id: data.user.id,
+            barber_id: requestedBarberId,
+            customer_name: name
+          }, { onConflict: 'customer_id,barber_id' })
+          .catch(() => {});
+      }
+
       await loadConversations();
     } catch (saveError) {
       setCustomerNameSaveFailed(true);
@@ -593,7 +625,7 @@ export default function Messages({ barberMode = false }) {
 
   const otherParticipant = (conversation) => barberMode
     ? {
-      name: conversation.customer_name && conversation.customer_name !== 'Pelanggan'
+      name: conversation.customer_name && conversation.customer_name.trim() !== '' && conversation.customer_name !== 'Pelanggan'
         ? conversation.customer_name
         : `Pelanggan #${conversation.customer_id.slice(0, 4).toUpperCase()}`,
       photo: conversation.customer_photo || ''

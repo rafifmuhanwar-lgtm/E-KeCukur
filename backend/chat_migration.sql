@@ -250,7 +250,7 @@ CREATE OR REPLACE FUNCTION public.set_conversation_participant_details()
 RETURNS TRIGGER
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, auth, pg_temp
 AS $$
 DECLARE
   v_customer_name TEXT;
@@ -263,18 +263,38 @@ BEGIN
     RAISE EXCEPTION 'Only customer accounts can start a consultation.';
   END IF;
 
-  IF COALESCE(auth.jwt()->>'is_anonymous', 'false') = 'true' THEN
-    v_customer_name := auth.jwt()->'user_metadata'->>'name';
-  ELSE
+  -- 1. Utamakan customer_name yang dikirim saat INSERT jika valid
+  IF public.is_valid_chat_display_name(NEW.customer_name) THEN
+    v_customer_name := NEW.customer_name;
+  END IF;
+
+  -- 2. Jika belum valid, ambil langsung dari tabel auth.users (raw_user_meta_data)
+  IF v_customer_name IS NULL OR v_customer_name = '' OR v_customer_name = 'Pelanggan' THEN
+    SELECT COALESCE(raw_user_meta_data->>'name', raw_user_meta_data->>'full_name')
+    INTO v_customer_name
+    FROM auth.users
+    WHERE id = NEW.customer_id;
+  END IF;
+
+  -- 3. Jika bukan anonim dan masih kosong, cek ke public.users
+  IF (v_customer_name IS NULL OR v_customer_name = '' OR v_customer_name = 'Pelanggan')
+     AND COALESCE(auth.jwt()->>'is_anonymous', 'false') <> 'true' THEN
     SELECT u.name
     INTO v_customer_name
     FROM public.users u
     WHERE u.id = NEW.customer_id AND u.role = 'CUSTOMER';
   END IF;
 
-  IF NOT public.is_valid_chat_display_name(v_customer_name) THEN
-    RAISE EXCEPTION 'A valid customer display name is required to start a consultation.';
+  -- 4. Fallback ke auth.jwt
+  IF v_customer_name IS NULL OR v_customer_name = '' OR v_customer_name = 'Pelanggan' THEN
+    v_customer_name := auth.jwt()->'user_metadata'->>'name';
   END IF;
+
+  -- 5. Jika masih kosong, beri fallback aman
+  IF v_customer_name IS NULL OR v_customer_name = '' THEN
+    v_customer_name := 'Pelanggan';
+  END IF;
+
   NEW.customer_name := regexp_replace(btrim(v_customer_name), '\s+', ' ', 'g');
 
   SELECT b.name, COALESCE(b.profile_photo, '')
@@ -366,7 +386,7 @@ CREATE OR REPLACE FUNCTION public.update_my_chat_display_name(display_name TEXT)
 RETURNS VOID
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = public, auth, pg_temp
 AS $$
 DECLARE
   v_name TEXT := regexp_replace(btrim(COALESCE(display_name, '')), '\s+', ' ', 'g');
@@ -382,6 +402,14 @@ BEGIN
   UPDATE public.conversations
   SET customer_name = v_name
   WHERE customer_id = auth.uid();
+
+  UPDATE auth.users
+  SET raw_user_meta_data = jsonb_set(
+    COALESCE(raw_user_meta_data, '{}'::jsonb),
+    '{name}',
+    to_jsonb(v_name)
+  )
+  WHERE id = auth.uid();
 END;
 $$;
 
@@ -578,7 +606,8 @@ REVOKE INSERT, UPDATE, DELETE ON public.users FROM PUBLIC, anon, authenticated;
 
 REVOKE ALL ON public.conversations FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.conversations TO authenticated;
-GRANT INSERT (customer_id, barber_id) ON public.conversations TO authenticated;
+GRANT INSERT (customer_id, barber_id, customer_name) ON public.conversations TO authenticated;
+GRANT UPDATE (customer_name) ON public.conversations TO authenticated;
 REVOKE ALL ON public.messages FROM PUBLIC, anon, authenticated;
 GRANT SELECT ON public.messages TO authenticated;
 GRANT INSERT (conversation_id, sender_id, body) ON public.messages TO authenticated;
