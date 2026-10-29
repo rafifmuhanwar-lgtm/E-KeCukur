@@ -295,13 +295,13 @@ export default function Messages({ barberMode = false }) {
       const { data: barber, error: barberError } = await supabase
         .from('barbers')
         .select('id, user_id, name, profile_photo, account_status, slug')
-        .eq('user_id', requestedBarberId)
-        .eq('account_status', 'ACTIVE')
+        .or(`user_id.eq.${requestedBarberId},id.eq.${requestedBarberId}`)
         .maybeSingle();
 
       if (barberError) throw barberError;
-      if (!barber) throw new Error('Profil barber tidak terhubung ke akun aktif untuk menerima konsultasi.');
-      if (barber.user_id === authUser.id) {
+      if (!barber) throw new Error('Profil barber tidak ditemukan.');
+      const targetBarberId = barber.user_id || barber.id;
+      if (targetBarberId === authUser.id) {
         navigate('/barber/messages', { replace: true });
         return;
       }
@@ -310,7 +310,7 @@ export default function Messages({ barberMode = false }) {
         .from('conversations')
         .select('*')
         .eq('customer_id', authUser.id)
-        .eq('barber_id', barber.user_id)
+        .eq('barber_id', targetBarberId)
         .maybeSingle();
 
       if (findError) throw findError;
@@ -318,7 +318,7 @@ export default function Messages({ barberMode = false }) {
         const clientCustomerName = authUser.user_metadata?.name || customerName || '';
         const insertPayload = {
           customer_id: authUser.id,
-          barber_id: barber.user_id
+          barber_id: targetBarberId
         };
         if (clientCustomerName && clientCustomerName !== 'Pelanggan') {
           insertPayload.customer_name = clientCustomerName;
@@ -335,7 +335,7 @@ export default function Messages({ barberMode = false }) {
             .from('conversations')
             .select('*')
             .eq('customer_id', authUser.id)
-            .eq('barber_id', barber.user_id)
+            .eq('barber_id', targetBarberId)
             .single();
           if (existing.error) throw existing.error;
           conversation = existing.data;
@@ -615,11 +615,18 @@ export default function Messages({ barberMode = false }) {
       // Jika ada requestedBarberId dan percakapan belum ada, buat/update langsung dengan nama pelanggan
       if (requestedBarberId && UUID_PATTERN.test(requestedBarberId)) {
         try {
+          const { data: bData } = await supabase
+            .from('barbers')
+            .select('id, user_id')
+            .or(`user_id.eq.${requestedBarberId},id.eq.${requestedBarberId}`)
+            .maybeSingle();
+          const targetId = bData?.user_id || bData?.id || requestedBarberId;
+
           await supabase
             .from('conversations')
             .upsert({
               customer_id: data.user.id,
-              barber_id: requestedBarberId,
+              barber_id: targetId,
               customer_name: name
             }, { onConflict: 'customer_id,barber_id' });
         } catch (upsertError) {

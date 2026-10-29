@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   CONSTRAINT conversations_customer_barber_unique UNIQUE (customer_id, barber_id)
 );
 
+-- Hapus foreign key constraint conversations_barber_id_fkey agar tidak error jika barber belum terdaftar di auth.users
+ALTER TABLE public.conversations DROP CONSTRAINT IF EXISTS conversations_barber_id_fkey;
+
 CREATE TABLE IF NOT EXISTS public.messages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   conversation_id UUID NOT NULL REFERENCES public.conversations(id) ON DELETE CASCADE,
@@ -266,13 +269,12 @@ BEGIN
   SELECT b.name, COALESCE(b.profile_photo, '')
   INTO NEW.barber_name, NEW.barber_photo
   FROM public.barbers b
-  JOIN public.users u ON u.id = b.user_id
-  WHERE b.user_id = NEW.barber_id
-    AND b.account_status = 'ACTIVE'
-    AND u.role = 'BARBER';
+  WHERE (b.user_id = NEW.barber_id OR b.id = NEW.barber_id)
+  LIMIT 1;
 
-  IF NEW.barber_name IS NULL THEN
-    RAISE EXCEPTION 'The selected barber account is not active or connected.';
+  IF NEW.barber_name IS NULL OR NEW.barber_name = '' THEN
+    NEW.barber_name := 'Barber';
+    NEW.barber_photo := '';
   END IF;
 
   RETURN NEW;
@@ -319,6 +321,63 @@ $$;
 -- 9. Izin Akses (Permissions & RLS)
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Chat participants can read conversations" ON public.conversations;
+CREATE POLICY "Chat participants can read conversations"
+  ON public.conversations FOR SELECT TO authenticated
+  USING (
+    customer_id = auth.uid()
+    OR barber_id = auth.uid()
+    OR EXISTS (
+      SELECT 1 FROM public.barbers b WHERE b.user_id = auth.uid() AND (b.id = barber_id OR b.user_id = barber_id)
+    )
+  );
+
+DROP POLICY IF EXISTS "Customers can create their own conversations" ON public.conversations;
+CREATE POLICY "Customers can create their own conversations"
+  ON public.conversations FOR INSERT TO authenticated
+  WITH CHECK (
+    customer_id = auth.uid()
+    AND (
+      EXISTS (
+        SELECT 1
+        FROM public.barbers b
+        WHERE (b.user_id = barber_id OR b.id = barber_id)
+      )
+      OR barber_id IS NOT NULL
+    )
+  );
+
+DROP POLICY IF EXISTS "Chat participants can read messages" ON public.messages;
+CREATE POLICY "Chat participants can read messages"
+  ON public.messages FOR SELECT TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.conversations c
+      WHERE c.id = conversation_id
+        AND (
+          c.customer_id = auth.uid()
+          OR c.barber_id = auth.uid()
+          OR EXISTS (SELECT 1 FROM public.barbers b WHERE b.user_id = auth.uid() AND (b.id = c.barber_id OR b.user_id = c.barber_id))
+        )
+    )
+  );
+
+DROP POLICY IF EXISTS "Participants can send messages as themselves" ON public.messages;
+CREATE POLICY "Participants can send messages as themselves"
+  ON public.messages FOR INSERT TO authenticated
+  WITH CHECK (
+    sender_id = auth.uid()
+    AND EXISTS (
+      SELECT 1 FROM public.conversations c
+      WHERE c.id = conversation_id
+        AND (
+          c.customer_id = auth.uid()
+          OR c.barber_id = auth.uid()
+          OR EXISTS (SELECT 1 FROM public.barbers b WHERE b.user_id = auth.uid() AND (b.id = c.barber_id OR b.user_id = c.barber_id))
+        )
+    )
+  );
 
 GRANT SELECT ON public.conversations TO authenticated;
 GRANT INSERT (customer_id, barber_id, customer_name) ON public.conversations TO authenticated;
