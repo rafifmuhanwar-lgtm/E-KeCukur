@@ -144,7 +144,11 @@ export default function Messages({ barberMode = false }) {
 
   const loadConversations = useCallback(async () => {
     // Jalankan auto-cleanup di database (retensi 24 jam)
-    supabase.rpc('cleanup_expired_chat').catch(() => {});
+    try {
+      supabase.rpc('cleanup_expired_chat').then(() => {}, () => {});
+    } catch {
+      // Abaikan error cleanup agar tidak menghalangi pemuatan obrolan
+    }
 
     const { data, error: queryError } = await supabase
       .from('conversations')
@@ -345,7 +349,11 @@ export default function Messages({ barberMode = false }) {
       // Pastikan jika percakapan sudah ada tapi customer_name masih kosong atau 'Pelanggan', kita sinkronkan sekarang
       const activeName = authUser.user_metadata?.name || customerName;
       if (conversation && activeName && activeName !== 'Pelanggan' && (!conversation.customer_name || conversation.customer_name === 'Pelanggan')) {
-        await supabase.rpc('update_my_chat_display_name', { display_name: activeName }).catch(() => {});
+        try {
+          await supabase.rpc('update_my_chat_display_name', { display_name: activeName });
+        } catch {
+          // Abaikan error rpc jika belum terpasang
+        }
         conversation.customer_name = activeName;
       }
 
@@ -593,7 +601,9 @@ export default function Messages({ barberMode = false }) {
       useStore.setState({ authUser: data.user });
 
       // Refresh auth session agar token JWT memuat user_metadata terbaru
-      await supabase.auth.refreshSession().catch(() => {});
+      try {
+        await supabase.auth.refreshSession();
+      } catch {}
 
       const { error: rpcError } = await supabase.rpc('update_my_chat_display_name', {
         display_name: name
