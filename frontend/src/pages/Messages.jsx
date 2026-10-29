@@ -257,7 +257,7 @@ export default function Messages({ barberMode = false }) {
           .maybeSingle();
 
         if (userError) throw userError;
-        if (!userProfile) throw new Error('Profil akun tidak ditemukan. Silakan hubungi pengelola E-KeCukur.');
+        if (!userProfile) throw new Error('Profil akun tidak ditemukan. Silakan hubungi pengelola E-Cukur.');
         const role = String(userProfile.role || '').toUpperCase();
         const { data: barber, error: barberError } = await supabase
           .from('barbers')
@@ -284,7 +284,7 @@ export default function Messages({ barberMode = false }) {
             .maybeSingle();
 
           if (userError) throw userError;
-          if (!userProfile) throw new Error('Profil akun tidak ditemukan. Silakan hubungi pengelola E-KeCukur.');
+          if (!userProfile) throw new Error('Profil akun tidak ditemukan. Silakan hubungi pengelola E-Cukur.');
           const role = String(userProfile.role || '').toUpperCase();
           if (role === 'BARBER') {
             throw new Error('Inbox barber hanya dapat dibuka dari dashboard akun barber. Untuk konsultasi sebagai pelanggan, keluar dari akun barber terlebih dahulu.');
@@ -940,7 +940,7 @@ export default function Messages({ barberMode = false }) {
                 {/* 24-Hour Message Retention Banner */}
                 <div className="shrink-0 bg-[#EEF5F0] border-b border-[#D7E5DC] px-3.5 py-1.5 flex items-center justify-center gap-1.5 text-center text-[11px] font-medium text-[#285844] shadow-xs">
                   <Clock className="w-3.5 h-3.5 shrink-0 text-[#397457]" />
-                  <span className="truncate sm:whitespace-normal">Pesan konsultasi otomatis terhapus setelah 24 jam untuk menjaga privasi &amp; penyimpanan</span>
+                  <span className="truncate sm:whitespace-normal">Pesan akan terhapus setelah 24 jam untuk menjaga privasi.</span>
                 </div>
 
                 {(routeError || error) && (
