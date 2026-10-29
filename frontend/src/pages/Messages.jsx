@@ -8,8 +8,8 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const EMPTY_MESSAGES = [];
 const CUSTOMER_MESSAGE_TEMPLATES = [
   'Halo, saya ingin konsultasi model rambut yang cocok.',
-  'Boleh tahu harga dan durasi layanannya?',
-  'Apakah ada jadwal kosong untuk hari ini?'
+  'Apakah ada jadwal kosong untuk hari ini?',
+  'Terimakasih, saya sangat puas dengan hasil nya!'
 ];
 const INVALID_CUSTOMER_NAME_WORDS = new Set([
   'abc', 'admin', 'anjing', 'anonymous', 'apple', 'asdf', 'ayam', 'bakso',
@@ -53,7 +53,7 @@ const validateCustomerName = (value) => {
     })[char] || char).replace(/[^a-z0-9]/g, ''));
   const compactName = words.join('');
   if (words.some((word) => INVALID_CUSTOMER_NAME_WORDS.has(word))) {
-    return 'Masukkan nama orang yang akan digunakan barber untuk menyapamu.';
+    return 'Masukkan nama orang yang akan digunakan untuk menyapamu.';
   }
   if (
     words.some((word) => INAPPROPRIATE_CUSTOMER_NAME_WORDS.has(word))
@@ -123,6 +123,9 @@ export default function Messages({ barberMode = false }) {
   const [error, setError] = useState('');
   const [realtimeStatus, setRealtimeStatus] = useState('connecting');
   const [typingStatus, setTypingStatus] = useState({ conversationId: '', userId: '' });
+  const [viewportHeight, setViewportHeight] = useState(() => (
+    typeof window !== 'undefined' && window.visualViewport ? window.visualViewport.height : null
+  ));
   const messageListRef = useRef(null);
   const textareaRef = useRef(null);
   const typingChannelRef = useRef(null);
@@ -130,6 +133,29 @@ export default function Messages({ barberMode = false }) {
   const typingTimeoutRef = useRef(null);
   const remoteTypingTimeoutRef = useRef(null);
   const lastTypingBroadcastAtRef = useRef(0);
+
+  useEffect(() => {
+    // Lock body scrolling when in chat to prevent mobile browser from pushing the page up
+    const prevHtmlOverflow = document.documentElement.style.overflow;
+    const prevBodyOverflow = document.body.style.overflow;
+    const prevBodyPosition = document.body.style.position;
+    const prevBodyHeight = document.body.style.height;
+    const prevBodyWidth = document.body.style.width;
+
+    document.documentElement.style.overflow = 'hidden';
+    document.body.style.overflow = 'hidden';
+    document.body.style.position = 'fixed';
+    document.body.style.width = '100%';
+    document.body.style.height = '100%';
+
+    return () => {
+      document.documentElement.style.overflow = prevHtmlOverflow;
+      document.body.style.overflow = prevBodyOverflow;
+      document.body.style.position = prevBodyPosition;
+      document.body.style.height = prevBodyHeight;
+      document.body.style.width = prevBodyWidth;
+    };
+  }, []);
   const selectedConversationId = conversations.some(
     (conversation) => conversation.id === requestedConversationId
   ) ? requestedConversationId : '';
@@ -561,6 +587,14 @@ export default function Messages({ barberMode = false }) {
     if (typeof window === 'undefined' || !window.visualViewport) return undefined;
 
     const handleViewportChange = () => {
+      const vv = window.visualViewport;
+      if (vv) {
+        setViewportHeight(vv.height);
+      }
+      // Critical for mobile: prevent browser from scrolling page into negative space
+      if (window.scrollY !== 0) {
+        window.scrollTo(0, 0);
+      }
       scrollToBottom(true);
     };
 
@@ -720,7 +754,10 @@ export default function Messages({ barberMode = false }) {
 
   if (requiresCustomerName) {
     return (
-      <main className="h-[100dvh] min-h-0 bg-[#F7F6F2] px-4 py-4 sm:py-8 flex items-center justify-center overflow-y-auto overscroll-contain">
+      <main
+        style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
+        className="fixed inset-0 w-full bg-[#F7F6F2] px-4 py-4 sm:py-8 flex items-center justify-center overflow-y-auto overscroll-contain"
+      >
         <form
           onSubmit={saveCustomerName}
           className="w-full max-w-md my-auto rounded-3xl border border-[#DCE7DF] bg-white p-5 sm:p-8 shadow-[0_18px_45px_rgba(40,88,68,0.14),0_5px_12px_rgba(40,88,68,0.08)]"
@@ -773,7 +810,10 @@ export default function Messages({ barberMode = false }) {
   }
 
   return (
-    <main className="h-[100dvh] min-h-0 w-full overflow-hidden bg-[#F7F6F2] text-[#171717] flex flex-col">
+    <main
+      style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
+      className="fixed inset-0 w-full overflow-hidden bg-[#F7F6F2] text-[#171717] flex flex-col"
+    >
       <header className="relative z-10 h-14 sm:h-16 shrink-0 bg-gradient-to-b from-white via-white to-[#F4F8F5] border-b border-[#DCE7DF] px-3 sm:px-6 flex items-center justify-between shadow-[0_6px_18px_rgba(40,88,68,0.14),0_2px_4px_rgba(40,88,68,0.08)]">
         <Link to={barberMode ? '/barber/dashboard' : profilePath} className="flex items-center gap-2.5 text-sm font-bold">
           <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3D765A] via-[#285844] to-[#1E4334] text-white flex items-center justify-center shadow-[0_4px_0_#173829,0_7px_14px_rgba(40,88,68,0.3)] ring-1 ring-white/70">
