@@ -604,14 +604,17 @@ export default function Messages({ barberMode = false }) {
 
       // Jika ada requestedBarberId dan percakapan belum ada, buat/update langsung dengan nama pelanggan
       if (requestedBarberId && UUID_PATTERN.test(requestedBarberId)) {
-        await supabase
-          .from('conversations')
-          .upsert({
-            customer_id: data.user.id,
-            barber_id: requestedBarberId,
-            customer_name: name
-          }, { onConflict: 'customer_id,barber_id' })
-          .catch(() => {});
+        try {
+          await supabase
+            .from('conversations')
+            .upsert({
+              customer_id: data.user.id,
+              barber_id: requestedBarberId,
+              customer_name: name
+            }, { onConflict: 'customer_id,barber_id' });
+        } catch (upsertError) {
+          console.warn('Upsert conversation info:', upsertError);
+        }
       }
 
       await loadConversations();
