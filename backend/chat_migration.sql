@@ -676,4 +676,12 @@ BEGIN
 END;
 $$;
 
+-- Dukungan fitur media, voice note, quote reply, dan emoji reactions
+ALTER TABLE public.messages DROP CONSTRAINT IF EXISTS messages_body_check;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS media_url TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS media_type TEXT;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS audio_duration NUMERIC;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS reply_to JSONB;
+ALTER TABLE public.messages ADD COLUMN IF NOT EXISTS reactions JSONB DEFAULT '{}'::jsonb;
+
 NOTIFY pgrst, 'reload schema';

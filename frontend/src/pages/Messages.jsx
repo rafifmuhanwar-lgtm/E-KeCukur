@@ -1,8 +1,35 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowLeft, Check, CheckCheck, Clock, LoaderCircle, MessageCircle, Send, UserRound } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  CheckCheck,
+  Clock,
+  CornerUpLeft,
+  Download,
+  Image as ImageIcon,
+  LoaderCircle,
+  MessageCircle,
+  Mic,
+  Search,
+  Send,
+  Smile,
+  Trash2,
+  UserRound,
+  X,
+  Zap
+} from 'lucide-react';
 import { useStore } from '../store';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
+import {
+  BARBER_QUICK_REPLIES,
+  EMOJI_OPTIONS,
+  formatAudioDuration,
+  getDateSeparatorLabel,
+  parseMessagePayload,
+  uploadChatMedia
+} from '../lib/chatMedia';
+import VoiceNotePlayer from '../components/chat/VoiceNotePlayer';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const EMPTY_MESSAGES = [];
@@ -126,13 +153,39 @@ export default function Messages({ barberMode = false }) {
   const [viewportHeight, setViewportHeight] = useState(() => (
     typeof window !== 'undefined' && window.visualViewport ? window.visualViewport.height : null
   ));
+
+  // WhatsApp-style feature states
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [replyingTo, setReplyingTo] = useState(null);
+  const [activeReactionMessageId, setActiveReactionMessageId] = useState(null);
+  const [isQuickReplyOpen, setIsQuickReplyOpen] = useState(false);
+  const [activeLightboxImage, setActiveLightboxImage] = useState(null);
+
+  // Image upload preview state
+  const [imagePreviewFile, setImagePreviewFile] = useState(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState('');
+  const [imageCaption, setImageCaption] = useState('');
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+
+  // Voice note recording states
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [isProcessingAudio, setIsProcessingAudio] = useState(false);
+
   const messageListRef = useRef(null);
   const textareaRef = useRef(null);
+  const fileInputRef = useRef(null);
   const typingChannelRef = useRef(null);
   const typingChannelReadyRef = useRef(false);
   const typingTimeoutRef = useRef(null);
   const remoteTypingTimeoutRef = useRef(null);
   const lastTypingBroadcastAtRef = useRef(0);
+
+  // Voice note recorder refs
+  const mediaRecorderRef = useRef(null);
+  const recordingTimerRef = useRef(null);
+  const audioChunksRef = useRef([]);
 
   useEffect(() => {
     // Lock body scrolling when in chat to prevent mobile browser from pushing the page up
@@ -156,6 +209,7 @@ export default function Messages({ barberMode = false }) {
       document.body.style.width = prevBodyWidth;
     };
   }, []);
+
   const selectedConversationId = conversations.some(
     (conversation) => conversation.id === requestedConversationId
   ) ? requestedConversationId : '';
@@ -170,9 +224,8 @@ export default function Messages({ barberMode = false }) {
       : '';
 
   const loadConversations = useCallback(async () => {
-    // Jalankan auto-cleanup di database (retensi 24 jam)
     try {
-      supabase.rpc('cleanup_expired_chat').then(() => {}, () => {});
+      await supabase.rpc('cleanup_expired_chat_messages', { retention_interval: '1 day' });
     } catch {
       // Abaikan error cleanup agar tidak menghalangi pemuatan obrolan
     }
@@ -200,7 +253,7 @@ export default function Messages({ barberMode = false }) {
     const cutoffIso = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const { data, error: queryError } = await supabase
       .from('messages')
-      .select('id, conversation_id, sender_id, body, created_at, read_at')
+      .select('*')
       .eq('conversation_id', conversationId)
       .gte('created_at', cutoffIso)
       .order('created_at', { ascending: true });
@@ -289,9 +342,6 @@ export default function Messages({ barberMode = false }) {
           if (role === 'BARBER') {
             throw new Error('Inbox barber hanya dapat dibuka dari dashboard akun barber. Untuk konsultasi sebagai pelanggan, keluar dari akun barber terlebih dahulu.');
           }
-          if (role !== 'CUSTOMER') {
-            throw new Error('Akun ini bukan akun pelanggan dan tidak dapat membuka konsultasi.');
-          }
           if (active) setAccount({ name: userProfile.name, role, userId: authUser.id });
         }
       }
@@ -312,13 +362,22 @@ export default function Messages({ barberMode = false }) {
   }, [authUser, barberMode, ensureAnonymousCustomerSession, isAppLoading, loadConversations, navigate, returnTo]);
 
   useEffect(() => {
-    if (!pageReady || barberMode || !authUser || requiresCustomerName || !requestedBarberId) return undefined;
-    if (!UUID_PATTERN.test(requestedBarberId)) {
-      return undefined;
-    }
+    if (!pageReady || !barberMode) return;
+    if (requestedConversationId) return;
+    if (conversations.length === 0) return;
+
+    navigate(`/barber/messages?conversationId=${encodeURIComponent(conversations[0].id)}`, { replace: true });
+  }, [barberMode, conversations, navigate, pageReady, requestedConversationId]);
+
+  useEffect(() => {
+    if (!pageReady || barberMode) return undefined;
+    if (requestedConversationId || !requestedBarberId || !authUser) return undefined;
+    if (requiresCustomerName) return undefined;
 
     let active = true;
+
     const openOrCreate = async () => {
+      setError('');
       const { data: barber, error: barberError } = await supabase
         .from('barbers')
         .select('id, user_id, name, profile_photo, account_status, slug')
@@ -326,11 +385,14 @@ export default function Messages({ barberMode = false }) {
         .maybeSingle();
 
       if (barberError) throw barberError;
-      if (!barber) throw new Error('Profil barber tidak ditemukan.');
+      if (!barber) throw new Error('Barber atau capster yang dipilih tidak ditemukan.');
+      if (barber.account_status !== 'ACTIVE') {
+        throw new Error('Barber sedang tidak aktif untuk konsultasi.');
+      }
+
       const targetBarberId = barber.user_id || barber.id;
       if (targetBarberId === authUser.id) {
-        navigate('/barber/messages', { replace: true });
-        return;
+        throw new Error('Kamu tidak dapat memulai percakapan dengan akunmu sendiri.');
       }
 
       let { data: conversation, error: findError } = await supabase
@@ -373,14 +435,11 @@ export default function Messages({ barberMode = false }) {
         }
       }
 
-      // Pastikan jika percakapan sudah ada tapi customer_name masih kosong atau 'Pelanggan', kita sinkronkan sekarang
       const activeName = authUser.user_metadata?.name || customerName;
       if (conversation && activeName && activeName !== 'Pelanggan' && (!conversation.customer_name || conversation.customer_name === 'Pelanggan')) {
         try {
           await supabase.rpc('update_my_chat_display_name', { display_name: activeName });
-        } catch {
-          // Abaikan error rpc jika belum terpasang
-        }
+        } catch {}
         conversation.customer_name = activeName;
       }
 
@@ -398,12 +457,13 @@ export default function Messages({ barberMode = false }) {
     return () => {
       active = false;
     };
-  }, [authUser, barberMode, customerName, loadConversations, navigate, pageReady, requestedBarberId, requiresCustomerName]);
+  }, [authUser, barberMode, customerName, loadConversations, navigate, pageReady, requestedBarberId, requestedConversationId, requiresCustomerName]);
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConversationId) || null,
     [conversations, selectedConversationId]
   );
+
   useEffect(() => {
     if (barberMode || !selectedConversation) return undefined;
     let active = true;
@@ -414,19 +474,18 @@ export default function Messages({ barberMode = false }) {
         return;
       }
 
-      const { data, error: profileError } = await supabase
+      const { data: profileData } = await supabase
         .from('barbers')
         .select('slug')
-        .eq('user_id', selectedConversation.barber_id)
+        .or(`user_id.eq.${selectedConversation.barber_id},id.eq.${selectedConversation.barber_id}`)
         .maybeSingle();
 
-      if (profileError) throw profileError;
-      if (active) setBarberProfileSlug(data?.slug || '');
+      if (active && profileData?.slug) {
+        setBarberProfileSlug(profileData.slug);
+      }
     };
 
-    loadBarberProfileSlug().catch((profileError) => {
-      if (active) setError(getChatErrorMessage(profileError));
-    });
+    loadBarberProfileSlug().catch(() => {});
 
     return () => {
       active = false;
@@ -439,6 +498,16 @@ export default function Messages({ barberMode = false }) {
   const messagesLoading = Boolean(selectedConversationId && selectedConversationId !== loadedConversationId);
   const visibleMessages = selectedConversationId === loadedConversationId ? messages : EMPTY_MESSAGES;
 
+  // Filter messages when search is active
+  const filteredMessages = useMemo(() => {
+    if (!searchQuery.trim()) return visibleMessages;
+    const q = searchQuery.toLowerCase();
+    return visibleMessages.filter((msg) => {
+      const payload = parseMessagePayload(msg);
+      return payload.text.toLowerCase().includes(q);
+    });
+  }, [searchQuery, visibleMessages]);
+
   const broadcastTypingStatus = useCallback((isTyping) => {
     const channel = typingChannelRef.current;
     if (!channel || !typingChannelReadyRef.current || !authUserId) return;
@@ -447,12 +516,19 @@ export default function Messages({ barberMode = false }) {
       type: 'broadcast',
       event: 'typing',
       payload: { userId: authUserId, isTyping }
-    }).then((status) => {
-      if (status !== 'ok') console.warn('Unable to broadcast chat typing status:', status);
-    }).catch((typingError) => {
-      console.warn('Unable to broadcast chat typing status:', typingError);
-    });
+    }).catch(() => {});
   }, [authUserId]);
+
+  const broadcastReaction = useCallback((messageId, reactions) => {
+    const channel = typingChannelRef.current;
+    if (!channel || !typingChannelReadyRef.current) return;
+
+    channel.send({
+      type: 'broadcast',
+      event: 'reaction',
+      payload: { messageId, reactions }
+    }).catch(() => {});
+  }, []);
 
   const adjustTextareaHeight = useCallback(() => {
     const textarea = textareaRef.current;
@@ -515,6 +591,15 @@ export default function Messages({ barberMode = false }) {
           ));
         }
       })
+      .on('broadcast', { event: 'reaction' }, ({ payload }) => {
+        if (payload?.messageId && payload?.reactions) {
+          setMessages((prev) => prev.map((msg) => (
+            msg.id === payload.messageId
+              ? { ...msg, reactions: payload.reactions }
+              : msg
+          )));
+        }
+      })
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
@@ -526,12 +611,12 @@ export default function Messages({ barberMode = false }) {
         });
       })
       .subscribe((status) => {
+        if (!active) return;
         if (status === 'SUBSCRIBED') {
           typingChannelRef.current = channel;
           typingChannelReadyRef.current = true;
           setRealtimeStatus('connected');
-        }
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           typingChannelReadyRef.current = false;
           setRealtimeStatus('offline');
         }
@@ -591,7 +676,6 @@ export default function Messages({ barberMode = false }) {
       if (vv) {
         setViewportHeight(vv.height);
       }
-      // Critical for mobile: prevent browser from scrolling page into negative space
       if (window.scrollY !== 0) {
         window.scrollTo(0, 0);
       }
@@ -610,15 +694,19 @@ export default function Messages({ barberMode = false }) {
 
   const selectConversation = (conversation) => {
     setError('');
+    setReplyingTo(null);
+    setSearchQuery('');
+    setIsSearchOpen(false);
     const basePath = barberMode ? '/barber/messages' : '/messages';
     navigate(`${basePath}?conversationId=${encodeURIComponent(conversation.id)}`);
   };
 
+  // ─── SEND TEXT MESSAGE (WITH OPTIONAL REPLY) ───
   const sendMessage = async (event) => {
-    event.preventDefault();
-    const body = messageText.trim();
-    if (!body || !selectedConversation || !authUser || sending) return;
-    if (body.length > 4000) {
+    if (event) event.preventDefault();
+    const bodyText = messageText.trim();
+    if (!bodyText || !selectedConversation || !authUser || sending) return;
+    if (bodyText.length > 4000) {
       setError('Pesan maksimal 4.000 karakter.');
       return;
     }
@@ -628,15 +716,45 @@ export default function Messages({ barberMode = false }) {
     if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
     broadcastTypingStatus(false);
     lastTypingBroadcastAtRef.current = 0;
+
+    const currentReply = replyingTo;
+    setReplyingTo(null);
+
+    const messagePayload = {
+      text: bodyText,
+      replyTo: currentReply
+    };
+    const bodyString = currentReply ? JSON.stringify(messagePayload) : bodyText;
+
     try {
-      const { error: sendError } = await supabase
-        .from('messages')
-        .insert({
-          conversation_id: selectedConversation.id,
-          sender_id: authUser.id,
-          body
-        });
+      let sendError = null;
+      try {
+        const res = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: selectedConversation.id,
+            sender_id: authUser.id,
+            body: bodyString,
+            reply_to: currentReply
+          });
+        sendError = res.error;
+      } catch (insertErr) {
+        sendError = insertErr;
+      }
+
+      if (sendError && sendError.code === 'PGRST204') {
+        const { error: fallbackError } = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: selectedConversation.id,
+            sender_id: authUser.id,
+            body: bodyString
+          });
+        sendError = fallbackError;
+      }
+
       if (sendError) throw sendError;
+
       setMessageText('');
       if (textareaRef.current) {
         textareaRef.current.style.height = 'auto';
@@ -650,6 +768,272 @@ export default function Messages({ barberMode = false }) {
       setError(getChatErrorMessage(loadError));
     } finally {
       setSending(false);
+    }
+  };
+
+  // ─── SEND MEDIA MESSAGE (IMAGE / VOICE NOTE) ───
+  const sendMediaMessage = async ({ mediaUrl, mediaType, text = '', audioDuration = 0 }) => {
+    if (!mediaUrl || !selectedConversation || !authUser) return;
+
+    setSending(true);
+    setError('');
+    const currentReply = replyingTo;
+    setReplyingTo(null);
+
+    const payload = {
+      text: text.trim(),
+      mediaUrl,
+      mediaType,
+      audioDuration,
+      replyTo: currentReply
+    };
+    const bodyString = JSON.stringify(payload);
+
+    try {
+      let sendError = null;
+      try {
+        const res = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: selectedConversation.id,
+            sender_id: authUser.id,
+            body: bodyString,
+            media_url: mediaUrl,
+            media_type: mediaType,
+            audio_duration: audioDuration || null,
+            reply_to: currentReply
+          });
+        sendError = res.error;
+      } catch (err) {
+        sendError = err;
+      }
+
+      if (sendError && sendError.code === 'PGRST204') {
+        const { error: fallbackError } = await supabase
+          .from('messages')
+          .insert({
+            conversation_id: selectedConversation.id,
+            sender_id: authUser.id,
+            body: bodyString
+          });
+        sendError = fallbackError;
+      }
+
+      if (sendError) throw sendError;
+
+      setTimeout(() => scrollToBottom(true), 50);
+      await Promise.all([
+        loadMessages(selectedConversation.id),
+        loadConversations()
+      ]);
+    } catch (err) {
+      setError(getChatErrorMessage(err));
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // ─── IMAGE SELECTION & UPLOAD HANDLERS ───
+  const handleImageSelected = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setError('File yang dipilih harus berupa gambar.');
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    setImagePreviewFile(file);
+    setImagePreviewUrl(previewUrl);
+    setImageCaption('');
+    e.target.value = '';
+  };
+
+  const handleSendImagePreview = async () => {
+    if (!imagePreviewFile || isUploadingImage) return;
+
+    setIsUploadingImage(true);
+    setError('');
+    try {
+      const res = await uploadChatMedia(imagePreviewFile, 'image', authUser.id);
+      if (!res?.url) throw new Error('Gagal mengunggah gambar referensi.');
+
+      await sendMediaMessage({
+        mediaUrl: res.url,
+        mediaType: 'image',
+        text: imageCaption
+      });
+
+      if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+      setImagePreviewFile(null);
+      setImagePreviewUrl('');
+      setImageCaption('');
+    } catch (err) {
+      setError(getChatErrorMessage(err));
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
+  const handleCancelImagePreview = () => {
+    if (imagePreviewUrl) URL.revokeObjectURL(imagePreviewUrl);
+    setImagePreviewFile(null);
+    setImagePreviewUrl('');
+    setImageCaption('');
+  };
+
+  // ─── VOICE NOTE (VN) RECORDING HANDLERS ───
+  const startRecording = async () => {
+    setError('');
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) {
+        throw new Error('Browser Anda tidak mendukung perekaman suara.');
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      audioChunksRef.current = [];
+
+      let mimeType = 'audio/webm';
+      if (!MediaRecorder.isTypeSupported('audio/webm')) {
+        mimeType = MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      }
+
+      const mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      mediaRecorderRef.current = mediaRecorder;
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data && event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.start(200);
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      recordingTimerRef.current = setInterval(() => {
+        setRecordingDuration((prev) => prev + 1);
+      }, 1000);
+    } catch (micErr) {
+      console.warn('Microphone permission error:', micErr);
+      setError('Izin mikrofon diperlukan untuk merekam pesan suara.');
+    }
+  };
+
+  const stopAndSendRecording = async () => {
+    const recorder = mediaRecorderRef.current;
+    if (!recorder || !isRecording) return;
+
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    setIsRecording(false);
+    setIsProcessingAudio(true);
+
+    const duration = recordingDuration;
+
+    recorder.onstop = async () => {
+      try {
+        const audioBlob = new Blob(audioChunksRef.current, { type: recorder.mimeType || 'audio/webm' });
+        recorder.stream.getTracks().forEach((track) => track.stop());
+
+        if (duration < 1) {
+          setIsProcessingAudio(false);
+          return;
+        }
+
+        const res = await uploadChatMedia(audioBlob, 'audio', authUser.id);
+        if (!res?.url) throw new Error('Gagal mengunggah pesan suara.');
+
+        await sendMediaMessage({
+          mediaUrl: res.url,
+          mediaType: 'audio',
+          audioDuration: duration
+        });
+      } catch (err) {
+        setError(getChatErrorMessage(err));
+      } finally {
+        setIsProcessingAudio(false);
+        setRecordingDuration(0);
+        audioChunksRef.current = [];
+        mediaRecorderRef.current = null;
+      }
+    };
+
+    recorder.stop();
+  };
+
+  const cancelRecording = () => {
+    const recorder = mediaRecorderRef.current;
+    if (recordingTimerRef.current) clearInterval(recordingTimerRef.current);
+    if (recorder) {
+      recorder.stream.getTracks().forEach((track) => track.stop());
+    }
+    setIsRecording(false);
+    setRecordingDuration(0);
+    audioChunksRef.current = [];
+    mediaRecorderRef.current = null;
+  };
+
+  // ─── EMOJI REACTION HANDLER ───
+  const toggleReaction = async (messageId, emoji) => {
+    setActiveReactionMessageId(null);
+    const targetMsg = messages.find((m) => m.id === messageId);
+    if (!targetMsg || !authUser?.id) return;
+
+    const payload = parseMessagePayload(targetMsg);
+    const currentReactions = { ...(targetMsg.reactions || payload.reactions || {}) };
+    const currentList = Array.isArray(currentReactions[emoji]) ? [...currentReactions[emoji]] : [];
+    const userIndex = currentList.indexOf(authUser.id);
+
+    if (userIndex > -1) {
+      currentList.splice(userIndex, 1);
+    } else {
+      currentList.push(authUser.id);
+    }
+
+    if (currentList.length > 0) {
+      currentReactions[emoji] = currentList;
+    } else {
+      delete currentReactions[emoji];
+    }
+
+    // Optimistic UI update
+    setMessages((prev) => prev.map((m) => {
+      if (m.id !== messageId) return m;
+      const parsed = parseMessagePayload(m);
+      return {
+        ...m,
+        reactions: currentReactions,
+        body: JSON.stringify({ ...parsed, reactions: currentReactions })
+      };
+    }));
+
+    broadcastReaction(messageId, currentReactions);
+
+    try {
+      await supabase
+        .from('messages')
+        .update({ reactions: currentReactions })
+        .eq('id', messageId);
+    } catch (err) {
+      console.warn('Update reaction error:', err);
+    }
+  };
+
+  // ─── REPLY TO MESSAGE HANDLER ───
+  const handleStartReply = (message, parsed) => {
+    const isOwn = message.sender_id === authUser?.id;
+    const senderName = isOwn ? 'Kamu' : (currentParticipant?.name || 'Lawan Bicara');
+    setReplyingTo({
+      id: message.id,
+      text: parsed.text || (parsed.mediaType === 'image' ? '📷 Foto' : parsed.mediaType === 'audio' ? '🎤 Pesan Suara' : ''),
+      senderId: message.sender_id,
+      senderName,
+      mediaType: parsed.mediaType,
+      mediaUrl: parsed.mediaUrl
+    });
+    if (textareaRef.current) {
+      textareaRef.current.focus();
     }
   };
 
@@ -673,7 +1057,6 @@ export default function Messages({ barberMode = false }) {
       if (!data.user) throw new Error('Nama tidak berhasil disimpan pada sesi pelanggan.');
       useStore.setState({ authUser: data.user });
 
-      // Refresh auth session agar token JWT memuat user_metadata terbaru
       try {
         await supabase.auth.refreshSession();
       } catch {}
@@ -685,7 +1068,6 @@ export default function Messages({ barberMode = false }) {
 
       setAccount((currentAccount) => currentAccount ? { ...currentAccount, name } : currentAccount);
 
-      // Jika ada requestedBarberId dan percakapan belum ada, buat/update langsung dengan nama pelanggan
       if (requestedBarberId && UUID_PATTERN.test(requestedBarberId)) {
         try {
           const { data: bData } = await supabase
@@ -826,8 +1208,8 @@ export default function Messages({ barberMode = false }) {
         )}
       </header>
 
-      <section className="flex-1 min-h-0 min-w-0 p-0 md:p-4 lg:p-6">
-        <div className="h-full min-h-0 min-w-0 max-w-7xl mx-auto bg-white md:border md:border-[#DCE7DF] md:rounded-2xl md:shadow-[0_18px_45px_rgba(40,88,68,0.12),0_5px_12px_rgba(40,88,68,0.08),inset_0_1px_0_rgba(255,255,255,0.95)] overflow-hidden flex">
+      <section className="flex-1 min-h-0 min-w-0 p-0 md:p-4 lg:p-6 flex flex-col">
+        <div className="h-full min-h-0 min-w-0 max-w-7xl mx-auto w-full bg-white md:border md:border-[#DCE7DF] md:rounded-2xl md:shadow-[0_18px_45px_rgba(40,88,68,0.12),0_5px_12px_rgba(40,88,68,0.08),inset_0_1px_0_rgba(255,255,255,0.95)] overflow-hidden flex flex-1">
           <aside className={`${!barberMode ? 'hidden' : selectedConversationId ? 'hidden md:flex' : 'flex'} w-full md:w-[320px] lg:w-[360px] shrink-0 flex-col border-r border-neutral-200`}>
             <div className="relative z-[1] px-5 py-4 border-b border-[#DCE7DF] bg-gradient-to-b from-white to-[#F4F8F5] shadow-[0_4px_12px_rgba(40,88,68,0.07)]">
               <h1 className="text-lg font-bold">Percakapan</h1>
@@ -895,47 +1277,105 @@ export default function Messages({ barberMode = false }) {
             </div>
           </aside>
 
-          <section className={`${selectedConversationId || !barberMode ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-1 flex-col`}>
+          <section className={`${selectedConversationId || !barberMode ? 'flex' : 'hidden md:flex'} min-h-0 min-w-0 flex-1 flex-col relative`}>
             {selectedConversation && currentParticipant ? (
               <>
-                <header className="relative z-[1] h-[64px] sm:h-[72px] shrink-0 border-b border-[#DCE7DF] px-3 sm:px-6 flex items-center gap-2.5 sm:gap-3 bg-gradient-to-b from-white to-[#F4F8F5] shadow-[0_5px_14px_rgba(40,88,68,0.09)]">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      navigate(barberMode ? '/barber/messages' : profilePath);
-                    }}
-                    className="md:hidden w-10 h-10 shrink-0 rounded-xl text-[#285844] hover:bg-[#E9F1EB] flex items-center justify-center transition-colors"
-                    aria-label={barberMode ? 'Kembali ke inbox' : 'Kembali ke profil barber'}
-                  >
-                    <ArrowLeft className="w-5 h-5" />
-                  </button>
-                  {currentParticipant.photo ? (
-                    <img src={currentParticipant.photo} alt="" className="w-10 h-10 shrink-0 rounded-full object-cover bg-neutral-100" />
-                  ) : (
-                    <span className="w-10 h-10 shrink-0 rounded-full bg-[#E7EFE9] text-[#285844] flex items-center justify-center font-bold">
-                      {(currentParticipant.name || '?').charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                  <div className="min-w-0">
-                    <h2 className="truncate text-sm font-bold">{currentParticipant.name}</h2>
-                    <p className="flex items-center gap-1 text-[10px] sm:text-[11px] text-neutral-500">
-                      {isOtherParticipantTyping ? (
-                        <>
-                          <span>Sedang mengetik</span>
-                          <span className="inline-flex items-center gap-0.5" aria-label="Sedang mengetik">
-                            {[0, 1, 2].map((dot) => (
-                              <span
-                                key={dot}
-                                className="h-1 w-1 rounded-full bg-[#285844] animate-bounce"
-                                style={{ animationDelay: `${dot * 140}ms` }}
-                              />
-                            ))}
+                {/* ─── CHAT HEADER WITH SEARCH & WHATSAPP STATUS ─── */}
+                <header className="relative z-[2] h-[64px] sm:h-[72px] shrink-0 border-b border-[#DCE7DF] px-3 sm:px-6 flex items-center justify-between bg-gradient-to-b from-white to-[#F4F8F5] shadow-[0_5px_14px_rgba(40,88,68,0.09)]">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigate(barberMode ? '/barber/messages' : profilePath);
+                      }}
+                      className="md:hidden w-10 h-10 shrink-0 rounded-xl text-[#285844] hover:bg-[#E9F1EB] flex items-center justify-center transition-colors"
+                      aria-label={barberMode ? 'Kembali ke inbox' : 'Kembali ke profil barber'}
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    {currentParticipant.photo ? (
+                      <img src={currentParticipant.photo} alt="" className="w-10 h-10 shrink-0 rounded-full object-cover bg-neutral-100" />
+                    ) : (
+                      <span className="w-10 h-10 shrink-0 rounded-full bg-[#E7EFE9] text-[#285844] flex items-center justify-center font-bold">
+                        {(currentParticipant.name || '?').charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <div className="min-w-0">
+                      <h2 className="truncate text-sm font-bold text-[#171717]">{currentParticipant.name}</h2>
+                      <p className="flex items-center gap-1.5 text-[10px] sm:text-[11px] text-neutral-500 truncate">
+                        {isOtherParticipantTyping ? (
+                          <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                            <span>Sedang mengetik</span>
+                            <span className="inline-flex items-center gap-0.5" aria-label="Sedang mengetik">
+                              {[0, 1, 2].map((dot) => (
+                                <span
+                                  key={dot}
+                                  className="h-1 w-1 rounded-full bg-emerald-600 animate-bounce"
+                                  style={{ animationDelay: `${dot * 140}ms` }}
+                                />
+                              ))}
+                            </span>
                           </span>
-                        </>
-                      ) : realtimeStatus === 'connected' ? 'Pembaruan langsung aktif' : 'Pembaruan langsung tidak tersedia'}
-                    </p>
+                        ) : realtimeStatus === 'connected' ? (
+                          <span className="text-emerald-700 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+                            <span>Online</span>
+                          </span>
+                        ) : (
+                          <span>Pembaruan langsung offline</span>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSearchOpen((prev) => !prev);
+                        if (isSearchOpen) setSearchQuery('');
+                      }}
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-colors ${
+                        isSearchOpen ? 'bg-[#285844] text-white' : 'text-[#285844] hover:bg-[#E9F1EB]'
+                      }`}
+                      title="Cari pesan"
+                      aria-label="Cari pesan"
+                    >
+                      <Search className="w-4 h-4" />
+                    </button>
                   </div>
                 </header>
+
+                {/* ─── SEARCH BAR IN CHAT (FITUR 10) ─── */}
+                {isSearchOpen && (
+                  <div className="shrink-0 bg-[#F4F8F5] border-b border-[#DCE7DF] px-3 py-2 flex items-center gap-2 shadow-inner">
+                    <Search className="w-4 h-4 text-neutral-400 shrink-0" />
+                    <input
+                      type="text"
+                      autoFocus
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      placeholder="Cari obrolan / teks..."
+                      className="flex-1 bg-white border border-[#D5E1D8] rounded-lg px-3 py-1.5 text-xs outline-none focus:border-[#72927F]"
+                    />
+                    {searchQuery && (
+                      <span className="text-[11px] text-neutral-500 shrink-0">
+                        {filteredMessages.length} ditemukan
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsSearchOpen(false);
+                        setSearchQuery('');
+                      }}
+                      className="p-1 text-neutral-400 hover:text-neutral-700"
+                      aria-label="Tutup pencarian"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
 
                 {/* 24-Hour Message Retention Banner */}
                 <div className="shrink-0 bg-[#EEF5F0] border-b border-[#D7E5DC] px-3.5 py-1.5 flex items-center justify-center gap-1.5 text-center text-[11px] font-medium text-[#285844] shadow-xs">
@@ -944,11 +1384,12 @@ export default function Messages({ barberMode = false }) {
                 </div>
 
                 {(routeError || error) && (
-                  <p role="alert" className="px-4 py-2 bg-amber-50 text-amber-800 text-xs border-b border-amber-100">
+                  <p role="alert" className="px-4 py-2 bg-amber-50 text-amber-800 text-xs border-b border-amber-100 shrink-0">
                     {routeError || error}
                   </p>
                 )}
 
+                {/* ─── MESSAGE LIST TIMELINE (WITH DATE SEPARATORS) ─── */}
                 <div ref={messageListRef} className="flex-1 min-h-0 overflow-x-hidden overflow-y-auto overscroll-contain touch-pan-y px-3 sm:px-8 py-4 sm:py-6 space-y-3 sm:space-y-4 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-[#EAF3EC] via-[#F8FBF8] to-[#F3F5F1]">
                   {messagesLoading && visibleMessages.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-xs text-neutral-400">
@@ -960,35 +1401,327 @@ export default function Messages({ barberMode = false }) {
                       <p className="text-sm font-semibold">Percakapan dimulai di sini</p>
                       <p className="text-xs text-neutral-500 mt-1">Kirim pertanyaan pertama untuk konsultasi. Pesan otomatis terhapus dalam 24 jam.</p>
                     </div>
-                  ) : visibleMessages.map((message) => {
+                  ) : filteredMessages.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-center text-neutral-400 py-12">
+                      <Search className="w-7 h-7 mb-2 opacity-50" />
+                      <p className="text-xs font-semibold">Tidak ada pesan yang cocok dengan &quot;{searchQuery}&quot;</p>
+                    </div>
+                  ) : filteredMessages.map((message, index) => {
                     const isOwnMessage = message.sender_id === authUser?.id;
+                    const parsed = parseMessagePayload(message);
+
+                    // Fitur 11: Date Separator comparison
+                    const currentDateLabel = getDateSeparatorLabel(message.created_at);
+                    const prevMessage = index > 0 ? filteredMessages[index - 1] : null;
+                    const prevDateLabel = prevMessage ? getDateSeparatorLabel(prevMessage.created_at) : '';
+                    const showDateSeparator = currentDateLabel && currentDateLabel !== prevDateLabel;
+
+                    const reactionsList = Object.entries(parsed.reactions || {});
+
                     return (
-                      <div key={message.id} className={`flex min-w-0 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
-                        <div className={`max-w-[88%] sm:max-w-[70%] min-w-0 rounded-2xl px-3.5 sm:px-4 py-2.5 sm:py-3 transition-transform duration-200 sm:hover:-translate-y-0.5 ${
-                          isOwnMessage
-                            ? 'bg-gradient-to-br from-[#397457] via-[#285844] to-[#214A38] text-white rounded-br-md shadow-[0_5px_0_#193B2C,0_9px_18px_rgba(40,88,68,0.23),inset_0_1px_0_rgba(255,255,255,0.18)]'
-                            : 'bg-gradient-to-br from-white to-[#F7FAF7] border border-[#DCE7DF] text-[#171717] rounded-bl-md shadow-[0_4px_0_#E4EBE5,0_8px_16px_rgba(35,67,48,0.10),inset_0_1px_0_rgba(255,255,255,0.95)]'
-                        }`}>
-                          <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{message.body}</p>
-                          <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
-                            isOwnMessage ? 'text-emerald-100' : 'text-neutral-400'
+                      <React.Fragment key={message.id}>
+                        {/* Date Separator Pill */}
+                        {showDateSeparator && (
+                          <div className="flex items-center justify-center my-3 select-none">
+                            <span className="px-3 py-1 rounded-full bg-[#E5EDE7] text-[#285844] text-[10px] font-bold tracking-wide uppercase shadow-2xs border border-[#D5E1D8]">
+                              {currentDateLabel}
+                            </span>
+                          </div>
+                        )}
+
+                        <div id={`msg-${message.id}`} className={`group relative flex min-w-0 ${isOwnMessage ? 'justify-end' : 'justify-start'}`}>
+                          {/* Hover / Tap Actions (Balas & Reaksi Emoji) */}
+                          <div className={`absolute top-1/2 -translate-y-1/2 hidden group-hover:flex items-center gap-1 z-10 ${
+                            isOwnMessage ? '-left-20' : '-right-20'
                           }`}>
-                            <span>{formatMessageTime(message.created_at)}</span>
-                            {isOwnMessage && (message.read_at
-                              ? <CheckCheck className="w-3.5 h-3.5 text-[#43C5FF]" aria-label="Pesan sudah dibaca" />
-                              : <Check className="w-3 h-3" aria-label="Pesan terkirim" />)}
+                            <button
+                              type="button"
+                              onClick={() => handleStartReply(message, parsed)}
+                              className="w-7 h-7 rounded-full bg-white border border-[#DCE7DF] text-neutral-600 hover:text-[#285844] flex items-center justify-center shadow-xs transition"
+                              title="Balas pesan ini"
+                              aria-label="Balas pesan"
+                            >
+                              <CornerUpLeft className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setActiveReactionMessageId((prev) => prev === message.id ? null : message.id)}
+                              className="w-7 h-7 rounded-full bg-white border border-[#DCE7DF] text-neutral-600 hover:text-[#285844] flex items-center justify-center shadow-xs transition"
+                              title="Beri reaksi"
+                              aria-label="Beri reaksi"
+                            >
+                              <Smile className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Emoji Reaction Selector Popup (Fitur 4) */}
+                          {activeReactionMessageId === message.id && (
+                            <div className={`absolute -top-11 z-20 flex items-center gap-1 bg-white border border-[#C9DBCE] rounded-full px-2 py-1 shadow-md animate-in fade-in zoom-in-95 ${
+                              isOwnMessage ? 'right-0' : 'left-0'
+                            }`}>
+                              {EMOJI_OPTIONS.map((emoji) => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => toggleReaction(message.id, emoji)}
+                                  className="w-7 h-7 rounded-full hover:bg-neutral-100 flex items-center justify-center text-sm transition transform hover:scale-125"
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          <div className={`max-w-[88%] sm:max-w-[70%] min-w-0 rounded-2xl px-3 sm:px-4 py-2 sm:py-2.5 transition-transform duration-200 ${
+                            isOwnMessage
+                              ? 'bg-gradient-to-br from-[#397457] via-[#285844] to-[#214A38] text-white rounded-br-md shadow-[0_5px_0_#193B2C,0_9px_18px_rgba(40,88,68,0.23),inset_0_1px_0_rgba(255,255,255,0.18)]'
+                              : 'bg-gradient-to-br from-white to-[#F7FAF7] border border-[#DCE7DF] text-[#171717] rounded-bl-md shadow-[0_4px_0_#E4EBE5,0_8px_16px_rgba(35,67,48,0.10),inset_0_1px_0_rgba(255,255,255,0.95)]'
+                          }`}>
+                            {/* Quote Reply Card inside bubble (Fitur 3) */}
+                            {parsed.replyTo && (
+                              <div
+                                onClick={() => {
+                                  const targetElem = document.getElementById(`msg-${parsed.replyTo.id}`);
+                                  if (targetElem) {
+                                    targetElem.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                  }
+                                }}
+                                className={`mb-2 rounded-xl p-2 text-xs border-l-4 cursor-pointer select-none transition ${
+                                  isOwnMessage
+                                    ? 'bg-black/20 border-white text-emerald-100 hover:bg-black/30'
+                                    : 'bg-[#EEF5F0] border-[#285844] text-neutral-700 hover:bg-[#E5EFE8]'
+                                }`}
+                              >
+                                <p className="font-bold text-[11px] truncate">
+                                  {parsed.replyTo.senderName || 'Balasan'}
+                                </p>
+                                <p className="truncate text-[10.5px] opacity-90 mt-0.5">
+                                  {parsed.replyTo.text || (parsed.replyTo.mediaType === 'image' ? '📷 Foto' : '🎤 Pesan Suara')}
+                                </p>
+                              </div>
+                            )}
+
+                            {/* Image Attachment (Fitur 1) */}
+                            {parsed.mediaType === 'image' && parsed.mediaUrl && (
+                              <div className="mb-2 overflow-hidden rounded-xl bg-black/5">
+                                <img
+                                  src={parsed.mediaUrl}
+                                  alt="Foto referensi potongan rambut"
+                                  onClick={() => setActiveLightboxImage(parsed.mediaUrl)}
+                                  className="w-full max-h-60 sm:max-h-72 object-cover rounded-xl cursor-pointer hover:opacity-95 transition-opacity"
+                                  loading="lazy"
+                                />
+                              </div>
+                            )}
+
+                            {/* Voice Note Player (Fitur 2) */}
+                            {parsed.mediaType === 'audio' && parsed.mediaUrl && (
+                              <VoiceNotePlayer
+                                src={parsed.mediaUrl}
+                                duration={parsed.audioDuration}
+                                isOwnMessage={isOwnMessage}
+                              />
+                            )}
+
+                            {/* Text message content with optional search highlight (Fitur 10) */}
+                            {parsed.text && (
+                              <p className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                                {searchQuery && parsed.text.toLowerCase().includes(searchQuery.toLowerCase()) ? (
+                                  (() => {
+                                    const regex = new RegExp(`(${searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+                                    const parts = parsed.text.split(regex);
+                                    return parts.map((part, i) => (
+                                      regex.test(part) ? (
+                                        <mark key={i} className="bg-amber-300 text-neutral-900 rounded-xs px-0.5 font-bold">
+                                          {part}
+                                        </mark>
+                                      ) : part
+                                    ));
+                                  })()
+                                ) : (
+                                  parsed.text
+                                )}
+                              </p>
+                            )}
+
+                            {/* Footer: Time and Checkmarks */}
+                            <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
+                              isOwnMessage ? 'text-emerald-100' : 'text-neutral-400'
+                            }`}>
+                              <span>{formatMessageTime(message.created_at)}</span>
+                              {isOwnMessage && (message.read_at
+                                ? <CheckCheck className="w-3.5 h-3.5 text-[#43C5FF]" aria-label="Pesan sudah dibaca" />
+                                : <Check className="w-3 h-3" aria-label="Pesan terkirim" />)}
+                            </div>
+
+                            {/* Emoji Reactions Pills at bottom of bubble (Fitur 4) */}
+                            {reactionsList.length > 0 && (
+                              <div className="mt-1 -mb-1 flex flex-wrap gap-1 pt-1 border-t border-white/10">
+                                {reactionsList.map(([emoji, userIds]) => {
+                                  const count = Array.isArray(userIds) ? userIds.length : 0;
+                                  if (count === 0) return null;
+                                  const isUserReacted = Array.isArray(userIds) && userIds.includes(authUser?.id);
+                                  return (
+                                    <button
+                                      key={emoji}
+                                      type="button"
+                                      onClick={() => toggleReaction(message.id, emoji)}
+                                      className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold transition ${
+                                        isUserReacted
+                                          ? isOwnMessage
+                                            ? 'bg-white text-[#285844] shadow-xs'
+                                            : 'bg-[#285844] text-white shadow-xs'
+                                          : isOwnMessage
+                                            ? 'bg-white/20 text-white'
+                                            : 'bg-neutral-100 text-neutral-700'
+                                      }`}
+                                    >
+                                      <span>{emoji}</span>
+                                      <span>{count}</span>
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            )}
                           </div>
                         </div>
-                      </div>
+                      </React.Fragment>
                     );
                   })}
+
+                  {/* Typing Indicator Bubble at bottom of messages (Fitur 7) */}
+                  {isOtherParticipantTyping && (
+                    <div className="flex justify-start">
+                      <div className="rounded-2xl rounded-bl-xs bg-white border border-[#DCE7DF] px-3.5 py-2 shadow-xs flex items-center gap-1.5 text-xs text-neutral-500">
+                        <span className="text-[11px] font-semibold text-emerald-800">Mengetik</span>
+                        <span className="inline-flex items-center gap-1">
+                          {[0, 1, 2].map((dot) => (
+                            <span
+                              key={dot}
+                              className="h-1.5 w-1.5 rounded-full bg-emerald-600 animate-bounce"
+                              style={{ animationDelay: `${dot * 140}ms` }}
+                            />
+                          ))}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
-                <form onSubmit={sendMessage} className="shrink-0 px-3 pt-2.5 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-4 border-t border-[#DCE7DF] bg-gradient-to-b from-[#F4F8F5] to-white shadow-[0_-6px_16px_rgba(40,88,68,0.08)]">
-                  {(routeError || error) && <p role="alert" className="text-xs text-red-700 mb-2">{routeError || error}</p>}
+                {/* ─── QUICK REPLIES DRAWER FOR BARBERS (FITUR 9) ─── */}
+                {barberMode && isQuickReplyOpen && (
+                  <div className="shrink-0 bg-white border-t border-[#DCE7DF] p-3 max-h-48 overflow-y-auto shadow-md">
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-neutral-100">
+                      <span className="text-xs font-bold text-[#285844] flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 fill-current" />
+                        Balasan Cepat Barber
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsQuickReplyOpen(false)}
+                        className="text-neutral-400 hover:text-neutral-600 p-0.5"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {BARBER_QUICK_REPLIES.map((reply) => (
+                        <button
+                          key={reply.id}
+                          type="button"
+                          onClick={() => {
+                            setMessageText(reply.text);
+                            setIsQuickReplyOpen(false);
+                            setTimeout(adjustTextareaHeight, 0);
+                            textareaRef.current?.focus();
+                          }}
+                          className="text-left p-2 rounded-xl border border-[#DCE7DF] hover:bg-[#F2F8F3] hover:border-[#285844] transition-all text-xs"
+                        >
+                          <p className="font-bold text-[#171717]">{reply.title}</p>
+                          <p className="text-neutral-500 text-[11px] line-clamp-1 mt-0.5">{reply.text}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ─── IMAGE PREVIEW DIALOG BEFORE SENDING (FITUR 1) ─── */}
+                {imagePreviewFile && (
+                  <div className="shrink-0 bg-white border-t border-[#DCE7DF] p-3 sm:p-4 shadow-lg flex items-center gap-3">
+                    <img
+                      src={imagePreviewUrl}
+                      alt="Pratinjau Foto"
+                      className="w-16 h-16 rounded-xl object-cover border border-[#C9DBCE] shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-bold text-[#171717] truncate">{imagePreviewFile.name}</p>
+                      <input
+                        type="text"
+                        value={imageCaption}
+                        onChange={(e) => setImageCaption(e.target.value)}
+                        placeholder="Tambah keterangan foto (opsional)..."
+                        className="w-full mt-1 px-3 py-1.5 rounded-lg border border-[#D5E1D8] text-xs outline-none focus:border-[#72927F]"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleCancelImagePreview}
+                        className="p-2 text-neutral-400 hover:text-red-600 rounded-xl hover:bg-neutral-100 transition"
+                        title="Batal"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                      <button
+                        type="button"
+                        disabled={isUploadingImage}
+                        onClick={handleSendImagePreview}
+                        className="px-3.5 py-2 rounded-xl bg-[#285844] hover:bg-[#1E4334] text-white text-xs font-bold flex items-center gap-1.5 transition disabled:opacity-50"
+                      >
+                        {isUploadingImage ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        <span>Kirim</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ─── REPLY QUOTE BANNER ABOVE INPUT (FITUR 3) ─── */}
+                {replyingTo && (
+                  <div className="shrink-0 bg-[#F2F8F3] border-t border-l-4 border-l-[#285844] border-t-[#DCE7DF] px-3.5 py-2 flex items-center justify-between shadow-2xs">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-bold text-[#285844] truncate">
+                        Membalas {replyingTo.senderName}
+                      </p>
+                      <p className="text-xs text-neutral-600 truncate mt-0.5">
+                        {replyingTo.text}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setReplyingTo(null)}
+                      className="p-1 text-neutral-400 hover:text-neutral-700 rounded-lg"
+                      title="Batalkan balasan"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+
+                {/* ─── CHAT INPUT & VOICE NOTE BAR ─── */}
+                <form onSubmit={sendMessage} className="shrink-0 px-3 pt-2 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:px-5 sm:py-3 border-t border-[#DCE7DF] bg-gradient-to-b from-[#F4F8F5] to-white shadow-[0_-6px_16px_rgba(40,88,68,0.08)]">
+                  {/* Hidden file input for photos */}
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    accept="image/*"
+                    onChange={handleImageSelected}
+                    className="hidden"
+                  />
+
+                  {/* Customer Quick Starter Templates */}
                   {!barberMode && visibleMessages.length === 0 && (
-                    <div className="max-w-5xl min-w-0 mx-auto mb-2 sm:mb-3">
-                      <p className="mb-2 text-[11px] font-semibold text-[#547260]">Mulai dengan pesan</p>
+                    <div className="max-w-5xl min-w-0 mx-auto mb-2">
+                      <p className="mb-1.5 text-[11px] font-semibold text-[#547260]">Mulai dengan pertanyaan</p>
                       <div className="flex gap-2 overflow-x-auto overscroll-x-contain pb-1 touch-pan-x">
                         {CUSTOMER_MESSAGE_TEMPLATES.map((template) => (
                           <button
@@ -997,11 +1730,9 @@ export default function Messages({ barberMode = false }) {
                             onClick={() => {
                               setMessageText(template);
                               setTimeout(adjustTextareaHeight, 0);
-                              if (textareaRef.current) {
-                                textareaRef.current.focus();
-                              }
+                              if (textareaRef.current) textareaRef.current.focus();
                             }}
-                            className="shrink-0 rounded-full border border-[#C9DBCE] bg-white px-3 py-2 text-left text-[11px] font-medium text-[#285844] shadow-[0_2px_0_#E0EAE2,0_4px_8px_rgba(40,88,68,0.06)] transition hover:-translate-y-0.5 hover:bg-[#F2F8F3] hover:shadow-[0_3px_0_#D7E5DA,0_6px_10px_rgba(40,88,68,0.1)]"
+                            className="shrink-0 rounded-full border border-[#C9DBCE] bg-white px-3 py-1.5 text-left text-[11px] font-medium text-[#285844] shadow-[0_2px_0_#E0EAE2,0_4px_8px_rgba(40,88,68,0.06)] transition hover:-translate-y-0.5 hover:bg-[#F2F8F3]"
                           >
                             {template}
                           </button>
@@ -1009,43 +1740,156 @@ export default function Messages({ barberMode = false }) {
                       </div>
                     </div>
                   )}
-                  <div className="flex items-end gap-2 max-w-5xl min-w-0 mx-auto">
-                    <textarea
-                      ref={textareaRef}
-                      value={messageText}
-                      onChange={handleMessageInput}
-                      onFocus={() => {
-                        setTimeout(() => scrollToBottom(true), 150);
-                        setTimeout(() => scrollToBottom(true), 350);
-                      }}
-                      onBlur={() => {
-                        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
-                        broadcastTypingStatus(false);
-                        lastTypingBroadcastAtRef.current = 0;
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key === 'Enter' && !event.shiftKey) {
-                          event.preventDefault();
-                          event.currentTarget.form?.requestSubmit();
-                        }
-                      }}
-                      maxLength={4000}
-                      rows={1}
-                      placeholder="Tulis pesan..."
-                      aria-label="Tulis pesan"
-                      className="min-h-11 max-h-28 sm:max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[#D5E1D8] bg-white px-3.5 sm:px-4 py-2.5 sm:py-3 text-[16px] sm:text-sm leading-relaxed text-[#171717] outline-none shadow-[inset_0_2px_5px_rgba(40,88,68,0.07),0_2px_0_rgba(255,255,255,0.9)] transition focus:border-[#72927F] focus:ring-4 focus:ring-[#285844]/10"
-                    />
-                    <button
-                      type="submit"
-                      disabled={sending || !messageText.trim()}
-                      className="w-11 h-11 shrink-0 rounded-xl bg-gradient-to-br from-[#397457] to-[#1E4334] hover:brightness-105 text-white flex items-center justify-center shadow-[0_4px_0_#173829,0_7px_12px_rgba(40,88,68,0.22)] transition sm:hover:-translate-y-0.5 active:translate-y-0 active:shadow-[0_2px_0_#173829,0_3px_7px_rgba(40,88,68,0.2)] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0"
-                      aria-label="Kirim pesan"
-                    >
-                      {sending ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <p className="max-w-5xl mx-auto text-[10px] text-neutral-400 mt-1.5 hidden sm:block">Enter untuk mengirim · Shift+Enter untuk baris baru</p>
+
+                  {/* Input Row or Recording Active Row (Fitur 2) */}
+                  {isRecording ? (
+                    <div className="flex items-center justify-between gap-3 max-w-5xl mx-auto py-1">
+                      <div className="flex items-center gap-2 text-red-600 font-semibold text-xs animate-pulse">
+                        <span className="w-3 h-3 rounded-full bg-red-600 inline-block" />
+                        <span>Merekam suara... {formatAudioDuration(recordingDuration)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={cancelRecording}
+                          className="w-10 h-10 rounded-xl bg-red-50 text-red-600 hover:bg-red-100 flex items-center justify-center transition"
+                          title="Batalkan rekaman"
+                          aria-label="Batalkan rekaman"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={stopAndSendRecording}
+                          className="w-10 h-10 rounded-xl bg-emerald-600 text-white hover:bg-emerald-700 flex items-center justify-center shadow-md transition"
+                          title="Kirim pesan suara"
+                          aria-label="Kirim pesan suara"
+                        >
+                          <Send className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-end gap-1.5 sm:gap-2 max-w-5xl min-w-0 mx-auto">
+                      {/* Barber Quick Replies Button (Fitur 9) */}
+                      {barberMode && (
+                        <button
+                          type="button"
+                          onClick={() => setIsQuickReplyOpen((prev) => !prev)}
+                          className={`w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl border flex items-center justify-center transition ${
+                            isQuickReplyOpen
+                              ? 'bg-[#285844] text-white border-[#285844]'
+                              : 'border-[#D5E1D8] bg-white text-[#285844] hover:bg-[#F2F8F3]'
+                          }`}
+                          title="Balasan Cepat Barber"
+                          aria-label="Balasan Cepat"
+                        >
+                          <Zap className="w-4 h-4 fill-current" />
+                        </button>
+                      )}
+
+                      {/* Photo Attachment Button (Fitur 1) */}
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl border border-[#D5E1D8] bg-white hover:bg-[#F2F8F3] text-[#285844] flex items-center justify-center transition shadow-2xs"
+                        title="Kirim Foto Referensi"
+                        aria-label="Kirim Foto"
+                      >
+                        <ImageIcon className="w-4 h-4" />
+                      </button>
+
+                      {/* Message Textarea */}
+                      <textarea
+                        ref={textareaRef}
+                        value={messageText}
+                        onChange={handleMessageInput}
+                        onFocus={() => {
+                          setTimeout(() => scrollToBottom(true), 150);
+                          setTimeout(() => scrollToBottom(true), 350);
+                        }}
+                        onBlur={() => {
+                          if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+                          broadcastTypingStatus(false);
+                          lastTypingBroadcastAtRef.current = 0;
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' && !event.shiftKey) {
+                            event.preventDefault();
+                            event.currentTarget.form?.requestSubmit();
+                          }
+                        }}
+                        maxLength={4000}
+                        rows={1}
+                        placeholder={replyingTo ? `Balas ${replyingTo.senderName}...` : 'Tulis pesan...'}
+                        aria-label="Tulis pesan"
+                        className="min-h-10 sm:min-h-11 max-h-28 sm:max-h-32 min-w-0 flex-1 resize-none overflow-y-auto rounded-xl border border-[#D5E1D8] bg-white px-3 sm:px-4 py-2 sm:py-2.5 text-[16px] sm:text-sm leading-relaxed text-[#171717] outline-none shadow-[inset_0_2px_5px_rgba(40,88,68,0.07),0_2px_0_rgba(255,255,255,0.9)] transition focus:border-[#72927F] focus:ring-4 focus:ring-[#285844]/10"
+                      />
+
+                      {/* Voice Note Button (Fitur 2) or Send Button */}
+                      {!messageText.trim() ? (
+                        <button
+                          type="button"
+                          onClick={startRecording}
+                          disabled={isProcessingAudio}
+                          className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-[#285844] hover:bg-[#1E4334] text-white flex items-center justify-center shadow-[0_3px_0_#173829,0_5px_10px_rgba(40,88,68,0.22)] transition active:translate-y-0.5"
+                          title="Rekam Pesan Suara"
+                          aria-label="Rekam Suara"
+                        >
+                          <Mic className="w-4 h-4" />
+                        </button>
+                      ) : (
+                        <button
+                          type="submit"
+                          disabled={sending}
+                          className="w-10 h-10 sm:w-11 sm:h-11 shrink-0 rounded-xl bg-gradient-to-br from-[#397457] to-[#1E4334] hover:brightness-105 text-white flex items-center justify-center shadow-[0_3px_0_#173829,0_5px_10px_rgba(40,88,68,0.22)] transition active:translate-y-0.5 disabled:opacity-50"
+                          aria-label="Kirim pesan"
+                        >
+                          {sending ? <LoaderCircle className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <p className="max-w-5xl mx-auto text-[10px] text-neutral-400 mt-1 hidden sm:block">
+                    Enter untuk mengirim · Shift+Enter untuk baris baru · Klik foto untuk memperbesar
+                  </p>
                 </form>
+
+                {/* ─── FULLSCREEN LIGHTBOX MODAL (FITUR 1) ─── */}
+                {activeLightboxImage && (
+                  <div
+                    className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-in fade-in"
+                    onClick={() => setActiveLightboxImage(null)}
+                  >
+                    <div className="absolute top-4 right-4 flex items-center gap-2 z-10" onClick={(e) => e.stopPropagation()}>
+                      <a
+                        href={activeLightboxImage}
+                        target="_blank"
+                        rel="noreferrer"
+                        download="foto-referensi-cukur.jpg"
+                        className="w-10 h-10 rounded-full bg-white/20 text-white hover:bg-white/30 flex items-center justify-center backdrop-blur-xs transition"
+                        title="Buka / Unduh Gambar"
+                      >
+                        <Download className="w-5 h-5" />
+                      </a>
+                      <button
+                        type="button"
+                        onClick={() => setActiveLightboxImage(null)}
+                        className="w-10 h-10 rounded-full bg-white/20 text-white hover:bg-white/30 flex items-center justify-center backdrop-blur-xs transition"
+                        title="Tutup"
+                      >
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+                    <img
+                      src={activeLightboxImage}
+                      alt="Foto Referensi Fullscreen"
+                      onClick={(e) => e.stopPropagation()}
+                      className="max-h-[85vh] max-w-[95vw] rounded-2xl object-contain shadow-2xl"
+                    />
+                  </div>
+                )}
               </>
             ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-center p-8">
