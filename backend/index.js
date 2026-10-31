@@ -2,9 +2,13 @@ import express from 'express';
 import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { supabase } from './supabase.js';
+import qrisRouter from './routes/qrisPayment.js';
 
-dotenv.config();
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
@@ -14,6 +18,9 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(cookieParser());
+
+// ━━━ QRIS Payment Gateway Routes ━━━
+app.use('/api/payment/qris', qrisRouter);
 
 // ━━━ 1. Health Check Route ━━━
 app.get('/api/health', (req, res) => {

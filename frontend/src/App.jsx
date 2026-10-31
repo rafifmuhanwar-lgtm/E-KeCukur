@@ -8,6 +8,7 @@ import BookingFlow from './pages/customer/BookingFlow';
 import BarberDashboard from './pages/barber/Dashboard';
 import BarberBioLink from './pages/customer/BarberBioLink';
 import Messages from './pages/Messages';
+import AdminMasterDashboard from './pages/admin/Dashboard';
 import { useStore } from './store';
 
 export default function App() {
@@ -37,6 +38,11 @@ export default function App() {
         {/* Legacy staff route redirects to Barber Studio Dashboard */}
         <Route path="/staff/dashboard" element={<Navigate to="/barber/dashboard" replace />} />
         
+        {/* Master Admin / Super Admin Portal */}
+        <Route path="/admin" element={<AdminMasterDashboard />} />
+        <Route path="/admin/dashboard" element={<AdminMasterDashboard />} />
+        <Route path="/master" element={<Navigate to="/admin" replace />} />
+
         {/* Barber Creator Studio Dashboard */}
         <Route path="/barber/dashboard" element={<BarberDashboard />} />
         <Route path="/barber/messages" element={<Messages barberMode />} />

@@ -1252,6 +1252,7 @@ export default function Home() {
             <ul className="space-y-1.5 text-neutral-300">
               <li><a href="/login" className="hover:text-white transition-colors">Masuk ke Akun Barber</a></li>
               <li><a href="/customer/barbers" className="hover:text-white transition-colors">Cari Barber Sekitar</a></li>
+              <li><a href="/admin" className="hover:text-emerald-400 text-emerald-400 font-semibold transition-colors flex items-center gap-1"><span>Portal Master Admin</span> ↗</a></li>
             </ul>
           </div>
 

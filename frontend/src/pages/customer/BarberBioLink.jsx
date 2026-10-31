@@ -28,6 +28,7 @@ import {
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
 import Logo from '../../components/Logo';
+import { createQrisPayment, checkQrisPaymentStatus, simulateQrisPayment } from '../../lib/qrisPayment';
 
 const TIME_SLOTS = [
   '09:30', '10:00', '10:45', '11:30', 
@@ -325,6 +326,55 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [tipperName, setTipperName] = useState('');
   const [tipperMessage, setTipperMessage] = useState('');
   const [tipPaid, setTipPaid] = useState(false);
+  const [tipQrisData, setTipQrisData] = useState(null);
+  const [tipQrisLoading, setTipQrisLoading] = useState(false);
+  const [copiedTipAmount, setCopiedTipAmount] = useState(false);
+  const [simulatingTip, setSimulatingTip] = useState(false);
+
+  // Auto-generate QRIS tagihan dengan kode unik saat modal tip dibuka
+  useEffect(() => {
+    if (!isTippingOpen || tipPaid) return;
+    let isCancelled = false;
+    let pollInterval = null;
+
+    setTipQrisLoading(true);
+    createQrisPayment({
+      type: 'TIP',
+      amount: tipAmount,
+      barberId: barber.id,
+      customerName: tipperName || 'Pelanggan',
+      qrisImageUrl: barber.tippingConfig?.qrisImage || null
+    }).then((res) => {
+      if (isCancelled) return;
+      setTipQrisLoading(false);
+      if (res?.success && res.payment) {
+        setTipQrisData(res.payment);
+
+        // Polling status tiap 2.5 detik untuk mendeteksi notifikasi MacroDroid
+        pollInterval = setInterval(async () => {
+          const statusRes = await checkQrisPaymentStatus(res.payment.referenceId);
+          if (statusRes?.status === 'PAID') {
+            clearInterval(pollInterval);
+            if (typeof addBarberTip === 'function') {
+              addBarberTip(barber.id, {
+                customerName: tipperName || 'Pelanggan',
+                amount: res.payment.totalAmount || tipAmount,
+                coffeeLabel: selectedCoffeeLabel || 'Kopi',
+                message: tipperMessage || 'Terima kasih atas pelayanannya!',
+                method: 'QRIS Listener'
+              });
+            }
+            setTipPaid(true);
+          }
+        }, 2500);
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      if (pollInterval) clearInterval(pollInterval);
+    };
+  }, [isTippingOpen, tipAmount, tipPaid]);
 
   // Share link copy
   const handleShare = () => {
@@ -672,19 +722,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                 </a>
               )}
 
-              {/* WhatsApp Quick Pill */}
-              {barber.whatsapp && (
-                <a 
-                  href={`https://wa.me/${barber.whatsapp}?text=${encodeURIComponent(barber.whatsappMessage || 'Halo, saya mau booking jadwal cukur')}`}
-                  target="_blank" 
-                  rel="noreferrer"
-                  className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 bg-neutral-100 hover:bg-emerald-50 text-neutral-800 hover:text-emerald-800 border border-neutral-200/70 hover:border-emerald-300 shadow-2xs transition-all hover:scale-[1.02]"
-                >
-                  <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>WhatsApp</span>
-                </a>
-              )}
-
               {/* Custom External Links as Pills */}
               {(barber.customLinks || []).filter(l => l.active).map((lnk) => (
                 <a
@@ -699,14 +736,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                 </a>
               ))}
             </div>
-
-            {/* Schedule Info Badge */}
-            {barber.schedule && (
-              <div className={`inline-flex items-center gap-1.5 rounded-full ${isPreview ? 'text-[9.5px] mb-2 px-2.5 py-0.5' : 'text-xs mb-4 px-3.5 py-1'} font-semibold ${theme.badgeBg} ${theme.badgeText}`}>
-                <Clock className={`${isPreview ? 'w-2.5 h-2.5' : 'w-3.5 h-3.5'}`} />
-                <span>{barber.schedule}</span>
-              </div>
-            )}
             {!isPreview && (
               <div className="px-4 w-full max-w-sm mt-1 mb-4">
                 <button
@@ -1310,14 +1339,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   </a>
                 )}
               </div>
-
-              <div className={`${isPreview ? 'p-2.5 rounded-xl' : 'p-4 rounded-2xl'} border shadow-2xs ${theme.cardBg} ${theme.cardBorder}`}>
-                <span className={`font-display font-bold ${isPreview ? 'text-[11px]' : 'text-xs'} block mb-0.5`}>🕒 Jadwal Booking:</span>
-                <p className={`${isPreview ? 'text-[10px]' : 'text-xs'} ${theme.textSecondary}`}>{barber.schedule || 'Jadwal operasional belum diatur'}</p>
-                {barber.workingHours && (
-                  <p className={`${isPreview ? 'text-[10px]' : 'text-xs'} font-mono mt-0.5 ${theme.textSecondary}`}>Jam Buka: {barber.workingHours}</p>
-                )}
-              </div>
             </motion.div>
           )}
 
@@ -1425,24 +1446,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       <strong className="font-mono text-sm text-[#285844]">{formatRupiah(bookingSuccessData.price)}</strong>
                     </div>
                   </div>
-
-                  {/* Direct WhatsApp Confirmation Button */}
-                  <a
-                    href={`https://wa.me/${barber.whatsapp}?text=${encodeURIComponent(
-                      `Halo ${barber.name}, saya ${bookingSuccessData.customerName} mau konfirmasi jadwal booking cukur dari link bio kamu:\n\n• Layanan: ${bookingSuccessData.serviceName}\n• Hari/Tgl: ${bookingSuccessData.date}\n• Jam: ${bookingSuccessData.time} WIB\n• No. Booking: ${bookingSuccessData.id}\n\nMohon konfirmasinya ya Mas, terima kasih!`
-                    )}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all"
-                  >
-                    <MessageCircle className="w-4 h-4" />
-                    <span>Kirim Konfirmasi ke WhatsApp Barber</span>
-                  </a>
-
                   <button
                     type="button"
                     onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); }}
-                    className="w-full py-2.5 text-neutral-500 hover:text-black text-xs font-semibold"
+                    className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
                   >
                     Selesai & Tutup
                   </button>
@@ -1610,21 +1617,66 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     </p>
                   </div>
 
-                  {/* QRIS Box */}
-                  <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-center">
-                    <div className="w-36 h-36 mx-auto rounded-lg bg-white p-2 border border-neutral-200 flex items-center justify-center overflow-hidden mb-2 shadow-2xs">
+                  {/* QRIS Box dengan Kode Unik & Verifikasi Realtime */}
+                  <div className="p-3.5 bg-neutral-50 rounded-2xl border border-neutral-200 text-center space-y-2.5">
+                    <div className="w-36 h-36 mx-auto rounded-xl bg-white p-2 border border-neutral-200 flex items-center justify-center overflow-hidden shadow-2xs">
                       <img 
-                        src={barber.tippingConfig?.qrisImage || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=QRIS_TIP_${tipAmount}_FOR_${barber.id}`} 
+                        src={barber.tippingConfig?.qrisImage || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=QRIS_PAY_${tipQrisData?.totalAmount || tipAmount}_FOR_${barber.id}`} 
                         alt="QRIS" 
                         className="w-full h-full object-contain"
                       />
                     </div>
-                    <span className="font-display font-bold text-sm text-neutral-900 block">
-                      {formatRupiah(tipAmount)}
-                    </span>
-                    <span className="text-[10px] text-neutral-400 block mt-0.5">
-                      Scan via BCA, GoPay, OVO, DANA, atau mobile banking
-                    </span>
+
+                    {/* Banner Nominal + Kode Unik */}
+                    <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2 text-center">
+                      <span className="text-[10px] font-semibold text-amber-800 block">
+                        Transfer TEPAT termasuk 3 digit kode unik:
+                      </span>
+                      <div className="flex items-center justify-center gap-2 mt-0.5">
+                        <span className="font-display font-extrabold text-base text-neutral-900 font-mono">
+                          Rp {(tipQrisData?.totalAmount || tipAmount).toLocaleString('id-ID')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(String(tipQrisData?.totalAmount || tipAmount));
+                            setCopiedTipAmount(true);
+                            setTimeout(() => setCopiedTipAmount(false), 2000);
+                          }}
+                          className="px-2 py-0.5 rounded-md bg-neutral-900 text-white text-[10px] font-bold cursor-pointer hover:bg-neutral-800 transition-colors"
+                        >
+                          {copiedTipAmount ? '✓ Disalin' : 'Salin'}
+                        </button>
+                      </div>
+                      <span className="text-[9px] text-amber-700 block mt-0.5">
+                        *Kode unik acak: +Rp {tipQrisData?.uniqueCode || '...'} agar diverifikasi otomatis
+                      </span>
+                    </div>
+
+                    {/* Status Polling Animation */}
+                    <div className="flex items-center justify-center gap-1.5 text-[11px] text-neutral-500 font-medium pt-0.5">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                      </span>
+                      <span>Menunggu pembayaran otomatis...</span>
+                    </div>
+
+                    {/* Simulasi Cepat (Untuk Demo/Testing) */}
+                    <button
+                      type="button"
+                      disabled={simulatingTip}
+                      onClick={async () => {
+                        setSimulatingTip(true);
+                        try {
+                          await simulateQrisPayment(tipQrisData?.referenceId, tipQrisData?.totalAmount || tipAmount);
+                        } catch (e) {}
+                        setTimeout(() => setSimulatingTip(false), 1500);
+                      }}
+                      className="text-[10px] text-neutral-400 hover:text-neutral-700 underline cursor-pointer block mx-auto"
+                    >
+                      {simulatingTip ? 'Memproses Simulasi...' : '⚡ Uji Simulasi Notifikasi Masuk'}
+                    </button>
                   </div>
 
                   {/* Input fields for customer */}
@@ -1864,23 +1916,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                 >
                   <X className="w-5 h-5" />
                 </button>
-              </div>
-
-              {/* Direct WhatsApp Callout */}
-              <div className="p-3 bg-neutral-50 border-b border-neutral-100 flex items-center justify-between gap-2">
-                <div className="text-[10.5px] text-neutral-800 leading-tight">
-                  <span className="font-bold block">Mau Chat Langsung dengan {barber.name}?</span>
-                  <span className="text-neutral-500 text-[9.5px]">Kirim pesan via WhatsApp</span>
-                </div>
-                <a
-                  href={`https://wa.me/${(barber.phone || '628123456789').replace(/^0/, '62').replace(/\D/g, '')}?text=${encodeURIComponent(`Halo Mas ${barber.name}, saya melihat postingan "${commentModalPost.title}" di feed e-Cukur kamu.`)}`}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="px-2.5 py-1.5 rounded-lg bg-[#285844] hover:bg-[#1E4334] text-white text-[10.5px] font-bold flex items-center gap-1.5 shrink-0 shadow-xs transition-all active:scale-95"
-                >
-                  <MessageCircle className="w-3.5 h-3.5" />
-                  <span>Chat Barber</span>
-                </a>
               </div>
 
               {/* Comments List */}

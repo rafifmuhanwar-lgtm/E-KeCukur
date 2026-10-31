@@ -436,7 +436,6 @@ export default function BarberDashboard() {
   const [withdrawAccNumber, setWithdrawAccNumber] = useState(barber?.payoutAccount?.accountNumber || '');
   const [withdrawAccHolder, setWithdrawAccHolder] = useState(barber?.payoutAccount?.accountHolder || barber?.name || '');
   const [activeLedgerTab, setActiveLedgerTab] = useState('incoming'); // 'incoming' | 'withdrawals'
-
   const handleOpenWithdrawModal = () => {
     setWithdrawBank(barber?.payoutAccount?.bankName || 'BCA');
     setWithdrawAccNumber(barber?.payoutAccount?.accountNumber || '');
@@ -1632,102 +1631,12 @@ export default function BarberDashboard() {
 
               </div>
 
-              {/* ─── JADWAL OPERASIONAL & KETERSEDIAAN BOOKING ─── */}
+              {/* Lokasi Alamat Barbershop */}
               <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-4">
                 <h2 className="font-display font-bold text-base text-[#171717] flex items-center gap-2">
-                  <Clock className="w-4 h-4 text-[#285844]" />
-                  <span>Jadwal Operasional & Ketersediaan Booking</span>
+                  <MapPin className="w-4 h-4 text-[#285844]" />
+                  <span>Lokasi & Alamat Barbershop</span>
                 </h2>
-
-                {/* Status Toggle */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-                  {[
-                    { id: 'AVAILABLE', label: '🟢 Buka (Siap Booking)', color: 'border-emerald-500 bg-emerald-50 text-emerald-900' },
-                    { id: 'OCCUPIED', label: '🟡 Jadwal Padat', color: 'border-amber-500 bg-amber-50 text-amber-900' },
-                    { id: 'BREAK', label: '☕ Sedang Istirahat', color: 'border-blue-500 bg-blue-50 text-blue-900' },
-                    { id: 'CLOSED', label: '🔴 Sedang Tutup', color: 'border-neutral-500 bg-neutral-100 text-neutral-800' },
-                  ].map((st) => (
-                    <button
-                      key={st.id}
-                      type="button"
-                      onClick={() => handleProfileFieldChange('status', st.id)}
-                      className={`py-3 px-2 rounded-xl text-xs font-semibold border-2 transition-all text-center ${
-                        barber.status === st.id 
-                          ? st.color + ' shadow-sm font-bold scale-[1.02]' 
-                          : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
-                      }`}
-                    >
-                      {st.label}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Jam Buka - Tutup</label>
-                    <input 
-                      type="text"
-                      value={barber.workingHours || ''}
-                      onChange={(e) => handleProfileFieldChange('workingHours', e.target.value)}
-                      placeholder="e.g. 10:00 - 21:00"
-                      className="w-full text-sm font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Hari Operasional</label>
-                    <input 
-                      type="text"
-                      value={barber.openDays || ''}
-                      onChange={(e) => handleProfileFieldChange('openDays', e.target.value)}
-                      placeholder="e.g. Buka Setiap Hari / Senin - Sabtu"
-                      className="w-full text-sm font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Teks Badge Keterangan di Link Bio</label>
-                  <input 
-                    type="text"
-                    value={barber.schedule || ''}
-                    onChange={(e) => handleProfileFieldChange('schedule', e.target.value)}
-                    placeholder="e.g. Buka 10:00 - 21:00 • Siap Terima Booking"
-                    className="w-full text-sm font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
-                  />
-                </div>
-              </div>
-
-              {/* Lokasi & WhatsApp Booking */}
-              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-4">
-                <h2 className="font-display font-bold text-base text-[#171717] flex items-center gap-2">
-                  <Phone className="w-4 h-4 text-[#285844]" />
-                  <span>Kontak WhatsApp & Lokasi Alamat</span>
-                </h2>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Nomor WhatsApp (awalan 62)</label>
-                    <input 
-                      type="text"
-                      value={barber.whatsapp}
-                      onChange={(e) => handleProfileFieldChange('whatsapp', e.target.value.replace(/\D/g, ''))}
-                      placeholder="e.g. 6281234567890"
-                      className="w-full text-sm font-mono font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Pesan Pembuka Otomatis WhatsApp</label>
-                    <input 
-                      type="text"
-                      value={barber.whatsappMessage || ''}
-                      onChange={(e) => handleProfileFieldChange('whatsappMessage', e.target.value)}
-                      placeholder="e.g. Halo Mas, saya ingin booking slot cukur"
-                      className="w-full text-sm font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
-                    />
-                  </div>
-                </div>
 
                 <div>
                   <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Alamat Lengkap Barbershop</label>
