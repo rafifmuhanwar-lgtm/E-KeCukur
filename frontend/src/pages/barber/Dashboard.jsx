@@ -35,7 +35,11 @@ import {
   Coffee,
   ArrowDownToLine,
   Landmark,
-  Save
+  Save,
+  Wallet,
+  TrendingUp,
+  Receipt,
+  ShieldCheck
 } from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
@@ -236,6 +240,59 @@ export default function BarberDashboard() {
   }, [barber, bookings]);
 
   const weeklyChartData = React.useMemo(() => computeWeeklyChartData(barberBookings), [barberBookings]);
+
+  // Finansial Terpadu (Layanan Booking + Tip Kopi)
+  const paidBookings = React.useMemo(() => {
+    return barberBookings.filter(b => 
+      b.paymentStatus === 'PAID' || 
+      b.status === 'Terkonfirmasi' || 
+      b.status === 'Selesai' || 
+      b.status === 'CONFIRMED' || 
+      b.status === 'COMPLETED'
+    );
+  }, [barberBookings]);
+
+  const totalBookingRevenue = React.useMemo(() => {
+    return paidBookings.reduce((sum, b) => sum + (Number(b.price) || 0), 0);
+  }, [paidBookings]);
+
+  const tipsList = React.useMemo(() => {
+    return Array.isArray(barber?.tipsHistory) ? barber.tipsHistory : [];
+  }, [barber?.tipsHistory]);
+
+  const totalTipRevenue = React.useMemo(() => {
+    return tipsList.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  }, [tipsList]);
+
+  const totalCombinedRevenue = totalBookingRevenue + totalTipRevenue;
+
+  // Gabungan Aktivitas Transaksi Masuk Terkini (Realtime Feed)
+  const combinedRecentTransactions = React.useMemo(() => {
+    const list = [];
+    paidBookings.forEach(b => {
+      list.push({
+        id: b.id,
+        type: 'BOOKING',
+        title: `Layanan: ${b.serviceName || 'Layanan Barbershop'}`,
+        customerName: b.customerName || 'Pelanggan',
+        amount: Number(b.price) || 0,
+        date: b.createdAt || b.date,
+        badge: 'Reservasi'
+      });
+    });
+    tipsList.forEach(t => {
+      list.push({
+        id: t.id,
+        type: 'TIP',
+        title: `Tip Kopi: ${t.coffeeLabel || 'Traktir Kopi'}`,
+        customerName: t.customerName || 'Pelanggan Setia',
+        amount: Number(t.amount) || 0,
+        date: t.date,
+        badge: 'Tip Kopi'
+      });
+    });
+    return list.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0)).slice(0, 15);
+  }, [paidBookings, tipsList]);
 
   // Active Main Tab
   const [activeTab, setActiveTab] = useState(queryTab || 'profile');
@@ -1787,187 +1844,76 @@ export default function BarberDashboard() {
           )}
 
           {/* ══════════════════════════════════════════ */}
-          {/* TAB: SALDO TIP & PENARIKAN (WALLET)         */}
+                    {/* ══════════════════════════════════════════ */}
+          {/* TAB: SAWER TIP DIGITAL (TRAKTIR KOPI)      */}
           {/* ══════════════════════════════════════════ */}
           {activeTab === 'tipping' && (
             <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               
-              {/* 1. WALLET HERO CARD */}
+              {/* 1. RINGKASAN TIP HERO CARD */}
               <div className="bg-[#18181B] text-white p-6 sm:p-7 rounded-2xl border border-neutral-800 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-neutral-800/80">
-                  <div>
-                    <span className="text-xs font-medium text-neutral-400 block mb-1">
-                      Dompet Saldo Tip
-                    </span>
-                    <div className="flex items-baseline gap-2">
-                      <h2 className="font-display font-bold text-3xl sm:text-4xl text-white tracking-tight">
-                        Rp {(typeof barber.tipBalance === 'number' ? barber.tipBalance : 0).toLocaleString('id-ID')}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-neutral-800/80">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-12 h-12 rounded-xl bg-amber-500/15 border border-amber-500/30 text-amber-400 flex items-center justify-center shrink-0">
+                      <Coffee className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-semibold uppercase tracking-wider text-amber-400">
+                          Apresiasi Pelanggan
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
+                          Realtime QRIS
+                        </span>
+                      </div>
+                      <h2 className="font-display font-bold text-2xl sm:text-3xl text-white tracking-tight mt-0.5">
+                        Sawer Tip Digital (Tip Kopi)
                       </h2>
+                      <p className="text-xs text-neutral-400 mt-1 max-w-xl">
+                        Pelanggan yang puas dapat memberikan apresiasi tip kopi secara digital melalui bio link kamu. Dana langsung masuk ke QRIS platform dan tercatat otomatis di menu Statistik.
+                      </p>
                     </div>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={handleOpenWithdrawModal}
-                      disabled={(barber.tipBalance || 0) < 15000}
-                      className={`px-4 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 transition-colors cursor-pointer ${
-                        (barber.tipBalance || 0) >= 15000 
-                          ? 'bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm' 
-                          : 'bg-neutral-800/80 text-neutral-400 cursor-not-allowed border border-neutral-700/60'
-                      }`}
-                    >
-                      <ArrowDownToLine className="w-4 h-4" />
-                      <span>Tarik Saldo</span>
-                    </button>
-
+                  <div className="flex items-center gap-2">
                     <button
                       type="button"
                       onClick={handleSimulateIncomingTip}
-                      className="px-3 py-2.5 rounded-xl text-neutral-400 hover:text-white border border-neutral-700/80 hover:border-neutral-600 text-xs font-medium transition-colors cursor-pointer"
-                      title="Simulasikan ada pelanggan yang memberikan tip"
+                      className="px-3.5 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white border border-neutral-700 text-xs font-semibold transition-colors cursor-pointer inline-flex items-center gap-2"
+                      title="Simulasikan ada pelanggan yang mengirim tip kopi"
                     >
-                      + Simulasi Tip (Rp 25.000)
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400" />
+                      <span>+ Simulasi Tip Masuk</span>
                     </button>
                   </div>
                 </div>
 
-                <div className="pt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-400">
-                  <div className="flex items-center gap-2">
-                    <span className="inline-block w-2 h-2 rounded-full bg-emerald-400" />
-                    <span>Minimal penarikan <strong>Rp 15.000</strong></span>
-                    <span className="text-neutral-600">•</span>
-                    <span>Biaya admin <strong>Gratis</strong></span>
-                  </div>
-
-                  {(barber.tipBalance || 0) < 15000 ? (
-                    <span className="text-amber-400 font-medium text-[11px]">
-                      Kurang Rp {(15000 - (barber.tipBalance || 0)).toLocaleString('id-ID')} lagi untuk tarik saldo
+                {/* 3 Metrik Utama Tip */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-5">
+                  <div className="bg-neutral-900/80 p-3.5 rounded-xl border border-neutral-800">
+                    <span className="text-[11px] text-neutral-400 block mb-0.5">Total Tip Diterima</span>
+                    <span className="font-display font-extrabold text-xl text-white">
+                      Rp {totalTipRevenue.toLocaleString('id-ID')}
                     </span>
-                  ) : (
-                    <span className="text-emerald-400 font-medium text-[11px]">
-                      Saldo siap dicairkan ke rekening
+                  </div>
+
+                  <div className="bg-neutral-900/80 p-3.5 rounded-xl border border-neutral-800">
+                    <span className="text-[11px] text-neutral-400 block mb-0.5">Jumlah Apresiasi</span>
+                    <span className="font-display font-extrabold text-xl text-amber-400">
+                      {tipsList.length} kali
                     </span>
-                  )}
+                  </div>
+
+                  <div className="bg-neutral-900/80 p-3.5 rounded-xl border border-neutral-800">
+                    <span className="text-[11px] text-neutral-400 block mb-0.5">Rata-rata per Tip</span>
+                    <span className="font-display font-extrabold text-xl text-emerald-400">
+                      Rp {tipsList.length > 0 ? Math.round(totalTipRevenue / tipsList.length).toLocaleString('id-ID') : '0'}
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* 2. STAT METRICS */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white p-4 sm:p-5 rounded-xl border border-neutral-200 shadow-2xs">
-                  <span className="text-xs font-medium text-neutral-500 block mb-1">
-                    Total Tip Masuk
-                  </span>
-                  <div className="font-display font-bold text-2xl text-[#171717]">
-                    Rp {((barber.tipsHistory || []).reduce((acc, t) => acc + (Number(t.amount) || 0), 0)).toLocaleString('id-ID')}
-                  </div>
-                  <span className="text-xs text-neutral-400 mt-1 block">
-                    {(barber.tipsHistory || []).length} transaksi
-                  </span>
-                </div>
-
-                <div className="bg-white p-4 sm:p-5 rounded-xl border border-neutral-200 shadow-2xs">
-                  <span className="text-xs font-medium text-neutral-500 block mb-1">
-                    Total Ditarik
-                  </span>
-                  <div className="font-display font-bold text-2xl text-[#171717]">
-                    Rp {((barber.withdrawalsHistory || []).reduce((acc, w) => acc + (Number(w.amount) || 0), 0)).toLocaleString('id-ID')}
-                  </div>
-                  <span className="text-xs text-neutral-400 mt-1 block">
-                    {(barber.withdrawalsHistory || []).length} penarikan berhasil
-                  </span>
-                </div>
-
-                <div className="bg-white p-4 sm:p-5 rounded-xl border border-neutral-200 shadow-2xs">
-                  <span className="text-xs font-medium text-neutral-500 block mb-1">
-                    Rata-rata per Tip
-                  </span>
-                  <div className="font-display font-bold text-2xl text-[#171717]">
-                    {(barber.tipsHistory || []).length > 0
-                      ? `Rp ${Math.round(((barber.tipsHistory || []).reduce((acc, t) => acc + (Number(t.amount) || 0), 0)) / (barber.tipsHistory || []).length).toLocaleString('id-ID')}`
-                      : 'Rp 0'}
-                  </div>
-                  <span className="text-xs text-neutral-400 mt-1 block">
-                    per apresiasi pelanggan
-                  </span>
-                </div>
-              </div>
-
-              {/* 3. REKENING PENCAIRAN DEFAULT */}
-              <div className="bg-white p-5 sm:p-6 rounded-xl border border-neutral-200 shadow-2xs space-y-4">
-                <div className="border-b border-neutral-100 pb-3">
-                  <h3 className="font-display font-bold text-sm text-[#171717] flex items-center gap-2">
-                    <Landmark className="w-4 h-4 text-neutral-700" />
-                    <span>Rekening Tujuan Pencairan</span>
-                  </h3>
-                  <p className="text-xs text-neutral-500 mt-0.5">
-                    Data rekening atau e-wallet default untuk transfer hasil tip.
-                  </p>
-                </div>
-
-                <form onSubmit={handleSavePayoutAccount} className="space-y-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                    <div>
-                      <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                        Bank / E-Wallet
-                      </label>
-                      <select 
-                        value={withdrawBank}
-                        onChange={(e) => setWithdrawBank(e.target.value)}
-                        className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-lg text-xs font-medium focus:border-neutral-900 focus:bg-white outline-none cursor-pointer"
-                      >
-                        <option value="BCA">BCA</option>
-                        <option value="Mandiri">Bank Mandiri</option>
-                        <option value="BRI">Bank BRI</option>
-                        <option value="BNI">Bank BNI</option>
-                        <option value="Bank Jago">Bank Jago</option>
-                        <option value="SeaBank">SeaBank</option>
-                        <option value="GoPay">GoPay</option>
-                        <option value="DANA">DANA</option>
-                        <option value="OVO">OVO</option>
-                        <option value="ShopeePay">ShopeePay</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                        Nomor Rekening / No. HP
-                      </label>
-                      <input 
-                        type="text" 
-                        value={withdrawAccNumber}
-                        onChange={(e) => setWithdrawAccNumber(e.target.value)}
-                        placeholder="Contoh: 8271928192"
-                        className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-lg text-xs font-mono font-medium focus:border-neutral-900 focus:bg-white outline-none"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                        Atas Nama Pemilik
-                      </label>
-                      <input 
-                        type="text" 
-                        value={withdrawAccHolder}
-                        onChange={(e) => setWithdrawAccHolder(e.target.value)}
-                        placeholder="Nama lengkap di rekening"
-                        className="w-full px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-lg text-xs font-medium focus:border-neutral-900 focus:bg-white outline-none"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end pt-1">
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-[#171717] hover:bg-neutral-800 text-white text-xs font-semibold rounded-lg cursor-pointer transition-colors"
-                    >
-                      Simpan Rekening
-                    </button>
-                  </div>
-                </form>
-              </div>
-
-              {/* 4. PRESET PAKET TIP DI HALAMAN BIO */}
+              {/* 2. PRESET PAKET TIP DI HALAMAN BIO */}
               <div className="bg-white p-5 sm:p-6 rounded-xl border border-neutral-200 shadow-2xs space-y-4">
                 <div className="border-b border-neutral-100 pb-3">
                   <h3 className="font-display font-bold text-sm text-[#171717] flex items-center gap-2">
@@ -1975,7 +1921,7 @@ export default function BarberDashboard() {
                     <span>Pilihan Paket Tip di Bio</span>
                   </h3>
                   <p className="text-xs text-neutral-500 mt-0.5">
-                    Nominal cepat yang dapat dipilih pelanggan saat mengirim tip.
+                    Nominal cepat yang dapat dipilih pelanggan saat mengirim tip di halaman bio kamu.
                   </p>
                 </div>
 
@@ -2023,7 +1969,7 @@ export default function BarberDashboard() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2 border-t border-neutral-100">
                   <div>
                     <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                      Judul Ajakan
+                      Judul Ajakan di Bio
                     </label>
                     <input 
                       type="text" 
@@ -2049,136 +1995,67 @@ export default function BarberDashboard() {
                 </div>
               </div>
 
-              {/* 5. RIWAYAT TRANSAKSI */}
+              {/* 3. RIWAYAT TRANSAKSI TIP MASUK */}
               <div className="bg-white p-5 sm:p-6 rounded-xl border border-neutral-200 shadow-2xs space-y-4">
                 <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
-                  <div className="flex items-center gap-1.5 bg-neutral-100 p-1 rounded-lg">
-                    <button
-                      type="button"
-                      onClick={() => setActiveLedgerTab('incoming')}
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                        activeLedgerTab === 'incoming' 
-                          ? 'bg-white text-neutral-900 shadow-2xs' 
-                          : 'text-neutral-500 hover:text-neutral-900'
-                      }`}
-                    >
-                      Tip Masuk ({(barber.tipsHistory || []).length})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveLedgerTab('withdrawals')}
-                      className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                        activeLedgerTab === 'withdrawals' 
-                          ? 'bg-white text-neutral-900 shadow-2xs' 
-                          : 'text-neutral-500 hover:text-neutral-900'
-                      }`}
-                    >
-                      Penarikan ({(barber.withdrawalsHistory || []).length})
-                    </button>
+                  <div>
+                    <h3 className="font-display font-bold text-sm text-[#171717] flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-neutral-700" />
+                      <span>Riwayat Tip Diterima</span>
+                    </h3>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Daftar apresiasi tip kopi yang dikirimkan pelanggan melalui bio link kamu.
+                    </p>
                   </div>
+                  <span className="text-xs font-mono font-semibold px-2.5 py-1 bg-neutral-100 text-neutral-700 rounded-lg">
+                    {tipsList.length} Transaksi
+                  </span>
                 </div>
 
-                {/* Sub Tab: Tip Masuk */}
-                {activeLedgerTab === 'incoming' && (
-                  <div>
-                    {(barber.tipsHistory || []).length === 0 ? (
-                      <div className="py-10 text-center text-neutral-400">
-                        <Coffee className="w-6 h-6 mx-auto mb-2 opacity-40 text-neutral-500" />
-                        <p className="text-xs font-medium text-neutral-600">Belum ada tip yang masuk</p>
-                        <p className="text-[11px] text-neutral-400 mt-0.5">
-                          Tip dari pelanggan akan otomatis tercatat di sini.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
-                          <thead>
-                            <tr className="border-b border-neutral-200 text-neutral-500 text-[11px]">
-                              <th className="py-2.5 px-3 font-semibold">Pelanggan</th>
-                              <th className="py-2.5 px-3 font-semibold">Nominal</th>
-                              <th className="py-2.5 px-3 font-semibold">Paket</th>
-                              <th className="py-2.5 px-3 font-semibold">Pesan</th>
-                              <th className="py-2.5 px-3 font-semibold text-right">Waktu</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-neutral-100">
-                            {(barber.tipsHistory || []).map((tip) => (
-                              <tr key={tip.id} className="hover:bg-neutral-50/70 transition-colors">
-                                <td className="py-3 px-3 font-semibold text-neutral-900">
-                                  {tip.customerName || 'Pelanggan'}
-                                </td>
-                                <td className="py-3 px-3 font-bold text-emerald-700 font-mono">
-                                  +Rp {Number(tip.amount || 0).toLocaleString('id-ID')}
-                                </td>
-                                <td className="py-3 px-3 text-neutral-600">
-                                  {tip.coffeeLabel || 'Kopi'}
-                                </td>
-                                <td className="py-3 px-3 text-neutral-500 max-w-xs truncate">
-                                  {tip.message || '-'}
-                                </td>
-                                <td className="py-3 px-3 text-neutral-400 font-mono text-right text-[11px]">
-                                  {formatLedgerDate(tip.date)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                {tipsList.length === 0 ? (
+                  <div className="py-10 text-center text-neutral-400">
+                    <Coffee className="w-6 h-6 mx-auto mb-2 opacity-40 text-neutral-500" />
+                    <p className="text-xs font-medium text-neutral-600">Belum ada tip yang masuk</p>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      Tip dari pelanggan akan otomatis tercatat di sini dan di menu Statistik.
+                    </p>
                   </div>
-                )}
-
-                {/* Sub Tab: Penarikan Dana */}
-                {activeLedgerTab === 'withdrawals' && (
-                  <div>
-                    {(barber.withdrawalsHistory || []).length === 0 ? (
-                      <div className="py-10 text-center text-neutral-400">
-                        <ArrowDownToLine className="w-6 h-6 mx-auto mb-2 opacity-40 text-neutral-500" />
-                        <p className="text-xs font-medium text-neutral-600">Belum ada riwayat penarikan</p>
-                        <p className="text-[11px] text-neutral-400 mt-0.5">
-                          Tarik saldo tip ke rekening bank kamu setelah mencapai minimal Rp 15.000.
-                        </p>
-                      </div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
-                          <thead>
-                            <tr className="border-b border-neutral-200 text-neutral-500 text-[11px]">
-                              <th className="py-2.5 px-3 font-semibold">Ref ID</th>
-                              <th className="py-2.5 px-3 font-semibold">Nominal</th>
-                              <th className="py-2.5 px-3 font-semibold">Rekening Tujuan</th>
-                              <th className="py-2.5 px-3 font-semibold">Status</th>
-                              <th className="py-2.5 px-3 font-semibold text-right">Tanggal</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-neutral-100">
-                            {(barber.withdrawalsHistory || []).map((wd) => (
-                              <tr key={wd.id} className="hover:bg-neutral-50/70 transition-colors">
-                                <td className="py-3 px-3 font-mono text-neutral-500 text-[11px]">
-                                  {wd.referenceId || wd.id}
-                                </td>
-                                <td className="py-3 px-3 font-bold text-neutral-900 font-mono">
-                                  Rp {Number(wd.amount || 0).toLocaleString('id-ID')}
-                                </td>
-                                <td className="py-3 px-3">
-                                  <div className="font-medium text-neutral-900">{wd.bankName} - {wd.accountNumber}</div>
-                                  <div className="text-[11px] text-neutral-400">a.n {wd.accountHolder}</div>
-                                </td>
-                                <td className="py-3 px-3">
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-200">
-                                    <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                    {wd.status || 'Berhasil'}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-3 text-neutral-400 font-mono text-right text-[11px]">
-                                  {formatLedgerDate(wd.date)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-neutral-200 text-neutral-500 text-[11px]">
+                          <th className="py-2.5 px-3 font-semibold">Pelanggan</th>
+                          <th className="py-2.5 px-3 font-semibold">Nominal</th>
+                          <th className="py-2.5 px-3 font-semibold">Paket</th>
+                          <th className="py-2.5 px-3 font-semibold">Pesan Apresiasi</th>
+                          <th className="py-2.5 px-3 font-semibold text-right">Waktu</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100">
+                        {tipsList.map((tip) => (
+                          <tr key={tip.id} className="hover:bg-neutral-50/70 transition-colors">
+                            <td className="py-3 px-3 font-semibold text-neutral-900">
+                              {tip.customerName || 'Pelanggan'}
+                            </td>
+                            <td className="py-3 px-3 font-bold text-emerald-700 font-mono">
+                              +Rp {Number(tip.amount || 0).toLocaleString('id-ID')}
+                            </td>
+                            <td className="py-3 px-3 text-neutral-600">
+                              <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-800 text-[11px] font-medium border border-amber-200/60">
+                                {tip.coffeeLabel || 'Kopi'}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 text-neutral-600 max-w-xs truncate italic">
+                              "{tip.message || '-'}"
+                            </td>
+                            <td className="py-3 px-3 text-neutral-400 font-mono text-right text-[11px]">
+                              {formatLedgerDate(tip.date)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -2548,19 +2425,106 @@ export default function BarberDashboard() {
           )}
 
           {/* ══════════════════════════════════════════ */}
-          {/* TAB 7: STATISTIK & ANALITIK               */}
+                    {/* ══════════════════════════════════════════ */}
+          {/* TAB 7: STATISTIK & FINANSIAL TERPADU        */}
           {/* ══════════════════════════════════════════ */}
           {activeTab === 'stats' && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               
-              <div className="border-b border-neutral-200 pb-2">
-                <h2 className="font-display font-bold text-xl text-[#171717]">Performa Bio Link Kamu</h2>
-                <p className="text-xs text-neutral-500">
-                  Data konversi kunjungan dari Instagram, TikTok, dan QR code selama 30 hari terakhir.
-                </p>
+              <div className="border-b border-neutral-200 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div>
+                  <h2 className="font-display font-bold text-xl text-[#171717] flex items-center gap-2">
+                    <BarChart2 className="w-5 h-5 text-[#285844]" />
+                    <span>Pusat Statistik & Finansial</span>
+                  </h2>
+                  <p className="text-xs text-neutral-500">
+                    Laporan terpadu seluruh pendapatan dari reservasi booking cukur dan tip kopi pelanggan.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    100% Cashless QRIS
+                  </span>
+                </div>
               </div>
 
-              {/* Metrics Grid */}
+              {/* 1. HERO CARD: TOTAL SELURUH PENDAPATAN (OMSET TERPADU) */}
+              <div className="bg-[#18181B] text-white p-6 sm:p-7 rounded-2xl border border-neutral-800 shadow-md">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-neutral-800">
+                  <div>
+                    <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400 block mb-1">
+                      Total Akumulasi Pendapatan Bersih
+                    </span>
+                    <div className="flex items-baseline gap-2">
+                      <h1 className="font-display font-black text-3xl sm:text-4xl text-white tracking-tight">
+                        {formatRupiah(totalCombinedRevenue)}
+                      </h1>
+                    </div>
+                    <span className="text-xs text-neutral-400 mt-1 block">
+                      Total dari seluruh pesanan booking terkonfirmasi + tip kopi yang diterima.
+                    </span>
+                  </div>
+
+                  <div className="flex flex-col sm:items-end gap-1.5">
+                    <span className="text-[11px] text-neutral-400 font-mono">Status Sistem</span>
+                    <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-semibold text-xs border border-emerald-500/30 flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Otomatis Terverifikasi
+                    </span>
+                  </div>
+                </div>
+
+                {/* 2 Sumber Pendapatan */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-5">
+                  <div className="bg-neutral-900/90 p-4 rounded-xl border border-neutral-800 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-xs text-neutral-400 mb-0.5">
+                        <Scissors className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Pendapatan Layanan (Booking)</span>
+                      </div>
+                      <div className="font-display font-bold text-xl text-white">
+                        {formatRupiah(totalBookingRevenue)}
+                      </div>
+                      <span className="text-[11px] text-neutral-500 mt-0.5 block">
+                        {paidBookings.length} reservasi terkonfirmasi / terbayar
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="bg-neutral-900/90 p-4 rounded-xl border border-neutral-800 flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center gap-1.5 text-xs text-neutral-400 mb-0.5">
+                        <Coffee className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Pendapatan Tip Kopi</span>
+                      </div>
+                      <div className="font-display font-bold text-xl text-amber-400">
+                        {formatRupiah(totalTipRevenue)}
+                      </div>
+                      <span className="text-[11px] text-neutral-500 mt-0.5 block">
+                        {tipsList.length} kali apresiasi traktir kopi
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. KARTU TRANSPARANSI: KEMANA DUITNYA MASUK? */}
+              <div className="bg-emerald-50/60 border border-emerald-200/80 rounded-2xl p-4 sm:p-5 flex items-start gap-3.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 mt-0.5">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <h4 className="text-xs font-bold text-emerald-950">
+                    Transparansi Aliran Dana (Kemana Uang Pembayaran Masuk?)
+                  </h4>
+                  <p className="text-[11.5px] text-emerald-900/90 leading-relaxed">
+                    Setiap pembayaran dari pelanggan (baik reservasi booking maupun tip kopi) diproses langsung via <strong>QRIS Master GoBiz (GoPay Merchant)</strong> platform E-CUKUR. Dana masuk secara realtime langsung ke saldo merchant GoBiz kamu tanpa mengendap di dompet perantara aplikasi, dan sistem otomatis memverifikasi pesanan tanpa perlu tombol konfirmasi manual.
+                  </p>
+                </div>
+              </div>
+
+              {/* 3. METRICS GRID */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm">
                   <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold block mb-1">
@@ -2570,19 +2534,19 @@ export default function BarberDashboard() {
                     {barberBookings.length}
                   </div>
                   <span className="text-[11px] text-neutral-500 font-medium mt-1 block">
-                    {barberBookings.length > 0 ? 'Tercatat di sistem' : 'Belum ada reservasi masuk'}
+                    {paidBookings.length} terbayar • {barberBookings.length - paidBookings.length} menunggu
                   </span>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm">
                   <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold block mb-1">
-                    Estimasi Omset Layanan
+                    Rata-rata Nilai Pesanan
                   </span>
                   <div className="font-display font-extrabold text-2xl text-[#285844]">
-                    {formatRupiah(barberBookings.reduce((sum, b) => sum + (Number(b.price) || 0), 0))}
+                    {formatRupiah(paidBookings.length > 0 ? Math.round(totalBookingRevenue / paidBookings.length) : 0)}
                   </div>
                   <span className="text-[11px] text-neutral-500 font-medium mt-1 block">
-                    Akumulasi nilai pesanan
+                    per transaksi reservasi
                   </span>
                 </div>
 
@@ -2602,12 +2566,12 @@ export default function BarberDashboard() {
                     })()}
                   </div>
                   <span className="text-[11px] text-neutral-500 font-medium block mt-1">
-                    Berdasarkan booking pelanggan
+                    Paling sering dipesan pelanggan
                   </span>
                 </div>
               </div>
 
-              {/* Real 7-Day Bookings Distribution */}
+              {/* 4. REALTIME 7-DAY BOOKINGS DISTRIBUTION */}
               <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-display font-bold text-sm text-[#171717]">Aktivitas Reservasi (7 Hari Terakhir)</h3>
@@ -2633,6 +2597,75 @@ export default function BarberDashboard() {
                   <div className="py-12 text-center text-neutral-400">
                     <p className="text-sm font-medium">Belum ada aktivitas reservasi dalam 7 hari terakhir.</p>
                     <p className="text-xs text-neutral-400 mt-1">Grafik aktivitas akan otomatis terbentuk seiring masuknya pesanan via link bio Anda.</p>
+                  </div>
+                )}
+              </div>
+
+              {/* 5. GABUNGAN RIWAYAT TRANSAKSI TERAKHIR (BOOKING & TIP) */}
+              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-4">
+                <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                  <div>
+                    <h3 className="font-display font-bold text-sm text-[#171717] flex items-center gap-2">
+                      <Receipt className="w-4 h-4 text-neutral-700" />
+                      <span>Aliran Transaksi Terkini (Booking & Tip Kopi)</span>
+                    </h3>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Catatan gabungan seluruh pembayaran masuk yang telah terverifikasi via QRIS.
+                    </p>
+                  </div>
+                  <span className="text-xs font-mono font-semibold px-2.5 py-1 bg-neutral-100 text-neutral-700 rounded-lg">
+                    {combinedRecentTransactions.length} Transaksi Terakhir
+                  </span>
+                </div>
+
+                {combinedRecentTransactions.length === 0 ? (
+                  <div className="py-10 text-center text-neutral-400">
+                    <Receipt className="w-7 h-7 mx-auto mb-2 opacity-40 text-neutral-500" />
+                    <p className="text-xs font-medium text-neutral-600">Belum ada transaksi yang terverifikasi</p>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      Transaksi booking dan tip yang berhasil akan otomatis muncul di sini.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead>
+                        <tr className="border-b border-neutral-200 text-neutral-500 text-[11px]">
+                          <th className="py-2.5 px-3 font-semibold">Tipe</th>
+                          <th className="py-2.5 px-3 font-semibold">Deskripsi Layanan / Paket</th>
+                          <th className="py-2.5 px-3 font-semibold">Pelanggan</th>
+                          <th className="py-2.5 px-3 font-semibold">Nominal</th>
+                          <th className="py-2.5 px-3 font-semibold text-right">Waktu</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100">
+                        {combinedRecentTransactions.map((tx) => (
+                          <tr key={tx.id} className="hover:bg-neutral-50/70 transition-colors">
+                            <td className="py-3 px-3">
+                              <span className={`px-2 py-0.5 rounded-md text-[10.5px] font-bold border ${
+                                tx.type === 'BOOKING'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : 'bg-amber-50 text-amber-800 border-amber-200'
+                              }`}>
+                                {tx.badge}
+                              </span>
+                            </td>
+                            <td className="py-3 px-3 font-medium text-neutral-900">
+                              {tx.title}
+                            </td>
+                            <td className="py-3 px-3 text-neutral-600">
+                              {tx.customerName}
+                            </td>
+                            <td className="py-3 px-3 font-bold text-emerald-700 font-mono">
+                              +{formatRupiah(tx.amount)}
+                            </td>
+                            <td className="py-3 px-3 text-neutral-400 font-mono text-right text-[11px]">
+                              {formatLedgerDate(tx.date)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 )}
               </div>
@@ -3387,215 +3420,7 @@ export default function BarberDashboard() {
       {/* ━━━ MODAL: TARIK SALDO TIP (MIN. RP 15.000) ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <AnimatePresence>
-        {isWithdrawModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              className="bg-white rounded-2xl p-6 sm:p-7 max-w-md w-full border border-neutral-200 shadow-xl relative max-h-[90vh] overflow-y-auto"
-            >
-              <button 
-                onClick={() => setIsWithdrawModalOpen(false)}
-                className="absolute top-5 right-5 p-1.5 text-neutral-400 hover:text-black rounded-lg cursor-pointer transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-
-              <div className="mb-4">
-                <h3 className="font-display font-bold text-lg text-[#171717]">
-                  Tarik Saldo Tip
-                </h3>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  Pencairan dana langsung ke rekening bank atau e-wallet.
-                </p>
-              </div>
-
-              {/* Saldo Dompet Info Card */}
-              <div className="p-4 rounded-xl bg-neutral-900 text-white mb-4">
-                <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
-                  <span>Saldo Tersedia</span>
-                  <span className="text-[11px] text-neutral-300">Min. penarikan Rp 15.000</span>
-                </div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-display font-bold text-2xl tracking-tight">
-                    Rp {(typeof barber?.tipBalance === 'number' ? barber.tipBalance : 0).toLocaleString('id-ID')}
-                  </span>
-                  {(barber?.tipBalance || 0) >= 15000 && (
-                    <button
-                      type="button"
-                      onClick={() => setWithdrawAmount(String(barber.tipBalance || 0))}
-                      className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
-                    >
-                      Tarik Semua
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Form Penarikan */}
-              <form onSubmit={handleSubmitWithdraw} className="space-y-4">
-                <div>
-                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                    Nominal Penarikan
-                  </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-400">
-                      Rp
-                    </span>
-                    <input 
-                      type="number"
-                      required
-                      min="15000"
-                      step="1000"
-                      value={withdrawAmount}
-                      onChange={(e) => setWithdrawAmount(e.target.value)}
-                      placeholder="15000"
-                      className="w-full text-sm font-bold pl-9 pr-3 py-2 bg-neutral-50 border border-neutral-300 rounded-lg outline-none focus:border-neutral-900 focus:bg-white"
-                    />
-                  </div>
-                  
-                  {/* Quick Preset Buttons */}
-                  <div className="flex flex-wrap gap-1.5 mt-2">
-                    {[15000, 25000, 50000, 100000].map((amt) => {
-                      const isAvailable = (barber?.tipBalance || 0) >= amt;
-                      return (
-                        <button
-                          key={amt}
-                          type="button"
-                          disabled={!isAvailable}
-                          onClick={() => setWithdrawAmount(String(amt))}
-                          className={`text-xs px-2.5 py-1 rounded-md font-medium border transition-colors cursor-pointer ${
-                            Number(withdrawAmount) === amt 
-                              ? 'bg-neutral-900 text-white border-neutral-900'
-                              : isAvailable 
-                                ? 'bg-neutral-50 hover:bg-neutral-100 text-neutral-700 border-neutral-200' 
-                                : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'
-                          }`}
-                        >
-                          Rp {amt.toLocaleString('id-ID')}
-                        </button>
-                      );
-                    })}
-                  </div>
-
-                  {withdrawAmount && Number(withdrawAmount) < 15000 && (
-                    <p className="text-[11px] text-rose-600 mt-1.5">
-                      Batas minimal penarikan adalah Rp 15.000
-                    </p>
-                  )}
-                  {withdrawAmount && Number(withdrawAmount) > (barber?.tipBalance || 0) && (
-                    <p className="text-[11px] text-rose-600 mt-1.5">
-                      Nominal melebihi saldo dompet yang tersedia
-                    </p>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                      Bank / E-Wallet Tujuan
-                    </label>
-                    <select
-                      value={withdrawBank}
-                      onChange={(e) => setWithdrawBank(e.target.value)}
-                      className="w-full text-xs font-medium p-2 bg-neutral-50 border border-neutral-300 rounded-lg outline-none focus:border-neutral-900 focus:bg-white cursor-pointer"
-                    >
-                      <optgroup label="Bank">
-                        <option value="BCA">BCA</option>
-                        <option value="Mandiri">Bank Mandiri</option>
-                        <option value="BRI">Bank BRI</option>
-                        <option value="BNI">Bank BNI</option>
-                        <option value="Bank Jago">Bank Jago</option>
-                        <option value="SeaBank">SeaBank</option>
-                        <option value="Permata">Bank Permata</option>
-                        <option value="CIMB Niaga">CIMB Niaga</option>
-                      </optgroup>
-                      <optgroup label="E-Wallet">
-                        <option value="DANA">DANA</option>
-                        <option value="GoPay">GoPay</option>
-                        <option value="OVO">OVO</option>
-                        <option value="ShopeePay">ShopeePay</option>
-                      </optgroup>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                      Nomor Rekening / No. HP
-                    </label>
-                    <input 
-                      type="text"
-                      required
-                      value={withdrawAccNumber}
-                      onChange={(e) => setWithdrawAccNumber(e.target.value)}
-                      placeholder="Nomor rekening / HP"
-                      className="w-full text-xs font-mono font-medium p-2 bg-neutral-50 border border-neutral-300 rounded-lg outline-none focus:border-neutral-900 focus:bg-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                    Atas Nama Pemilik Rekening
-                  </label>
-                  <input 
-                    type="text"
-                    required
-                    value={withdrawAccHolder}
-                    onChange={(e) => setWithdrawAccHolder(e.target.value)}
-                    placeholder="Nama lengkap di rekening"
-                    className="w-full text-xs font-medium p-2 bg-neutral-50 border border-neutral-300 rounded-lg outline-none focus:border-neutral-900 focus:bg-white"
-                  />
-                </div>
-
-                {/* Summary Box */}
-                <div className="p-3 bg-neutral-50 rounded-lg border border-neutral-200 text-xs space-y-1">
-                  <div className="flex justify-between text-neutral-600">
-                    <span>Nominal:</span>
-                    <span className="font-medium text-neutral-900">
-                      Rp {Number(withdrawAmount || 0).toLocaleString('id-ID')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between text-neutral-600">
-                    <span>Biaya Admin:</span>
-                    <span className="font-medium text-emerald-600">Gratis (Rp 0)</span>
-                  </div>
-                  <div className="pt-1.5 border-t border-neutral-200 flex justify-between font-bold text-neutral-900">
-                    <span>Total Diterima:</span>
-                    <span>
-                      Rp {Number(withdrawAmount || 0).toLocaleString('id-ID')}
-                    </span>
-                  </div>
-                </div>
-
-                <div className="pt-2 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsWithdrawModalOpen(false)}
-                    className="px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-100 rounded-lg cursor-pointer transition-colors"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={
-                      !withdrawAmount || 
-                      Number(withdrawAmount) < 15000 || 
-                      Number(withdrawAmount) > (barber?.tipBalance || 0) ||
-                      !withdrawAccNumber.trim() ||
-                      !withdrawAccHolder.trim()
-                    }
-                    className="px-5 py-2 bg-[#171717] hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg cursor-pointer transition-colors"
-                  >
-                    Tarik Saldo
-                  </button>
-                </div>
-              </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
+        </AnimatePresence>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ MOBILE BOTTOM DRAWER FOR PHONE PREVIEW ━━━ */}
