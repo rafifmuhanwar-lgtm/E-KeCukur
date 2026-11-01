@@ -85,7 +85,7 @@ export default function BookingFlow() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerNote, setCustomerNote] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('Tunai');
+  const [paymentMethod, setPaymentMethod] = useState('QRIS');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const formatRupiah = (number) => {
@@ -570,45 +570,18 @@ export default function BookingFlow() {
                         Metode Pembayaran
                       </label>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div
-                          onClick={() => setPaymentMethod('Tunai')}
-                          className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
-                            paymentMethod === 'Tunai'
-                              ? 'border-white bg-zinc-900'
-                              : 'border-zinc-800/80 bg-zinc-950 hover:border-zinc-700'
-                          }`}
-                        >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                            paymentMethod === 'Tunai' ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400'
-                          }`}>
-                            <Banknote className="w-4 h-4" />
+                      <div className="p-4 rounded-2xl border border-white/20 bg-zinc-900 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-xl bg-white text-black flex items-center justify-center shrink-0 font-bold">
+                            <CreditCard className="w-5 h-5" />
                           </div>
                           <div>
-                            <div className="font-bold text-sm text-white">Bayar di Tempat (Kasir)</div>
-                            <div className="text-[11px] text-zinc-400 font-light mt-0.5">
-                              Tunai, Kartu Debit, atau QRIS saat sesi cukur selesai.
+                            <div className="font-bold text-sm text-white flex items-center gap-2">
+                              <span>QRIS Dinamis (100% Cashless)</span>
+                              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono font-medium">Otomatis Terkunci</span>
                             </div>
-                          </div>
-                        </div>
-
-                        <div
-                          onClick={() => setPaymentMethod('QRIS')}
-                          className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-start gap-3 ${
-                            paymentMethod === 'QRIS'
-                              ? 'border-white bg-zinc-900'
-                              : 'border-zinc-800/80 bg-zinc-950 hover:border-zinc-700'
-                          }`}
-                        >
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                            paymentMethod === 'QRIS' ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400'
-                          }`}>
-                            <CreditCard className="w-4 h-4" />
-                          </div>
-                          <div>
-                            <div className="font-bold text-sm text-white">QRIS Instant</div>
                             <div className="text-[11px] text-zinc-400 font-light mt-0.5">
-                              BCA, GoPay, OVO, ShopeePay & semua bank digital.
+                              BCA, Mandiri, GoPay, DANA, ShopeePay, OVO & semua m-Banking.
                             </div>
                           </div>
                         </div>
@@ -729,7 +702,7 @@ export default function BookingFlow() {
                     <div className="flex-1 min-w-0">
                       <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Pembayaran</div>
                       <div className="font-bold text-white text-sm">
-                        {paymentMethod === 'Tunai' ? 'Tunai di Kasir' : 'QRIS Instant'}
+                        'QRIS Dinamis (100% Cashless)'
                       </div>
                     </div>
                   </div>

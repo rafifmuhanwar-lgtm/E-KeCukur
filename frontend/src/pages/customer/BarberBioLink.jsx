@@ -477,20 +477,15 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     const resolvedId = saved?.id || bookingCode;
     setIsSubmitting(false);
 
-    if (paymentMethod === 'QRIS') {
-      setBookingQrisData({
-        bookingId: resolvedId,
-        basePrice,
-        uniqueCode,
-        totalAmount: finalPrice,
-        customerName: customerName.trim(),
-        qrisImageUrl: getDynamicQrisImageUrl(finalPrice)
-      });
-      setBookingStep('qris');
-    } else {
-      setBookingSuccessData({ ...newBooking, id: resolvedId });
-      setBookingStep('success');
-    }
+    setBookingQrisData({
+      bookingId: resolvedId,
+      basePrice,
+      uniqueCode,
+      totalAmount: finalPrice,
+      customerName: customerName.trim(),
+      qrisImageUrl: getDynamicQrisImageUrl(finalPrice)
+    });
+    setBookingStep('qris');
   };
 
   const formatRupiah = (number) => {
@@ -1705,41 +1700,20 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     </div>
                   </div>
 
-                  {/* Pilihan Metode Pembayaran */}
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Metode Pembayaran:</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('QRIS')}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                          paymentMethod === 'QRIS'
-                            ? 'border-[#285844] bg-[#D9E5DC]/30 text-[#285844] ring-1 ring-[#285844]'
-                            : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-xs font-bold">QRIS Dinamis</span>
-                          <span className="text-[9px] bg-[#285844] text-white px-1.5 py-0.2 rounded font-semibold">Auto</span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 leading-tight">BCA, GoPay, DANA, dll (Nominal otomatis)</p>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPaymentMethod('Tunai')}
-                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
-                          paymentMethod === 'Tunai'
-                            ? 'border-[#285844] bg-[#D9E5DC]/30 text-[#285844] ring-1 ring-[#285844]'
-                            : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-0.5">
-                          <span className="text-xs font-bold">Bayar di Tempat</span>
-                        </div>
-                        <p className="text-[10px] text-neutral-500 leading-tight">Bayar tunai/cash langsung ke capster</p>
-                      </button>
+                  {/* Pembayaran 100% Cashless */}
+                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                        <span className="text-xs font-bold text-emerald-950">100% Cashless via QRIS</span>
+                      </div>
+                      <p className="text-[10px] text-emerald-800 leading-tight">
+                        BCA, Mandiri, GoPay, DANA, OVO, ShopeePay (Nominal terkunci otomatis)
+                      </p>
                     </div>
+                    <span className="text-[10px] font-bold text-[#285844] bg-white px-2 py-1 rounded-lg border border-emerald-200 shrink-0">
+                      Auto-Verify
+                    </span>
                   </div>
 
                   <button
@@ -1749,9 +1723,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   >
                     {isSubmitting 
                       ? 'Memproses Reservasi...' 
-                      : paymentMethod === 'QRIS' 
-                      ? `Lanjut Bayar QRIS (${formatRupiah(selectedService?.price || activeServices[0].price)})`
-                      : `Konfirmasi Booking Tunai (${formatRupiah(selectedService?.price || activeServices[0].price)})`}
+                      : `Lanjut Bayar QRIS (${formatRupiah(selectedService?.price || activeServices[0].price)})`}
                   </button>
                 </form>
               )}
