@@ -38,7 +38,7 @@ import { useStore } from '../../store';
 import Logo from '../../components/Logo';
 import { getAppDomain } from '../../lib/domain';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
-import { simulateQrisPayment } from '../../lib/qrisPayment';
+import { simulateQrisPayment, getDynamicQrisImageUrl, MASTER_QRIS_STATIC } from '../../lib/qrisPayment';
 
 export default function AdminMasterDashboard() {
   const navigate = useNavigate();
@@ -1037,6 +1037,59 @@ export default function AdminMasterDashboard() {
                   <RefreshCw className={`w-3.5 h-3.5 ${simulatingWebhook ? 'animate-spin' : ''}`} />
                   <span>{simulatingWebhook ? 'Memproses Simulasi...' : 'Kirim Simulasi Webhook (Rp 50.480)'}</span>
                 </button>
+              </div>
+            </div>
+
+            {/* Master QRIS Information Card */}
+            <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-2xs space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
+                <div>
+                  <h4 className="font-display font-bold text-sm text-neutral-900 flex items-center gap-2">
+                    <CreditCard className="w-4 h-4 text-[#285844]" />
+                    <span>Barcode QRIS Master Platform (Dukungan QRIS Dinamis Otomatis)</span>
+                  </h4>
+                  <p className="text-xs text-neutral-500 mt-0.5">
+                    Barcode ini digunakan di seluruh transaksi customer (Booking Jadwal Cukur & Traktir Kopi Capster).
+                  </p>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 self-start sm:self-center">
+                  Dinamis & Otomatis Terkunci
+                </span>
+              </div>
+
+              <div className="flex flex-col md:flex-row items-center gap-6 pt-1">
+                <div className="w-40 h-40 shrink-0 bg-neutral-50 border border-neutral-200 rounded-2xl p-2 flex items-center justify-center shadow-xs">
+                  <img 
+                    src={getDynamicQrisImageUrl(50000)} 
+                    alt="Master QRIS Dinamis E-CUKUR" 
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+
+                <div className="space-y-2 text-xs flex-1 w-full">
+                  <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-neutral-500 block text-[10px]">Merchant Terdaftar:</span>
+                      <strong className="text-neutral-900 text-xs">BAYAR QRIS bypipx, Ahli Chiropractic</strong>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 block text-[10px]">NMID Nasional (ASPI):</span>
+                      <strong className="font-mono text-neutral-900 text-xs">ID1026490305079</strong>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 block text-[10px]">Acquiring Provider:</span>
+                      <span className="font-semibold text-emerald-800">GoPay / GoBiz Merchant</span>
+                    </div>
+                    <div>
+                      <span className="text-neutral-500 block text-[10px]">Fitur Otomatis:</span>
+                      <span className="font-semibold text-neutral-800">Inject Tag 54 + CRC16 Checksum</span>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-neutral-500 leading-relaxed">
+                    💡 Setiap kali customer memilih bayar via QRIS, sistem otomatis mengubah QRIS ini menjadi <strong>QRIS Dinamis</strong> dengan nominal yang terkunci persis sesuai total tagihan (+ 3 digit kode unik acak). Pelanggan tidak perlu repot mengetik angka manual di aplikasi m-Banking mereka!
+                  </p>
+                </div>
               </div>
             </div>
 

@@ -28,7 +28,8 @@ import {
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
 import Logo from '../../components/Logo';
-import { createQrisPayment, checkQrisPaymentStatus, simulateQrisPayment } from '../../lib/qrisPayment';
+import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { createQrisPayment, checkQrisPaymentStatus, simulateQrisPayment, getDynamicQrisImageUrl } from '../../lib/qrisPayment';
 
 const TIME_SLOTS = [
   '09:30', '10:00', '10:45', '11:30', 
@@ -308,15 +309,57 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
   // Booking Modal State
   const [isBookingOpen, setIsBookingOpen] = useState(false);
+  const [bookingStep, setBookingStep] = useState('form'); // 'form' | 'qris' | 'success'
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState(UPCOMING_DATES[0].label);
   const [selectedTime, setSelectedTime] = useState(TIME_SLOTS[1]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const paymentMethod = 'Tunai';
+  const [paymentMethod, setPaymentMethod] = useState('QRIS');
   const [noteStyle, setNoteStyle] = useState('');
   const [bookingSuccessData, setBookingSuccessData] = useState(null);
+  const [bookingQrisData, setBookingQrisData] = useState(null);
+  const [copiedBookingAmount, setCopiedBookingAmount] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Auto-listen when customer is on QRIS payment step
+  useEffect(() => {
+    if (bookingStep !== 'qris' || !bookingQrisData?.bookingId) return;
+
+    let active = true;
+    const pollBooking = async () => {
+      if (!isSupabaseConfigured) return;
+      try {
+        const { data } = await supabase
+          .from('bookings')
+          .select('id, booking_status, payment_status')
+          .eq('id', bookingQrisData.bookingId)
+          .maybeSingle();
+
+        if (data && (data.payment_status === 'PAID' || data.booking_status === 'CONFIRMED')) {
+          if (active) {
+            setBookingSuccessData({
+              id: bookingQrisData.bookingId,
+              customerName,
+              customerPhone,
+              serviceName: selectedService?.name || activeServices[0]?.name,
+              date: selectedDate,
+              time: selectedTime,
+              price: bookingQrisData.totalAmount,
+              paymentMethod: 'QRIS (Lunas Otomatis)'
+            });
+            setBookingStep('success');
+          }
+        }
+      } catch (err) {}
+    };
+
+    const interval = setInterval(pollBooking, 2000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [bookingStep, bookingQrisData]);
 
   // Tipping Modal State
   const addBarberTip = useStore((state) => state.addBarberTip);
@@ -389,6 +432,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     setSelectedService(service || activeServices[0]);
     if (prefilledNote) setNoteStyle(prefilledNote);
     setBookingSuccessData(null);
+    setBookingQrisData(null);
+    setBookingStep('form');
     setIsBookingOpen(true);
   };
 
@@ -407,6 +452,11 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
     setIsSubmitting(true);
     const bookingCode = generateBookingCode();
+    const basePrice = Number(selectedService ? selectedService.price : (activeServices[0]?.price || 50000));
+
+    // Kode unik acak 3-digit untuk verifikasi otomatis via QRIS Listener
+    const uniqueCode = paymentMethod === 'QRIS' ? Math.floor(100 + Math.random() * 899) : 0;
+    const finalPrice = basePrice + uniqueCode;
 
     const newBooking = {
       id: bookingCode,
@@ -417,15 +467,30 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       serviceName: selectedService ? selectedService.name : activeServices[0].name,
       date: selectedDate,
       time: selectedTime,
-      status: 'Menunggu',
+      status: paymentMethod === 'QRIS' ? 'Menunggu' : 'Terkonfirmasi',
       paymentMethod,
-      price: selectedService ? selectedService.price : 50000,
+      price: finalPrice,
       note: noteStyle.trim()
     };
 
     const saved = await addBooking(newBooking);
+    const resolvedId = saved?.id || bookingCode;
     setIsSubmitting(false);
-    setBookingSuccessData(saved || newBooking);
+
+    if (paymentMethod === 'QRIS') {
+      setBookingQrisData({
+        bookingId: resolvedId,
+        basePrice,
+        uniqueCode,
+        totalAmount: finalPrice,
+        customerName: customerName.trim(),
+        qrisImageUrl: getDynamicQrisImageUrl(finalPrice)
+      });
+      setBookingStep('qris');
+    } else {
+      setBookingSuccessData({ ...newBooking, id: resolvedId });
+      setBookingStep('success');
+    }
   };
 
   const formatRupiah = (number) => {
@@ -1391,22 +1456,100 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               <div className="flex items-center justify-between pb-3 border-b border-neutral-100 mb-4">
                 <div>
                   <h3 className="font-display font-extrabold text-base text-[#171717]">
-                    {bookingSuccessData ? 'Tiket Reservasi Berhasil' : 'Pilih Jadwal & Jam Cukur'}
+                    {bookingStep === 'success' ? 'Tiket Reservasi Berhasil' : bookingStep === 'qris' ? 'Pembayaran QRIS Dinamis' : 'Pilih Jadwal & Jam Cukur'}
                   </h3>
                   <p className="text-xs text-neutral-500">
-                    {bookingSuccessData ? 'Tunjukkan tiket ini saat tiba di lokasi' : `Dengan ${barber.name}`}
+                    {bookingStep === 'success' ? 'Tunjukkan tiket ini saat tiba di lokasi' : bookingStep === 'qris' ? 'Nominal otomatis terisi saat di-scan' : `Dengan ${barber.name}`}
                   </p>
                 </div>
                 <button 
                   type="button"
-                  onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); }}
+                  onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); setBookingQrisData(null); setBookingStep('form'); }}
                   className="p-1.5 rounded-full hover:bg-neutral-100 text-neutral-500"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {bookingSuccessData ? (
+              {/* ── STEP 1: QRIS PAYMENT SCREEN ── */}
+              {bookingStep === 'qris' && bookingQrisData ? (
+                <div className="space-y-4 text-center py-1">
+                  
+                  {/* Dynamic QRIS Image Container */}
+                  <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-200 text-center space-y-3">
+                    <div className="w-44 h-44 mx-auto rounded-2xl bg-white p-2.5 border border-neutral-200 flex items-center justify-center overflow-hidden shadow-xs">
+                      <img 
+                        src={bookingQrisData.qrisImageUrl} 
+                        alt="QRIS Dinamis E-CUKUR" 
+                        className="w-full h-full object-contain"
+                      />
+                    </div>
+
+                    {/* Nominal Banner with Copy */}
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-2.5 text-center">
+                      <span className="text-[10px] font-semibold text-emerald-800 block">
+                        Total Nominal Otomatis (Termasuk 3 Digit Kode Unik):
+                      </span>
+                      <div className="flex items-center justify-center gap-2 mt-0.5">
+                        <span className="font-display font-extrabold text-lg text-[#285844] font-mono">
+                          Rp {bookingQrisData.totalAmount.toLocaleString('id-ID')}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(String(bookingQrisData.totalAmount));
+                            setCopiedBookingAmount(true);
+                            setTimeout(() => setCopiedBookingAmount(false), 2000);
+                          }}
+                          className="px-2 py-0.5 text-[10px] bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-md flex items-center gap-1 cursor-pointer"
+                        >
+                          {copiedBookingAmount ? <Check className="w-3 h-3" /> : 'Salin'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-neutral-600 leading-relaxed px-1">
+                      Buka aplikasi <strong>BCA, Mandiri, GoPay, OVO, ShopeePay, atau DANA</strong> lalu scan barcode di atas. Nominal pembayaran akan langsung terisi otomatis!
+                    </p>
+                  </div>
+
+                  {/* Realtime waiting indicator */}
+                  <div className="flex items-center justify-center gap-2 py-1 text-xs text-neutral-500 font-medium">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                    <span>Menunggu verifikasi pembayaran otomatis...</span>
+                  </div>
+
+                  <div className="pt-2 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setBookingStep('form')}
+                      className="flex-1 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all cursor-pointer"
+                    >
+                      Kembali / Ubah
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setBookingSuccessData({
+                          id: bookingQrisData.bookingId,
+                          customerName,
+                          customerPhone,
+                          serviceName: selectedService?.name || activeServices[0]?.name,
+                          date: selectedDate,
+                          time: selectedTime,
+                          price: bookingQrisData.totalAmount,
+                          paymentMethod: 'QRIS (Terkonfirmasi)'
+                        });
+                        setBookingStep('success');
+                      }}
+                      className="flex-1 py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
+                    >
+                      Saya Sudah Bayar
+                    </button>
+                  </div>
+                </div>
+              ) : bookingStep === 'success' && bookingSuccessData ? (
+                /* ── STEP 2: BOOKING SUCCESS TICKET ── */
                 <div className="space-y-4 text-center py-2">
                   <div className="w-14 h-14 rounded-full bg-[#D9E5DC] text-[#285844] flex items-center justify-center mx-auto">
                     <CheckCircle2 className="w-8 h-8" />
@@ -1419,7 +1562,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       Jadwal Cukur Terdaftar!
                     </h4>
                     <p className="text-xs text-neutral-500 mt-1">
-                      Data booking kamu telah masuk ke sistem barber.
+                      Data booking kamu telah terverifikasi dan masuk ke sistem barber.
                     </p>
                   </div>
 
@@ -1441,20 +1584,25 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       <span className="text-neutral-500">Waktu Kedatangan:</span>
                       <strong className="text-[#285844]">{bookingSuccessData.date} • {bookingSuccessData.time} WIB</strong>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-neutral-500">Metode:</span>
+                      <strong className="text-emerald-700 font-semibold">{bookingSuccessData.paymentMethod || 'QRIS'}</strong>
+                    </div>
                     <div className="flex justify-between border-t border-neutral-200 pt-2">
-                      <span className="text-neutral-500">Tarif Layanan:</span>
+                      <span className="text-neutral-500">Total Tarif:</span>
                       <strong className="font-mono text-sm text-[#285844]">{formatRupiah(bookingSuccessData.price)}</strong>
                     </div>
                   </div>
                   <button
                     type="button"
-                    onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); }}
+                    onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); setBookingQrisData(null); setBookingStep('form'); }}
                     className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
                   >
-                    Selesai & Tutup
+                    Selesai & Simpan Tiket
                   </button>
                 </div>
               ) : (
+                /* ── STEP 3: BOOKING FORM ── */
                 <form onSubmit={handleSubmitBooking} className="space-y-4 text-left">
                   
                   {/* Select service dropdown / pill */}
@@ -1557,12 +1705,53 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     </div>
                   </div>
 
+                  {/* Pilihan Metode Pembayaran */}
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Metode Pembayaran:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('QRIS')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          paymentMethod === 'QRIS'
+                            ? 'border-[#285844] bg-[#D9E5DC]/30 text-[#285844] ring-1 ring-[#285844]'
+                            : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-xs font-bold">QRIS Dinamis</span>
+                          <span className="text-[9px] bg-[#285844] text-white px-1.5 py-0.2 rounded font-semibold">Auto</span>
+                        </div>
+                        <p className="text-[10px] text-neutral-500 leading-tight">BCA, GoPay, DANA, dll (Nominal otomatis)</p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('Tunai')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          paymentMethod === 'Tunai'
+                            ? 'border-[#285844] bg-[#D9E5DC]/30 text-[#285844] ring-1 ring-[#285844]'
+                            : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className="text-xs font-bold">Bayar di Tempat</span>
+                        </div>
+                        <p className="text-[10px] text-neutral-500 leading-tight">Bayar tunai/cash langsung ke capster</p>
+                      </button>
+                    </div>
+                  </div>
+
                   <button
                     type="submit"
                     disabled={isSubmitting}
-                    className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm transition-transform active:scale-95 disabled:opacity-50"
+                    className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm transition-transform active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
-                    {isSubmitting ? 'Memproses Reservasi...' : `Konfirmasi Booking (${formatRupiah(selectedService?.price || activeServices[0].price)})`}
+                    {isSubmitting 
+                      ? 'Memproses Reservasi...' 
+                      : paymentMethod === 'QRIS' 
+                      ? `Lanjut Bayar QRIS (${formatRupiah(selectedService?.price || activeServices[0].price)})`
+                      : `Konfirmasi Booking Tunai (${formatRupiah(selectedService?.price || activeServices[0].price)})`}
                   </button>
                 </form>
               )}
@@ -1621,7 +1810,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   <div className="p-3.5 bg-neutral-50 rounded-2xl border border-neutral-200 text-center space-y-2.5">
                     <div className="w-36 h-36 mx-auto rounded-xl bg-white p-2 border border-neutral-200 flex items-center justify-center overflow-hidden shadow-2xs">
                       <img 
-                        src={barber.tippingConfig?.qrisImage || `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=QRIS_PAY_${tipQrisData?.totalAmount || tipAmount}_FOR_${barber.id}`} 
+                        src={getDynamicQrisImageUrl(tipQrisData?.totalAmount || tipAmount)} 
                         alt="QRIS" 
                         className="w-full h-full object-contain"
                       />
