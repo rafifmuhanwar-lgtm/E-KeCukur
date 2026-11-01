@@ -1044,8 +1044,8 @@ export const useStore = create((set, get) => ({
             start_time: booking.time ? (booking.time.length === 5 ? `${booking.time}:00` : booking.time) : '10:00:00',
             end_time: '11:00:00',
             booking_status: dbStatus,
-            payment_method: booking.paymentMethod === 'QRIS' ? 'QRIS' : 'CASH',
-            payment_status: booking.paymentMethod === 'QRIS' ? 'PAID' : 'UNPAID',
+            payment_method: 'QRIS',
+            payment_status: 'UNPAID',
             total_price: Number(booking.price) || 0
           })
           .select()
@@ -1063,7 +1063,7 @@ export const useStore = create((set, get) => ({
       ...booking,
       id: finalId,
       status: 'Menunggu',
-      paymentStatus: booking.paymentMethod === 'QRIS' ? 'PAID' : 'UNPAID',
+      paymentStatus: 'UNPAID',
       createdAt: new Date().toISOString()
     };
 

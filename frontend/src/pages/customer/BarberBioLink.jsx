@@ -1875,21 +1875,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
                   <button
                     type="button"
-                    onClick={() => {
-                      if (typeof addBarberTip === 'function') {
-                        addBarberTip(barber.id, {
-                          customerName: tipperName || 'Pelanggan',
-                          amount: tipAmount,
-                          coffeeLabel: selectedCoffeeLabel || 'Kopi',
-                          message: tipperMessage || 'Terima kasih atas pelayanannya!',
-                          method: 'QRIS'
-                        });
-                      }
-                      setTipPaid(true);
-                    }}
-                    className="w-full py-2.5 bg-[#171717] hover:bg-neutral-800 text-white font-semibold text-xs rounded-xl shadow-xs transition-colors cursor-pointer text-center"
+                    onClick={() => { setIsTippingOpen(false); setTipPaid(false); }}
+                    className="w-full py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 font-semibold text-xs rounded-xl transition-colors cursor-pointer text-center"
                   >
-                    Saya Sudah Bayar
+                    Tutup
                   </button>
                 </div>
               )}
