@@ -1514,32 +1514,13 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     <span>Menunggu verifikasi pembayaran otomatis...</span>
                   </div>
 
-                  <div className="pt-2 flex gap-2">
+                  <div className="pt-2">
                     <button
                       type="button"
                       onClick={() => setBookingStep('form')}
-                      className="flex-1 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all cursor-pointer"
+                      className="w-full py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-600 font-semibold text-xs rounded-xl transition-all cursor-pointer"
                     >
-                      Kembali / Ubah
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setBookingSuccessData({
-                          id: bookingQrisData.bookingId,
-                          customerName,
-                          customerPhone,
-                          serviceName: selectedService?.name || activeServices[0]?.name,
-                          date: selectedDate,
-                          time: selectedTime,
-                          price: bookingQrisData.totalAmount,
-                          paymentMethod: 'QRIS (Terkonfirmasi)'
-                        });
-                        setBookingStep('success');
-                      }}
-                      className="flex-1 py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-xs transition-all cursor-pointer"
-                    >
-                      Saya Sudah Bayar
+                      Batalkan / Ubah Jadwal
                     </button>
                   </div>
                 </div>
