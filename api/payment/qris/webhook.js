@@ -4,6 +4,7 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL |
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hdGdxYWtzdW91c2xkZnh5ZG5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MjUxMjAsImV4cCI6MjEwNzMwMTEyMH0.09noBpwZ6jHYeJJV-3rprhUtqPk8XvBRTLTJKCEJHA8';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+const EXPECTED_SECRET = 'ecukur_qris_secret_2026';
 
 function parseNotificationAmount(input) {
   if (typeof input === 'number') return Math.round(input);
@@ -62,6 +63,15 @@ export default async function handler(req, res) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, message: 'Method Not Allowed' });
+  }
+
+  // Validasi Secret API Key
+  const apiKey = req.headers['x-api-key'] || (req.headers['authorization'] || '').replace('Bearer ', '').trim();
+  if (!apiKey || apiKey !== EXPECTED_SECRET) {
+    return res.status(401).json({
+      success: false,
+      message: 'Unauthorized: Header x-api-key tidak valid atau tidak disertakan'
+    });
   }
 
   try {
@@ -138,6 +148,37 @@ export default async function handler(req, res) {
             payment_method: 'QRIS'
           }).eq('id', qrisRow.booking_id);
         }
+
+        // Jika tipe TIP dan ada barber_id, update tip barber
+        if (qrisRow.type === 'TIP' && qrisRow.barber_id) {
+          try {
+            const { data: bData } = await supabase
+              .from('barbers')
+              .select('id, tip_balance, tips_history')
+              .eq('id', qrisRow.barber_id)
+              .maybeSingle();
+
+            if (bData) {
+              const currentBal = Number(bData.tip_balance) || 0;
+              const history = Array.isArray(bData.tips_history) ? bData.tips_history : [];
+              const newTipItem = {
+                id: `tip-${Date.now()}`,
+                date: now.toISOString(),
+                customerName: qrisRow.customer_name || 'Pelanggan Setia',
+                amount: qrisRow.total_amount,
+                coffeeLabel: 'Kopi',
+                message: 'Tip masuk via QRIS Listener',
+                method: 'Payment Gateway QRIS'
+              };
+              await supabase.from('barbers').update({
+                tip_balance: currentBal + qrisRow.total_amount,
+                tips_history: [newTipItem, ...history]
+              }).eq('id', bData.id);
+            }
+          } catch (tipErr) {
+            console.warn('Tip balance update notice:', tipErr.message);
+          }
+        }
       }
     } catch (e) {
       // Table qris_payments belum dibuat, lanjut ke cek tabel bookings
@@ -146,19 +187,24 @@ export default async function handler(req, res) {
     // 2. Jika belum cocok di qris_payments, cari langsung di tabel bookings
     if (!matched) {
       try {
-        // Cari booking dengan total_price sama persis atau selisih kode unik (1 - 999)
         const { data: bookingsList } = await supabase
           .from('bookings')
           .select('*')
-          .in('booking_status', ['PENDING_PAYMENT', 'Menunggu'])
+          .eq('booking_status', 'PENDING_PAYMENT')
           .order('created_at', { ascending: false })
-          .limit(10);
+          .limit(20);
 
         if (bookingsList && bookingsList.length > 0) {
-          const matchingBooking = bookingsList.find(b => {
-            const price = Number(b.total_price);
-            return price === targetAmount || (targetAmount >= price && targetAmount <= price + 999);
-          });
+          // Prioritas 1: Cocok persis total_price === targetAmount
+          let matchingBooking = bookingsList.find(b => Number(b.total_price) === targetAmount);
+
+          // Prioritas 2 (fallback jika booking lama tersimpan dengan base price): selisih kode unik 100-899
+          if (!matchingBooking) {
+            matchingBooking = bookingsList.find(b => {
+              const price = Number(b.total_price);
+              return targetAmount >= price + 100 && targetAmount <= price + 899;
+            });
+          }
 
           if (matchingBooking) {
             matched = true;

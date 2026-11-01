@@ -1838,14 +1838,38 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       disabled={simulatingTip}
                       onClick={async () => {
                         setSimulatingTip(true);
+                        const finalTipAmt = tipQrisData?.totalAmount || tipAmount;
                         try {
-                          await simulateQrisPayment(tipQrisData?.referenceId, tipQrisData?.totalAmount || tipAmount);
+                          await simulateQrisPayment(tipQrisData?.referenceId, finalTipAmt);
+                          await fetch('/api/payment/qris/webhook', {
+                            method: 'POST',
+                            headers: { 
+                              'Content-Type': 'application/json',
+                              'x-api-key': 'ecukur_qris_secret_2026'
+                            },
+                            body: JSON.stringify({ 
+                              text: `GoBiz: Pembayaran QRIS Rp ${finalTipAmt.toLocaleString('id-ID')} berhasil diterima` 
+                            })
+                          }).catch(() => {});
                         } catch (e) {}
-                        setTimeout(() => setSimulatingTip(false), 1500);
+
+                        setTimeout(() => {
+                          setSimulatingTip(false);
+                          if (typeof addBarberTip === 'function') {
+                            addBarberTip(barber.id, {
+                              customerName: tipperName || 'Pelanggan',
+                              amount: finalTipAmt,
+                              coffeeLabel: selectedCoffeeLabel || 'Kopi',
+                              message: tipperMessage || 'Terima kasih atas pelayanannya!',
+                              method: 'QRIS Listener (Simulasi)'
+                            });
+                          }
+                          setTipPaid(true);
+                        }, 1200);
                       }}
                       className="text-[10px] text-neutral-400 hover:text-neutral-700 underline cursor-pointer block mx-auto"
                     >
-                      {simulatingTip ? 'Memproses Simulasi...' : '⚡ Uji Simulasi Notifikasi Masuk'}
+                      {simulatingTip ? 'Memproses Notifikasi Bank...' : '⚡ Uji Simulasi Pembayaran Tip'}
                     </button>
                   </div>
 

@@ -129,8 +129,8 @@ export async function createQrisPayment({
  * Cek status tagihan QRIS (Polling)
  */
 export async function checkQrisPaymentStatus(referenceId) {
-  if (!referenceId || referenceId.startsWith('LOCAL-')) {
-    return { success: true, status: 'PENDING' };
+  if (!referenceId) {
+    return { success: false, error: 'Reference ID diperlukan' };
   }
   try {
     const res = await fetch(`${API_BASE}/status/${encodeURIComponent(referenceId)}`);
@@ -147,8 +147,11 @@ export async function simulateQrisPayment(referenceId, amount) {
   try {
     const res = await fetch(`${API_BASE}/simulate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ referenceId, amount })
+      headers: { 
+        'Content-Type': 'application/json',
+        'x-api-key': 'ecukur_qris_secret_2026'
+      },
+      body: JSON.stringify({ referenceId, amount: Number(amount) || 0 })
     });
     return await res.json();
   } catch (err) {
