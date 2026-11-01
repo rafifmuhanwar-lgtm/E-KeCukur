@@ -11,7 +11,7 @@ function parseNotificationAmount(input) {
 
   const cleaned = input.replace(/\s+/g, ' ');
 
-  // 1. Format dengan Rp atau IDR
+  // 1. Format dengan Rp atau IDR (e.g. Rp 50.123, Rp50.123,00, IDR 50.123)
   let match = cleaned.match(/(?:rp\.?|idr)\s*([0-9.,]+)/i);
   if (match) {
     let numStr = match[1].trim();
@@ -20,14 +20,14 @@ function parseNotificationAmount(input) {
     if (!isNaN(val) && val > 0) return val;
   }
 
-  // 2. Format ribuan bertitik/koma
+  // 2. Format ribuan bertitik/koma (e.g. 50.123 atau 50,123)
   match = cleaned.match(/\b([0-9]{1,3}(?:[.,][0-9]{3})+)(?:[.,]\d{2})?\b/);
   if (match) {
     const val = parseInt(match[1].replace(/\D/g, ''), 10);
     if (!isNaN(val) && val > 0) return val;
   }
 
-  // 3. Digit murni 4-9 digit
+  // 3. Digit murni 4-9 digit (e.g. 50123)
   match = cleaned.match(/\b([0-9]{4,9})\b/);
   if (match) {
     const val = parseInt(match[1], 10);
@@ -79,17 +79,23 @@ export default async function handler(req, res) {
 
     if (payload.amount) {
       targetAmount = parseNotificationAmount(payload.amount);
-    } else if (payload.text) {
-      targetAmount = parseNotificationAmount(payload.text);
-    } else if (payload.message) {
-      targetAmount = parseNotificationAmount(payload.message);
-    } else if (payload.body) {
-      targetAmount = parseNotificationAmount(payload.body);
-    } else if (payload.raw_text) {
-      targetAmount = parseNotificationAmount(payload.raw_text);
     }
 
-    console.log('[Vercel QRIS Webhook] Parsed Amount:', targetAmount, 'from:', JSON.stringify(payload));
+    // Gabungkan title, text, notification, message agar tidak ada data yang terlewat
+    if (!targetAmount) {
+      const combinedText = [
+        payload.title,
+        payload.text,
+        payload.notification,
+        payload.message,
+        payload.body,
+        payload.raw_text
+      ].filter(Boolean).join(' ');
+
+      targetAmount = parseNotificationAmount(combinedText);
+    }
+
+    console.log('[Vercel QRIS Webhook] Parsed Amount:', targetAmount, 'from payload:', JSON.stringify(payload));
 
     if (!targetAmount || targetAmount <= 0) {
       return res.status(400).json({
@@ -137,7 +143,7 @@ export default async function handler(req, res) {
       // Table qris_payments belum dibuat, lanjut ke cek tabel bookings
     }
 
-    // 2. Jika belum cocok, cari langsung di tabel bookings
+    // 2. Jika belum cocok di qris_payments, cari langsung di tabel bookings
     if (!matched) {
       try {
         // Cari booking dengan total_price sama persis atau selisih kode unik (1 - 999)
@@ -187,4 +193,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ success: false, error: err.message });
   }
 }
-
