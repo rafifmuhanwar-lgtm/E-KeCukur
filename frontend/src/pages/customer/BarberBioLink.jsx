@@ -321,6 +321,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [bookingQrisData, setBookingQrisData] = useState(null);
   const [copiedBookingAmount, setCopiedBookingAmount] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [simulatingBooking, setSimulatingBooking] = useState(false);
 
   // Auto-listen when customer is on QRIS payment step
   useEffect(() => {
@@ -1512,6 +1513,33 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   <div className="flex items-center justify-center gap-2 py-1 text-xs text-neutral-500 font-medium">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
                     <span>Menunggu verifikasi pembayaran otomatis...</span>
+                  </div>
+
+                  {/* Simulasi Pembayaran Masuk untuk Pengujian */}
+                  <div className="pt-1">
+                    <button
+                      type="button"
+                      disabled={simulatingBooking}
+                      onClick={async () => {
+                        setSimulatingBooking(true);
+                        try {
+                          await fetch('/api/payment/qris/webhook', {
+                            method: 'POST',
+                            headers: { 
+                              'Content-Type': 'application/json',
+                              'x-api-key': 'ecukur_qris_secret_2026'
+                            },
+                            body: JSON.stringify({ 
+                              text: `GoBiz: Pembayaran QRIS Rp ${bookingQrisData.totalAmount.toLocaleString('id-ID')} berhasil diterima` 
+                            })
+                          });
+                        } catch (err) {}
+                        setTimeout(() => setSimulatingBooking(false), 2000);
+                      }}
+                      className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg cursor-pointer transition-colors inline-flex items-center gap-1.5 mx-auto"
+                    >
+                      <span>{simulatingBooking ? '⏳ Memproses Notifikasi Bank...' : '⚡ Uji Simulasi Pembayaran Masuk (Testing)'}</span>
+                    </button>
                   </div>
 
                   <div className="pt-2">
