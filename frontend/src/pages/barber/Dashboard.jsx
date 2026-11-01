@@ -220,9 +220,19 @@ export default function BarberDashboard() {
   // Filter bookings for this barber (memoized to avoid unnecessary re-filtering)
   const barberBookings = React.useMemo(() => {
     if (!barber) return [];
-    return bookings.filter(
-      (b) => b.barberId === barber.id || b.barberName.toLowerCase() === barber.name.toLowerCase() || !b.barberId
-    );
+    const barberId = String(barber.id || '').toLowerCase().trim();
+    const barberSlug = String(barber.slug || '').toLowerCase().trim();
+    const barberName = String(barber.name || '').toLowerCase().trim();
+
+    return bookings.filter((b) => {
+      const bBarberId = String(b.barberId || '').toLowerCase().trim();
+      const bBarberName = String(b.barberName || '').toLowerCase().trim();
+
+      if (barberId && bBarberId === barberId) return true;
+      if (barberSlug && (bBarberId === barberSlug || bBarberName === barberSlug)) return true;
+      if (barberName && bBarberName === barberName) return true;
+      return false;
+    });
   }, [barber, bookings]);
 
   const weeklyChartData = React.useMemo(() => computeWeeklyChartData(barberBookings), [barberBookings]);

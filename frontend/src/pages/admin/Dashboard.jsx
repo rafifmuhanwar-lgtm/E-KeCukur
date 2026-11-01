@@ -50,6 +50,19 @@ export default function AdminMasterDashboard() {
   const updateBookingStatus = useStore((state) => state.updateBookingStatus);
   const updateBarber = useStore((state) => state.updateBarber);
   const authUser = useStore((state) => state.authUser);
+  const fetchBarbersFromSupabase = useStore((state) => state.fetchBarbersFromSupabase);
+  const fetchBookingsFromSupabase = useStore((state) => state.fetchBookingsFromSupabase);
+  const subscribeToBookings = useStore((state) => state.subscribeToBookings);
+
+  // Sync Supabase Barbers & Bookings on Mount + Realtime
+  useEffect(() => {
+    if (typeof fetchBarbersFromSupabase === 'function') fetchBarbersFromSupabase();
+    if (typeof fetchBookingsFromSupabase === 'function') fetchBookingsFromSupabase();
+    if (typeof subscribeToBookings === 'function') {
+      const unsub = subscribeToBookings();
+      return () => { if (typeof unsub === 'function') unsub(); };
+    }
+  }, [fetchBarbersFromSupabase, fetchBookingsFromSupabase, subscribeToBookings]);
 
   // Tabs
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'barbers' | 'bookings' | 'gateway' | 'withdrawals' | 'settings'
@@ -72,24 +85,48 @@ export default function AdminMasterDashboard() {
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
   const [simulatingWebhook, setSimulatingWebhook] = useState(false);
-  const [webhookLogs, setWebhookLogs] = useState([
-    {
-      id: 'log-1',
-      timestamp: 'Baru saja',
-      amount: 45480,
-      sender: 'GO-PAY QRIS',
-      status: 'MATCHED',
-      note: 'Diverifikasi otomatis via MacroDroid'
-    },
-    {
-      id: 'log-2',
-      timestamp: '15 menit lalu',
-      amount: 25142,
-      sender: 'BCA Mobile',
-      status: 'MATCHED',
-      note: 'Tip Kopi Capster verified'
-    }
-  ]);
+  const [webhookLogs, setWebhookLogs] = useState([]);
+
+  // Fetch live webhook & payment logs from Supabase
+  useEffect(() => {
+    const loadWebhookLogs = async () => {
+      if (!isSupabaseConfigured) return;
+      try {
+        const { data: qrisRows } = await supabase
+          .from('qris_payments')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (qrisRows && qrisRows.length > 0) {
+          setWebhookLogs(qrisRows.map(q => ({
+            id: q.id,
+            timestamp: new Date(q.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
+            amount: Number(q.total_amount) || Number(q.base_amount) || 0,
+            sender: q.raw_notification ? 'MacroDroid' : 'QRIS Dinamis',
+            status: q.status === 'PAID' ? 'MATCHED' : q.status,
+            note: `${q.customer_name || 'Pelanggan'} (${q.reference_id || 'QRIS'})`
+          })));
+          return;
+        }
+      } catch (err) {}
+
+      // Fallback: derive logs from real QRIS bookings in Supabase
+      const qrisBookings = bookings.filter(b => b.paymentMethod === 'QRIS');
+      if (qrisBookings.length > 0) {
+        setWebhookLogs(qrisBookings.map(b => ({
+          id: b.id,
+          timestamp: b.date || 'Hari ini',
+          amount: b.price,
+          sender: 'QRIS Listener',
+          status: b.paymentStatus === 'PAID' || b.status === 'Terkonfirmasi' ? 'MATCHED' : 'PENDING',
+          note: `${b.customerName} - ${b.serviceName}`
+        })));
+      }
+    };
+
+    loadWebhookLogs();
+  }, [bookings]);
 
   // Global Platform Settings State
   const [platformName, setPlatformName] = useState('E-CUKUR Link-in-Bio');
@@ -152,7 +189,9 @@ export default function AdminMasterDashboard() {
   const filteredBookings = useMemo(() => {
     return bookings.filter((b) => {
       const matchStatus = bookingStatusFilter === 'ALL' || b.status === bookingStatusFilter;
-      const matchBarber = bookingBarberFilter === 'ALL' || b.barberId === bookingBarberFilter || b.barberName === bookingBarberFilter;
+      const matchBarber = bookingBarberFilter === 'ALL' || 
+        (b.barberId && b.barberId === bookingBarberFilter) || 
+        (b.barberName && b.barberName.trim().toLowerCase() === bookingBarberFilter.trim().toLowerCase());
       return matchStatus && matchBarber;
     });
   }, [bookings, bookingStatusFilter, bookingBarberFilter]);

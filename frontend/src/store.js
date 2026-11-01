@@ -484,22 +484,34 @@ export const useStore = create((set, get) => ({
         .order('created_at', { ascending: false });
 
       if (!error && Array.isArray(data)) {
-        const mapped = data.map((row) => ({
-          id: row.id,
-          customerName: row.customer_name || 'Pelanggan Bio Link',
-          customerPhone: row.customer_phone || '-',
-          barberId: row.barber_id || 'reza',
-          barberName: row.barber_name || 'Reza',
-          serviceName: row.service_name || 'Cukur Dewasa',
-          date: row.booking_date || 'Hari Ini',
-          time: row.start_time ? row.start_time.substring(0, 5) : '10:00',
-          status: dbToUiStatus(row.booking_status),
-          paymentMethod: row.payment_method === 'QRIS' ? 'QRIS' : 'Tunai',
-          paymentStatus: row.payment_status || 'UNPAID',
-          price: Number(row.total_price) || 40000,
-          note: '',
-          createdAt: row.created_at
-        }));
+        const currentBarbers = get().barbers || [];
+        const mapped = data.map((row) => {
+          const matchedBarber = currentBarbers.find(b => {
+            if (row.barber_id && (b.id === row.barber_id || b.slug === row.barber_id)) return true;
+            if (row.barber_name) {
+              const rName = String(row.barber_name).trim().toLowerCase();
+              return (b.name && b.name.trim().toLowerCase() === rName) || (b.slug && b.slug.trim().toLowerCase() === rName);
+            }
+            return false;
+          });
+
+          return {
+            id: row.id,
+            customerName: row.customer_name || 'Pelanggan',
+            customerPhone: row.customer_phone || '-',
+            barberId: row.barber_id || matchedBarber?.id || '',
+            barberName: row.barber_name || matchedBarber?.name || 'Semua Capster',
+            serviceName: row.service_name || 'Layanan Cukur',
+            date: row.booking_date || 'Hari Ini',
+            time: row.start_time ? row.start_time.substring(0, 5) : '10:00',
+            status: dbToUiStatus(row.booking_status),
+            paymentMethod: row.payment_method === 'QRIS' ? 'QRIS' : (row.payment_method || 'Tunai'),
+            paymentStatus: row.payment_status || 'UNPAID',
+            price: Number(row.total_price) || 0,
+            note: '',
+            createdAt: row.created_at
+          };
+        });
 
         set({ bookings: mapped });
       }
@@ -1025,6 +1037,7 @@ export const useStore = create((set, get) => ({
           .insert({
             customer_name: booking.customerName,
             customer_phone: booking.customerPhone,
+            barber_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(booking.barberId)) ? booking.barberId : null,
             barber_name: booking.barberName,
             service_name: booking.serviceName,
             booking_date: booking.dateIso || new Date().toISOString().split('T')[0],
@@ -1033,7 +1046,7 @@ export const useStore = create((set, get) => ({
             booking_status: dbStatus,
             payment_method: booking.paymentMethod === 'QRIS' ? 'QRIS' : 'CASH',
             payment_status: booking.paymentMethod === 'QRIS' ? 'PAID' : 'UNPAID',
-            total_price: booking.price || 40000
+            total_price: Number(booking.price) || 0
           })
           .select()
           .single();
