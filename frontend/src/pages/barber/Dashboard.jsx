@@ -460,12 +460,12 @@ export default function BarberDashboard() {
     accountHolder: '',
     thankYouMessage: 'Terima kasih banyak atas tip kopinya! Sehat dan sukses selalu bro 🙏',
     presets: [
-      { id: 'p1', amount: 5000, label: 'Kopi Tubruk', price: 'Rp 5.000', active: true, emoji: '☕' },
-      { id: 'p2', amount: 10000, label: 'Es Kopi Susu', price: 'Rp 10.000', active: true, emoji: '🥤' },
-      { id: 'p3', amount: 20000, label: 'Roti & Kopi', price: 'Rp 20.000', active: true, emoji: '🥐' },
-      { id: 'p4', amount: 35000, label: 'Paket Makan Siang', price: 'Rp 35.000', active: true, emoji: '🍱' },
-      { id: 'p5', amount: 50000, label: 'Traktir Sultan', price: 'Rp 50.000', active: true, emoji: '👑' },
-      { id: 'p6', amount: 100000, label: 'Super Fan Cukur', price: 'Rp 100.000', active: false, emoji: '🔥' },
+      { id: 'p1', amount: 5000, label: 'Kopi Tubruk', price: '5K', active: true, emoji: '☕' },
+      { id: 'p2', amount: 10000, label: 'Es Kopi Susu', price: '10K', active: true, emoji: '🥤' },
+      { id: 'p3', amount: 20000, label: 'Roti & Kopi', price: '20K', active: true, emoji: '🥐' },
+      { id: 'p4', amount: 35000, label: 'Paket Makan Siang', price: '35K', active: true, emoji: '🍱' },
+      { id: 'p5', amount: 50000, label: 'Traktir Sultan', price: '50K', active: true, emoji: '👑' },
+      { id: 'p6', amount: 100000, label: 'Super Fan Cukur', price: '100K', active: false, emoji: '🔥' },
     ]
   };
 
@@ -494,7 +494,7 @@ export default function BarberDashboard() {
       id: newId,
       amount: 5000,
       label: 'Kopi Baru',
-      price: 'Rp 5.000',
+      price: '5K',
       active: true,
       emoji: '☕'
     });
@@ -2014,16 +2014,16 @@ export default function BarberDashboard() {
                               Rp
                             </span>
                             <input 
-                              type="number" 
-                              min="5000"
-                              step="1000"
-                              value={preset.amount || ''}
+                              type="text" 
+                              inputMode="numeric"
+                              value={preset.amount ? Number(preset.amount).toLocaleString('id-ID') : ''}
                               onChange={(e) => {
-                                const val = Number(e.target.value);
-                                handlePresetChange(idx, 'amount', val);
-                                handlePresetChange(idx, 'price', `Rp ${Number(val).toLocaleString('id-ID')}`);
+                                const cleanDigits = e.target.value.replace(/\D/g, '');
+                                const numVal = cleanDigits ? parseInt(cleanDigits, 10) : 0;
+                                handlePresetChange(idx, 'amount', numVal);
+                                handlePresetChange(idx, 'price', `${Math.round(numVal / 1000)}K`);
                               }}
-                              placeholder="5000"
+                              placeholder="5.000"
                               className="w-full pl-8 pr-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-mono font-bold text-neutral-900 focus:border-neutral-900 focus:bg-white outline-none"
                             />
                           </div>
