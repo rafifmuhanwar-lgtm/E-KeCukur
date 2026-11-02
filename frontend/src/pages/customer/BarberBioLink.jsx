@@ -1343,12 +1343,17 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
               <div className={`grid grid-cols-3 ${isPreview ? 'gap-1.5 mb-2.5' : 'gap-2 mb-4'}`}>
                 {(barber.tippingConfig?.presets || [
-                  { amount: 10000, label: 'Kopi Hitam', price: '10K' },
-                  { amount: 25000, label: 'Kopi Susu', price: '25K' },
-                  { amount: 50000, label: 'V60 Special', price: '50K' },
-                ]).map((preset) => (
+                  { amount: 5000, label: 'Kopi Tubruk', price: '5K', active: true, emoji: '☕' },
+                  { amount: 10000, label: 'Es Kopi Susu', price: '10K', active: true, emoji: '🥤' },
+                  { amount: 20000, label: 'Roti & Kopi', price: '20K', active: true, emoji: '🥐' },
+                  { amount: 35000, label: 'Paket Siang', price: '35K', active: true, emoji: '🍱' },
+                  { amount: 50000, label: 'Traktir Sultan', price: '50K', active: true, emoji: '👑' },
+                  { amount: 100000, label: 'Super Fan', price: '100K', active: false, emoji: '🔥' },
+                ])
+                .filter(p => p.active !== false)
+                .map((preset) => (
                   <button
-                    key={preset.amount}
+                    key={preset.id || preset.amount}
                     type="button"
                     onClick={() => { 
                       setTipAmount(preset.amount); 
@@ -1361,10 +1366,11 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                         : 'border-neutral-200 bg-white hover:border-neutral-300'
                     }`}
                   >
+                    <span className="text-sm block mb-0.5">{preset.emoji || '☕'}</span>
                     <p className={`${isPreview ? 'text-xs' : 'text-base'} font-display font-bold text-amber-600`}>
                       {preset.price || formatRupiah(preset.amount)}
                     </p>
-                    <p className={`${isPreview ? 'text-[8.5px]' : 'text-[10px]'} uppercase font-semibold text-neutral-500`}>{preset.label}</p>
+                    <p className={`${isPreview ? 'text-[8.5px]' : 'text-[10px]'} uppercase font-semibold text-neutral-500 truncate`}>{preset.label}</p>
                   </button>
                 ))}
               </div>

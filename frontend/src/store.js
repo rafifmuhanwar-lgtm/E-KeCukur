@@ -121,9 +121,12 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
       accountHolder: '',
       thankYouMessage: 'Terima kasih banyak atas tip kopinya! Sehat dan sukses selalu bro 🙏',
       presets: [
-        { amount: 10000, label: 'Kopi Hitam', price: '10K' },
-        { amount: 25000, label: 'Kopi Susu', price: '25K' },
-        { amount: 50000, label: 'V60 Special', price: '50K' },
+        { id: 'p1', amount: 5000, label: 'Kopi Tubruk', price: '5K', active: true, emoji: '☕' },
+        { id: 'p2', amount: 10000, label: 'Es Kopi Susu', price: '10K', active: true, emoji: '🥤' },
+        { id: 'p3', amount: 20000, label: 'Roti & Kopi', price: '20K', active: true, emoji: '🥐' },
+        { id: 'p4', amount: 35000, label: 'Paket Makan Siang', price: '35K', active: true, emoji: '🍱' },
+        { id: 'p5', amount: 50000, label: 'Traktir Sultan', price: '50K', active: true, emoji: '👑' },
+        { id: 'p6', amount: 100000, label: 'Super Fan Cukur', price: '100K', active: false, emoji: '🔥' },
       ]
     },
     tipsHistory: Array.isArray(row.tips_history) ? row.tips_history : [],
@@ -1527,7 +1530,9 @@ export const useStore = create((set, get) => ({
       ? activeBarber
       : barbers.find((b) => b.id === barberId || b.slug === barberId);
 
-    const currentBalance = typeof targetBarber?.tipBalance === 'number' ? targetBarber.tipBalance : 0;
+    const currentBalance = typeof withdrawalData.maxAvailable === 'number'
+      ? withdrawalData.maxAvailable
+      : (typeof targetBarber?.tipBalance === 'number' ? targetBarber.tipBalance : 0);
 
     if (amount > currentBalance) {
       return { success: false, message: `Saldo tidak mencukupi (Saldo saat ini: Rp ${currentBalance.toLocaleString('id-ID')})` };
