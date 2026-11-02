@@ -121,12 +121,12 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
       accountHolder: '',
       thankYouMessage: 'Terima kasih banyak atas tip kopinya! Sehat dan sukses selalu bro 🙏',
       presets: [
-        { id: 'p1', amount: 5000, label: 'Kopi Tubruk', price: '5K', active: true, emoji: '☕' },
-        { id: 'p2', amount: 10000, label: 'Es Kopi Susu', price: '10K', active: true, emoji: '🥤' },
-        { id: 'p3', amount: 20000, label: 'Roti & Kopi', price: '20K', active: true, emoji: '🥐' },
-        { id: 'p4', amount: 35000, label: 'Paket Makan Siang', price: '35K', active: true, emoji: '🍱' },
-        { id: 'p5', amount: 50000, label: 'Traktir Sultan', price: '50K', active: true, emoji: '👑' },
-        { id: 'p6', amount: 100000, label: 'Super Fan Cukur', price: '100K', active: false, emoji: '🔥' },
+        { id: 'p1', amount: 5000, label: 'Kopi Tubruk', price: 'Rp 5.000', active: true, emoji: '☕' },
+        { id: 'p2', amount: 10000, label: 'Es Kopi Susu', price: 'Rp 10.000', active: true, emoji: '🥤' },
+        { id: 'p3', amount: 20000, label: 'Roti & Kopi', price: 'Rp 20.000', active: true, emoji: '🥐' },
+        { id: 'p4', amount: 35000, label: 'Paket Makan Siang', price: 'Rp 35.000', active: true, emoji: '🍱' },
+        { id: 'p5', amount: 50000, label: 'Traktir Sultan', price: 'Rp 50.000', active: true, emoji: '👑' },
+        { id: 'p6', amount: 100000, label: 'Super Fan Cukur', price: 'Rp 100.000', active: false, emoji: '🔥' },
       ]
     },
     tipsHistory: Array.isArray(row.tips_history) ? row.tips_history : [],

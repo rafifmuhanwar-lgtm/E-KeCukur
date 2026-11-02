@@ -460,12 +460,12 @@ export default function BarberDashboard() {
     accountHolder: '',
     thankYouMessage: 'Terima kasih banyak atas tip kopinya! Sehat dan sukses selalu bro 🙏',
     presets: [
-      { id: 'p1', amount: 5000, label: 'Kopi Tubruk', price: '5K', active: true, emoji: '☕' },
-      { id: 'p2', amount: 10000, label: 'Es Kopi Susu', price: '10K', active: true, emoji: '🥤' },
-      { id: 'p3', amount: 20000, label: 'Roti & Kopi', price: '20K', active: true, emoji: '🥐' },
-      { id: 'p4', amount: 35000, label: 'Paket Makan Siang', price: '35K', active: true, emoji: '🍱' },
-      { id: 'p5', amount: 50000, label: 'Traktir Sultan', price: '50K', active: true, emoji: '👑' },
-      { id: 'p6', amount: 100000, label: 'Super Fan Cukur', price: '100K', active: false, emoji: '🔥' },
+      { id: 'p1', amount: 5000, label: 'Kopi Tubruk', price: 'Rp 5.000', active: true, emoji: '☕' },
+      { id: 'p2', amount: 10000, label: 'Es Kopi Susu', price: 'Rp 10.000', active: true, emoji: '🥤' },
+      { id: 'p3', amount: 20000, label: 'Roti & Kopi', price: 'Rp 20.000', active: true, emoji: '🥐' },
+      { id: 'p4', amount: 35000, label: 'Paket Makan Siang', price: 'Rp 35.000', active: true, emoji: '🍱' },
+      { id: 'p5', amount: 50000, label: 'Traktir Sultan', price: 'Rp 50.000', active: true, emoji: '👑' },
+      { id: 'p6', amount: 100000, label: 'Super Fan Cukur', price: 'Rp 100.000', active: false, emoji: '🔥' },
     ]
   };
 
@@ -494,7 +494,7 @@ export default function BarberDashboard() {
       id: newId,
       amount: 5000,
       label: 'Kopi Baru',
-      price: '5K',
+      price: 'Rp 5.000',
       active: true,
       emoji: '☕'
     });
@@ -1948,7 +1948,9 @@ export default function BarberDashboard() {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <span className="text-xl">{preset.emoji || '☕'}</span>
-                            <span className="text-[11px] font-bold text-neutral-400">#{idx + 1}</span>
+                            <span className="text-xs font-mono font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-md">
+                              Rp {Number(preset.amount || 0).toLocaleString('id-ID')}
+                            </span>
                           </div>
 
                           <div className="flex items-center gap-2">
@@ -2019,7 +2021,7 @@ export default function BarberDashboard() {
                               onChange={(e) => {
                                 const val = Number(e.target.value);
                                 handlePresetChange(idx, 'amount', val);
-                                handlePresetChange(idx, 'price', `${Math.round(val / 1000)}K`);
+                                handlePresetChange(idx, 'price', `Rp ${Number(val).toLocaleString('id-ID')}`);
                               }}
                               placeholder="5000"
                               className="w-full pl-8 pr-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-mono font-bold text-neutral-900 focus:border-neutral-900 focus:bg-white outline-none"
