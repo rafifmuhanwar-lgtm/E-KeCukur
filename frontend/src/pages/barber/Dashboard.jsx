@@ -473,9 +473,15 @@ export default function BarberDashboard() {
     updateBarberTippingConfig(barber.id, { [field]: value });
   };
 
-  const handlePresetChange = (index, field, value) => {
-    const newPresets = [...(tippingConfig.presets || [])];
-    newPresets[index] = { ...newPresets[index], [field]: value };
+  const handlePresetChange = (index, fieldOrUpdates, value) => {
+    const current = tippingConfig.presets || [];
+    const newPresets = current.map((p, i) => {
+      if (i !== index) return p;
+      if (typeof fieldOrUpdates === 'object' && fieldOrUpdates !== null) {
+        return { ...p, ...fieldOrUpdates };
+      }
+      return { ...p, [fieldOrUpdates]: value };
+    });
     updateBarberTippingConfig(barber.id, { presets: newPresets });
   };
 
@@ -2016,12 +2022,22 @@ export default function BarberDashboard() {
                             <input 
                               type="text" 
                               inputMode="numeric"
-                              value={preset.amount ? Number(preset.amount).toLocaleString('id-ID') : ''}
+                              value={preset.amount !== '' && preset.amount !== null && preset.amount !== undefined ? (Number(preset.amount) === 0 ? '' : Number(preset.amount).toLocaleString('id-ID')) : ''}
                               onChange={(e) => {
                                 const cleanDigits = e.target.value.replace(/\D/g, '');
-                                const numVal = cleanDigits ? parseInt(cleanDigits, 10) : 0;
-                                handlePresetChange(idx, 'amount', numVal);
-                                handlePresetChange(idx, 'price', `${Math.round(numVal / 1000)}K`);
+                                const numVal = cleanDigits === '' ? '' : parseInt(cleanDigits, 10);
+                                handlePresetChange(idx, {
+                                  amount: numVal,
+                                  price: numVal ? `${Math.round(numVal / 1000)}K` : ''
+                                });
+                              }}
+                              onBlur={() => {
+                                if (!preset.amount || Number(preset.amount) < 5000) {
+                                  handlePresetChange(idx, {
+                                    amount: 5000,
+                                    price: '5K'
+                                  });
+                                }
                               }}
                               placeholder="5.000"
                               className="w-full pl-8 pr-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-mono font-bold text-neutral-900 focus:border-neutral-900 focus:bg-white outline-none"
