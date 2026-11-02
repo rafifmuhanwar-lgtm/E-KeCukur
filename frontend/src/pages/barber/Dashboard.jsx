@@ -41,7 +41,8 @@ import {
   Receipt,
   ShieldCheck,
   ToggleLeft,
-  ToggleRight
+  ToggleRight,
+  AlertCircle
 } from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
@@ -487,8 +488,15 @@ export default function BarberDashboard() {
 
   const handleTogglePreset = (index) => {
     const newPresets = [...(tippingConfig.presets || [])];
-    const currentActive = newPresets[index].active !== false;
-    newPresets[index] = { ...newPresets[index], active: !currentActive };
+    const target = newPresets[index];
+    const currentActive = target.active !== false;
+    const validatedAmount = Math.max(5000, Number(target.amount) || 5000);
+    newPresets[index] = { 
+      ...target, 
+      amount: validatedAmount,
+      price: `${Math.round(validatedAmount / 1000)}K`,
+      active: !currentActive 
+    };
     updateBarberTippingConfig(barber.id, { presets: newPresets });
     showToast(newPresets[index].active ? `Paket ${newPresets[index].label || ''} diaktifkan!` : `Paket ${newPresets[index].label || ''} dinonaktifkan`);
   };
@@ -1904,7 +1912,7 @@ export default function BarberDashboard() {
               
               {/* 1. SAWERIA-STYLE PRESET MANAGER */}
               <div className="bg-white p-5 sm:p-6 rounded-2xl border border-neutral-200 shadow-2xs space-y-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-4 flex-wrap">
                   <div>
                     <h3 className="font-display font-bold text-base text-[#171717] flex items-center gap-2">
                       <Coffee className="w-5 h-5 text-amber-600" />
@@ -1938,28 +1946,33 @@ export default function BarberDashboard() {
                 </div>
 
                 {/* Preset List Cards (Saweria Style) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
                   {(tippingConfig.presets || []).map((preset, idx) => {
                     const isActive = preset.active !== false;
+                    const amountNum = Number(preset.amount || 0);
+                    const isBelowMin = preset.amount !== '' && preset.amount !== null && preset.amount !== undefined && amountNum < 5000;
+
                     return (
                       <div 
                         key={preset.id || idx} 
-                        className={`p-4 rounded-xl border transition-all space-y-3 ${
+                        className={`p-4 rounded-xl border transition-all space-y-3 min-w-0 overflow-hidden ${
                           isActive 
-                            ? 'bg-white border-neutral-200 shadow-2xs' 
+                            ? 'bg-white border-neutral-200 shadow-2xs hover:border-neutral-300' 
                             : 'bg-neutral-50/70 border-neutral-200/70 opacity-60'
                         }`}
                       >
-                        {/* Header: Emoji & Active Toggle Switch */}
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xl">{preset.emoji || '☕'}</span>
-                            <span className="text-xs font-mono font-bold text-neutral-900 bg-neutral-100 px-2 py-0.5 rounded-md">
-                              Rp {Number(preset.amount || 0).toLocaleString('id-ID')}
+                        {/* Header: Nomor Pilihan & Switch Aktif di Bio + Delete */}
+                        <div className="flex items-center justify-between gap-2 border-b border-neutral-100 pb-2.5">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="w-5 h-5 rounded-md bg-amber-50 border border-amber-200/60 text-amber-800 flex items-center justify-center text-[10px] font-bold font-mono shrink-0">
+                              #{idx + 1}
+                            </span>
+                            <span className="text-xs font-bold text-neutral-800 truncate" title={preset.label || `Paket ${idx + 1}`}>
+                              {preset.label || `Paket ${idx + 1}`}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <button
                               type="button"
                               onClick={() => handleTogglePreset(idx)}
@@ -1968,7 +1981,7 @@ export default function BarberDashboard() {
                                   ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' 
                                   : 'bg-neutral-200 text-neutral-600 hover:bg-neutral-300'
                               }`}
-                              title={isActive ? 'Klik untuk nonaktifkan' : 'Klik untuk aktifkan'}
+                              title={isActive ? 'Klik untuk nonaktifkan di bio link' : 'Klik untuk aktifkan di bio link'}
                             >
                               <span className={`w-1.5 h-1.5 rounded-full ${isActive ? 'bg-emerald-500' : 'bg-neutral-400'}`}></span>
                               <span>{isActive ? 'Aktif di Bio' : 'Nonaktif'}</span>
@@ -1978,7 +1991,7 @@ export default function BarberDashboard() {
                               <button
                                 type="button"
                                 onClick={() => handleDeletePreset(idx)}
-                                className="p-1 text-neutral-400 hover:text-rose-600 transition-colors cursor-pointer"
+                                className="p-1 text-neutral-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors cursor-pointer"
                                 title="Hapus paket ini"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -1987,62 +2000,119 @@ export default function BarberDashboard() {
                           </div>
                         </div>
 
-                        {/* Input Nama & Emoji */}
+                        {/* Input Nama Paket & Emoji */}
                         <div>
-                          <label className="text-[10.5px] font-semibold text-neutral-600 block mb-1">
+                          <label className="text-[11px] font-semibold text-neutral-700 block mb-1">
                             Nama Paket & Emoji
                           </label>
-                          <div className="flex items-center gap-1.5">
+                          <div className="flex items-center gap-1.5 w-full min-w-0">
                             <input 
                               type="text" 
                               value={preset.emoji || '☕'}
                               onChange={(e) => handlePresetChange(idx, 'emoji', e.target.value)}
-                              className="w-10 text-center px-1 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-sm outline-none focus:border-neutral-900 focus:bg-white"
-                              title="Pilih emoji"
+                              maxLength={4}
+                              className="w-10 h-8 shrink-0 text-center bg-neutral-50 border border-neutral-200 rounded-lg text-sm outline-none focus:border-neutral-900 focus:bg-white transition-colors"
+                              title="Ganti emoji"
                             />
                             <input 
                               type="text" 
                               value={preset.label || ''}
                               onChange={(e) => handlePresetChange(idx, 'label', e.target.value)}
                               placeholder="e.g. Kopi Tubruk"
-                              className="flex-1 px-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-semibold focus:border-neutral-900 focus:bg-white outline-none"
+                              maxLength={30}
+                              className="flex-1 min-w-0 h-8 px-2.5 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-semibold focus:border-neutral-900 focus:bg-white outline-none transition-colors"
                             />
                           </div>
                         </div>
 
                         {/* Input Nominal Rp (Min 5.000) */}
                         <div>
-                          <label className="text-[10.5px] font-semibold text-neutral-600 block mb-1">
-                            Nominal Traktir (Min. Rp 5.000)
-                          </label>
-                          <div className="relative">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-400 font-mono">
-                              Rp
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-[11px] font-semibold text-neutral-700">
+                              Nominal Traktir
+                            </label>
+                            <span className="text-[10px] font-bold text-neutral-500 bg-neutral-100 px-1.5 py-0.5 rounded">
+                              Min. Rp 5.000
                             </span>
-                            <input 
-                              type="text" 
-                              inputMode="numeric"
-                              value={preset.amount !== '' && preset.amount !== null && preset.amount !== undefined ? (Number(preset.amount) === 0 ? '' : Number(preset.amount).toLocaleString('id-ID')) : ''}
-                              onChange={(e) => {
-                                const cleanDigits = e.target.value.replace(/\D/g, '');
-                                const numVal = cleanDigits === '' ? '' : parseInt(cleanDigits, 10);
+                          </div>
+
+                          <div className="flex items-center gap-1.5 w-full min-w-0">
+                            <div className="relative flex-1 min-w-0">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-400 font-mono pointer-events-none">
+                                Rp
+                              </span>
+                              <input 
+                                type="text" 
+                                inputMode="numeric"
+                                value={preset.amount !== '' && preset.amount !== null && preset.amount !== undefined ? (Number(preset.amount) === 0 ? '' : Number(preset.amount).toLocaleString('id-ID')) : ''}
+                                onChange={(e) => {
+                                  const cleanDigits = e.target.value.replace(/\D/g, '');
+                                  const numVal = cleanDigits === '' ? '' : parseInt(cleanDigits, 10);
+                                  handlePresetChange(idx, {
+                                    amount: numVal,
+                                    price: numVal ? `${Math.round(numVal / 1000)}K` : ''
+                                  });
+                                }}
+                                onBlur={() => {
+                                  const num = Number(preset.amount);
+                                  if (!num || num < 5000) {
+                                    handlePresetChange(idx, {
+                                      amount: 5000,
+                                      price: '5K'
+                                    });
+                                    showToast('Nominal minimal adalah Rp 5.000 (disesuaikan otomatis)');
+                                  }
+                                }}
+                                placeholder="5.000"
+                                className={`w-full h-8 pl-8 pr-2 bg-neutral-50 border rounded-lg text-xs font-mono font-bold outline-none transition-all ${
+                                  isBelowMin
+                                    ? 'border-rose-400 bg-rose-50/20 text-rose-600 focus:border-rose-500'
+                                    : 'border-neutral-200 text-neutral-900 focus:border-neutral-900 focus:bg-white'
+                                }`}
+                              />
+                            </div>
+
+                            {/* Quick Stepper Shortcut Buttons */}
+                            <button
+                              type="button"
+                              disabled={amountNum <= 5000}
+                              onClick={() => {
+                                const current = amountNum || 5000;
+                                const nextVal = Math.max(5000, current - 5000);
                                 handlePresetChange(idx, {
-                                  amount: numVal,
-                                  price: numVal ? `${Math.round(numVal / 1000)}K` : ''
+                                  amount: nextVal,
+                                  price: `${Math.round(nextVal / 1000)}K`
                                 });
                               }}
-                              onBlur={() => {
-                                if (!preset.amount || Number(preset.amount) < 5000) {
-                                  handlePresetChange(idx, {
-                                    amount: 5000,
-                                    price: '5K'
-                                  });
-                                }
+                              className="h-8 px-2 bg-neutral-100 hover:bg-neutral-200 disabled:opacity-35 disabled:hover:bg-neutral-100 text-neutral-700 rounded-lg text-[10px] font-bold font-mono transition-colors shrink-0 cursor-pointer disabled:cursor-not-allowed"
+                              title="Kurangi Rp 5.000"
+                            >
+                              -5K
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const current = amountNum || 5000;
+                                const nextVal = current + 5000;
+                                handlePresetChange(idx, {
+                                  amount: nextVal,
+                                  price: `${Math.round(nextVal / 1000)}K`
+                                });
                               }}
-                              placeholder="5.000"
-                              className="w-full pl-8 pr-2.5 py-1.5 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-mono font-bold text-neutral-900 focus:border-neutral-900 focus:bg-white outline-none"
-                            />
+                              className="h-8 px-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-lg text-[10px] font-bold font-mono transition-colors shrink-0 cursor-pointer"
+                              title="Tambah Rp 5.000"
+                            >
+                              +5K
+                            </button>
                           </div>
+
+                          {isBelowMin && (
+                            <p className="text-[10px] text-rose-500 font-medium mt-1 flex items-center gap-1">
+                              <AlertCircle className="w-3 h-3 shrink-0" />
+                              <span>Di bawah Rp 5.000 tidak bisa (klik luar untuk reset 5K)</span>
+                            </p>
+                          )}
                         </div>
                       </div>
                     );
