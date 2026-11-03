@@ -2629,32 +2629,44 @@ export default function BarberDashboard() {
                 </div>
               </div>
 
-              {/* 1. HERO CARD: SALDO DOMPET & TOTAL OMSET */}
-              <div className="bg-[#18181B] text-white p-6 sm:p-7 rounded-2xl border border-neutral-800 shadow-md">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-neutral-800">
-                  <div>
-                    <span className="text-xs font-semibold uppercase tracking-wider text-neutral-400 block mb-1">
-                      Saldo Siap Ditarik (Dompet Capster)
-                    </span>
-                    <div className="flex items-baseline gap-2">
-                      <h1 className="font-display font-black text-3xl sm:text-4xl text-emerald-400 tracking-tight">
+              {/* 1. HERO CARD: SALDO DOMPET & TOTAL OMSET (ELEGANT LIGHT FINTECH THEME) */}
+              <div className="bg-white p-6 sm:p-7 rounded-2xl border border-neutral-200/90 shadow-sm relative overflow-hidden space-y-6">
+                {/* Top Subtle Brand Gradient Line */}
+                <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-[#285844] via-emerald-500 to-amber-500" />
+                
+                {/* Ambient Soft Mesh Glow */}
+                <div className="absolute -right-20 -top-20 w-64 h-64 bg-emerald-50/60 rounded-full blur-3xl pointer-events-none" />
+                <div className="absolute -left-20 -bottom-20 w-64 h-64 bg-amber-50/40 rounded-full blur-3xl pointer-events-none" />
+
+                <div className="relative flex flex-col sm:flex-row sm:items-center justify-between gap-5 pb-6 border-b border-neutral-100">
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200/80 text-[11px] font-bold">
+                        <Wallet className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>Saldo Siap Ditarik</span>
+                      </span>
+                      <span className="text-[11px] text-neutral-400 font-medium">Dompet Capster</span>
+                    </div>
+
+                    <div className="flex items-baseline gap-2 pt-1">
+                      <h1 className="font-display font-black text-3xl sm:text-4xl text-[#171717] tracking-tight">
                         {formatRupiah(availableBalance)}
                       </h1>
                     </div>
-                    <span className="text-xs text-neutral-400 mt-1 block">
-                      Total omset masuk dikurangi penarikan yang sudah dicairkan ke rekening.
-                    </span>
+                    <p className="text-xs text-neutral-500">
+                      Total omset masuk dikurangi penarikan yang sudah dicairkan ke rekening kamu.
+                    </p>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <div className="flex flex-wrap items-center gap-2.5 sm:justify-end shrink-0">
                     <button
                       type="button"
                       onClick={handleOpenWithdrawModal}
                       disabled={availableBalance < 20000}
-                      className={`px-5 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 transition-all cursor-pointer ${
+                      className={`px-5 py-3 rounded-xl font-bold text-xs flex items-center gap-2 transition-all shadow-sm ${
                         availableBalance >= 20000
-                          ? 'bg-emerald-500 hover:bg-emerald-400 text-black shadow-sm'
-                          : 'bg-neutral-800 text-neutral-500 cursor-not-allowed border border-neutral-700'
+                          ? 'bg-[#285844] hover:bg-[#1E4334] text-white cursor-pointer active:scale-95 shadow-emerald-900/10'
+                          : 'bg-neutral-100 text-neutral-400 border border-neutral-200 cursor-not-allowed'
                       }`}
                     >
                       <ArrowDownToLine className="w-4 h-4" />
@@ -2663,44 +2675,68 @@ export default function BarberDashboard() {
                   </div>
                 </div>
 
-                {/* 3 Sumber Rincian */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-5">
-                  <div className="bg-neutral-900/90 p-4 rounded-xl border border-neutral-800">
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-400 mb-0.5">
-                      <Scissors className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>Omset Booking</span>
+                {/* 3 Sumber Rincian Pendapatan (Color Coded & Modern) */}
+                <div className="relative grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+                  {/* Omset Booking */}
+                  <div className="bg-gradient-to-br from-emerald-50/70 to-emerald-50/20 p-4 rounded-xl border border-emerald-100 hover:border-emerald-200 transition-all">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-900">
+                        <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                          <Scissors className="w-3.5 h-3.5" />
+                        </span>
+                        <span>Omset Booking</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100/80 text-emerald-800">
+                        Layanan
+                      </span>
                     </div>
-                    <div className="font-display font-bold text-lg text-white">
+                    <div className="font-display font-extrabold text-xl text-[#171717]">
                       {formatRupiah(totalBookingRevenue)}
                     </div>
-                    <span className="text-[11px] text-neutral-500 mt-0.5 block">
-                      {paidBookings.length} booking terbayar
+                    <span className="text-[11px] text-emerald-700/80 font-medium mt-1 block">
+                      {paidBookings.length} booking terbayar QRIS
                     </span>
                   </div>
 
-                  <div className="bg-neutral-900/90 p-4 rounded-xl border border-neutral-800">
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-400 mb-0.5">
-                      <Coffee className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Total Tip Kopi</span>
+                  {/* Total Tip Kopi */}
+                  <div className="bg-gradient-to-br from-amber-50/70 to-amber-50/20 p-4 rounded-xl border border-amber-100 hover:border-amber-200 transition-all">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-amber-900">
+                        <span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                          <Coffee className="w-3.5 h-3.5" />
+                        </span>
+                        <span>Total Tip Kopi</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100/80 text-amber-800">
+                        Sawer
+                      </span>
                     </div>
-                    <div className="font-display font-bold text-lg text-amber-400">
+                    <div className="font-display font-extrabold text-xl text-amber-900">
                       {formatRupiah(totalTipRevenue)}
                     </div>
-                    <span className="text-[11px] text-neutral-500 mt-0.5 block">
-                      {tipsList.length} apresiasi masuk
+                    <span className="text-[11px] text-amber-700/80 font-medium mt-1 block">
+                      {tipsList.length} apresiasi pelanggan
                     </span>
                   </div>
 
-                  <div className="bg-neutral-900/90 p-4 rounded-xl border border-neutral-800">
-                    <div className="flex items-center gap-1.5 text-xs text-neutral-400 mb-0.5">
-                      <ArrowDownToLine className="w-3.5 h-3.5 text-neutral-400" />
-                      <span>Sudah Dicairkan</span>
+                  {/* Sudah Dicairkan */}
+                  <div className="bg-gradient-to-br from-neutral-50 to-neutral-50/40 p-4 rounded-xl border border-neutral-200/80 hover:border-neutral-300 transition-all">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-neutral-700">
+                        <span className="w-6 h-6 rounded-lg bg-neutral-200/80 text-neutral-700 flex items-center justify-center shrink-0">
+                          <ArrowDownToLine className="w-3.5 h-3.5" />
+                        </span>
+                        <span>Sudah Dicairkan</span>
+                      </div>
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-600">
+                        Payout
+                      </span>
                     </div>
-                    <div className="font-display font-bold text-lg text-neutral-300">
+                    <div className="font-display font-extrabold text-xl text-neutral-900">
                       {formatRupiah(totalWithdrawn)}
                     </div>
-                    <span className="text-[11px] text-neutral-500 mt-0.5 block">
-                      {(barber?.withdrawalsHistory || []).length} kali penarikan
+                    <span className="text-[11px] text-neutral-500 font-medium mt-1 block">
+                      {(barber?.withdrawalsHistory || []).length} kali penarikan dana
                     </span>
                   </div>
                 </div>
@@ -2782,7 +2818,7 @@ export default function BarberDashboard() {
                   <div className="flex justify-end pt-1">
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-[#171717] hover:bg-neutral-800 text-white text-xs font-semibold rounded-lg cursor-pointer transition-colors"
+                      className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white text-xs font-semibold rounded-xl cursor-pointer transition-colors shadow-sm"
                     >
                       Simpan Rekening Pencairan
                     </button>
@@ -2849,35 +2885,50 @@ export default function BarberDashboard() {
 
               {/* 4. METRICS GRID */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm">
-                  <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold block mb-1">
-                    Total Reservasi Masuk
-                  </span>
+                <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 hover:border-neutral-300 shadow-2xs hover:shadow-xs transition-all space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold">
+                      Total Reservasi
+                    </span>
+                    <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center">
+                      <Calendar className="w-3.5 h-3.5 text-[#285844]" />
+                    </span>
+                  </div>
                   <div className="font-display font-extrabold text-3xl text-[#171717]">
                     {barberBookings.length}
                   </div>
-                  <span className="text-[11px] text-neutral-500 font-medium mt-1 block">
-                    {paidBookings.length} terbayar • {barberBookings.length - paidBookings.length} menunggu
+                  <span className="text-[11px] text-neutral-500 font-medium block">
+                    <span className="text-emerald-700 font-bold">{paidBookings.length}</span> terbayar • {barberBookings.length - paidBookings.length} menunggu
                   </span>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm">
-                  <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold block mb-1">
-                    Rata-rata Nilai Pesanan
-                  </span>
+                <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 hover:border-neutral-300 shadow-2xs hover:shadow-xs transition-all space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold">
+                      Rata-rata Pesanan
+                    </span>
+                    <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center">
+                      <TrendingUp className="w-3.5 h-3.5 text-[#285844]" />
+                    </span>
+                  </div>
                   <div className="font-display font-extrabold text-2xl text-[#285844]">
                     {formatRupiah(paidBookings.length > 0 ? Math.round(totalBookingRevenue / paidBookings.length) : 0)}
                   </div>
-                  <span className="text-[11px] text-neutral-500 font-medium mt-1 block">
-                    per transaksi reservasi
+                  <span className="text-[11px] text-neutral-500 font-medium block">
+                    per transaksi reservasi cukur
                   </span>
                 </div>
 
-                <div className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm">
-                  <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold block mb-1">
-                    Layanan Terpopuler
-                  </span>
-                  <div className="font-display font-bold text-base text-[#171717] truncate mt-1">
+                <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 hover:border-neutral-300 shadow-2xs hover:shadow-xs transition-all space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold">
+                      Layanan Terpopuler
+                    </span>
+                    <span className="w-7 h-7 rounded-lg bg-amber-50 text-amber-800 flex items-center justify-center">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+                    </span>
+                  </div>
+                  <div className="font-display font-bold text-base text-[#171717] truncate">
                     {(() => {
                       const counts = {};
                       barberBookings.forEach(b => {
@@ -2888,8 +2939,8 @@ export default function BarberDashboard() {
                       return top || (barber.services?.[0]?.name || 'Belum ada pesanan');
                     })()}
                   </div>
-                  <span className="text-[11px] text-neutral-500 font-medium block mt-1">
-                    Paling sering dipesan pelanggan
+                  <span className="text-[11px] text-neutral-500 font-medium block">
+                    Paling sering dipilih pelanggan
                   </span>
                 </div>
               </div>
@@ -2909,7 +2960,7 @@ export default function BarberDashboard() {
                         <div 
                           style={{ height: `${Math.max(12, (bar.count / weeklyChartData.maxVal) * 100)}%` }}
                           className={`w-full max-w-[36px] rounded-t-lg transition-all ${
-                            bar.count > 0 ? 'bg-[#285844] hover:bg-[#1E4334]' : 'bg-neutral-200'
+                            bar.count > 0 ? 'bg-gradient-to-t from-[#285844] to-emerald-500 hover:to-emerald-400' : 'bg-neutral-200/80'
                           }`}
                         />
                         <span className="text-[11px] font-semibold text-neutral-600">{bar.day}</span>
@@ -3805,21 +3856,24 @@ export default function BarberDashboard() {
                 </p>
               </div>
 
-              {/* Saldo Dompet Info Card */}
-              <div className="p-4 rounded-xl bg-neutral-900 text-white mb-4">
-                <div className="flex items-center justify-between text-xs text-neutral-400 mb-1">
-                  <span>Saldo Siap Ditarik</span>
-                  <span className="text-[11px] text-neutral-300">Min. penarikan Rp 20.000</span>
+              {/* Saldo Dompet Info Card (Light Emerald Theme) */}
+              <div className="p-4 rounded-xl bg-gradient-to-br from-emerald-50/90 via-emerald-50/50 to-teal-50/40 border border-emerald-200/80 mb-4">
+                <div className="flex items-center justify-between text-xs text-emerald-900 font-semibold mb-1">
+                  <span className="flex items-center gap-1.5">
+                    <Wallet className="w-3.5 h-3.5 text-emerald-700" />
+                    <span>Saldo Siap Ditarik</span>
+                  </span>
+                  <span className="text-[10.5px] text-emerald-800 bg-emerald-100/90 px-2 py-0.5 rounded-md font-bold">Min. Rp 20.000</span>
                 </div>
-                <div className="flex items-baseline justify-between gap-2">
-                  <span className="font-display font-bold text-2xl tracking-tight text-emerald-400">
+                <div className="flex items-baseline justify-between gap-2 mt-1">
+                  <span className="font-display font-black text-2xl tracking-tight text-[#171717]">
                     {formatRupiah(availableBalance)}
                   </span>
                   {availableBalance >= 20000 && (
                     <button
                       type="button"
                       onClick={() => setWithdrawAmount(String(availableBalance))}
-                      className="text-xs font-semibold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                      className="text-xs font-bold text-[#285844] hover:text-[#1E4334] underline underline-offset-2 transition-colors cursor-pointer"
                     >
                       Tarik Semua
                     </button>
@@ -3861,7 +3915,7 @@ export default function BarberDashboard() {
                           onClick={() => setWithdrawAmount(String(amt))}
                           className={`text-xs px-2.5 py-1 rounded-md font-medium border transition-colors cursor-pointer ${
                             Number(withdrawAmount) === amt 
-                              ? 'bg-neutral-900 text-white border-neutral-900'
+                              ? 'bg-[#285844] text-white border-[#285844] shadow-xs'
                               : isAvailable 
                                 ? 'bg-neutral-50 hover:bg-neutral-100 text-neutral-700 border-neutral-200' 
                                 : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'
@@ -3980,7 +4034,7 @@ export default function BarberDashboard() {
                       !withdrawAccNumber.trim() || 
                       !withdrawAccHolder.trim()
                     }
-                    className="px-5 py-2 bg-[#171717] hover:bg-neutral-800 disabled:bg-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-lg cursor-pointer transition-colors"
+                    className="px-5 py-2.5 bg-[#285844] hover:bg-[#1E4334] disabled:bg-neutral-200 disabled:text-neutral-400 disabled:cursor-not-allowed text-white text-xs font-semibold rounded-xl cursor-pointer transition-colors shadow-sm"
                   >
                     Kirim Penarikan
                   </button>
