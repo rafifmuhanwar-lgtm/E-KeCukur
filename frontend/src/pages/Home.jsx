@@ -12,7 +12,9 @@ import {
   ArrowRight,
   Calendar,
   BarChart2,
-  Store
+  Store,
+  Crown,
+  ShieldCheck
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Logo from '../components/Logo';
@@ -99,6 +101,7 @@ export default function Home() {
   const [usernameInput, setUsernameInput] = useState('');
   const [usernameError, setUsernameError] = useState('');
   const [usernameSuccess, setUsernameSuccess] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState('free');
 
   // Live Product Preview Persona Tab
   const [previewPersona, setPreviewPersona] = useState('reza'); // 'reza' | 'studio' | 'asgar'
@@ -144,7 +147,7 @@ export default function Home() {
     setUsernameSuccess(true);
     // Navigate to register flow with prefilled slug
     setTimeout(() => {
-      navigate(`/daftar?slug=${usernameInput.trim()}`);
+      navigate(`/daftar?slug=${usernameInput.trim()}${selectedPlan && selectedPlan !== 'free' ? `&plan=${selectedPlan}` : ''}`);
     }, 400);
   };
 
@@ -1004,30 +1007,30 @@ export default function Home() {
       {/* ━━━ 9. PRICING (HONEST & TRANSPARENT) ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <section id="harga" className="scroll-mt-20 py-16 sm:py-24 bg-white border-y border-neutral-200">
-        <div className="max-w-4xl mx-auto px-4 sm:px-6">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
           
-          <div className="text-center max-w-xl mx-auto mb-14">
+          <div className="text-center max-w-2xl mx-auto mb-14">
             <span className="text-xs font-mono uppercase tracking-widest text-[#285844] font-semibold">
               Pilihan Paket
             </span>
             <h2 className="text-2xl sm:text-4xl font-display font-extrabold text-[#171717] tracking-tight mt-2 mb-3">
-              Mulai Tanpa Biaya Berlangganan
+              Pilih Paket Sesuai Kebutuhan Bisnismu
             </h2>
             <p className="text-sm text-neutral-600">
-              Gunakan paket gratis selamanya. Tingkatkan ke paket Pro ketika bisnis cukurmu butuh fitur analitik lanjutan.
+              Mulai gratis dengan fitur esensial, atau pilih paket Capster dan Barber untuk skala bisnis yang lebih profesional.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-stretch">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
             
-            {/* Plan Gratis */}
-            <div className="p-6 sm:p-8 rounded-3xl bg-[#F7F6F2] border-2 border-[#285844] shadow-sm flex flex-col justify-between">
+            {/* 1. PLAN FREE */}
+            <div className="p-6 sm:p-7 rounded-3xl bg-white border border-neutral-300 shadow-xs flex flex-col justify-between hover:border-neutral-400 transition-all">
               <div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D9E5DC] text-[#285844] text-xs font-semibold mb-4">
-                  <span>Paling Populer</span>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-100 text-neutral-700 text-xs font-semibold mb-4">
+                  <span>Gratis Selamanya</span>
                 </div>
-                <h3 className="font-display font-bold text-2xl text-[#171717] mb-1">Paket Gratis</h3>
-                <p className="text-xs text-neutral-600 mb-6">Cocok untuk capster individu & pangkas rambut yang baru mulai.</p>
+                <h3 className="font-display font-bold text-2xl text-[#171717] mb-1">Paket Free</h3>
+                <p className="text-xs text-neutral-600 mb-6">Cocok untuk barber pemula yang baru memulai digitalisasi profil.</p>
                 
                 <div className="flex items-baseline gap-1 mb-6">
                   <span className="text-4xl font-display font-extrabold text-[#171717]">Rp 0</span>
@@ -1035,90 +1038,197 @@ export default function Home() {
                 </div>
 
                 <ul className="space-y-3 text-sm text-neutral-700 mb-8">
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <span>Halaman profil publik <strong className="text-neutral-900">{appDomain}/namamu</strong></span>
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Menu layanan & transparansi harga</span>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Maksimal <strong>10 menu layanan</strong> cukur</span>
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Portfolio foto hingga 6 hasil cukuran</span>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Maksimal <strong>10 foto portofolio</strong> haircut</span>
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <span>Sistem booking jadwal otomatis langsung di web</span>
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span>Pilihan kontak chat WhatsApp & tautan medsos</span>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Pembayaran reservasi 100% Cashless QRIS</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Fitur sawer tip kopi digital standar</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Penarikan saldo omset ke rekening bank</span>
                   </li>
                 </ul>
               </div>
 
               <button
                 onClick={() => {
+                  setSelectedPlan('free');
                   const el = document.getElementById('claim-box');
-                  if (el) el.scrollIntoView({ behavior: 'smooth' });
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth' });
+                    const input = el.querySelector('input');
+                    if (input) input.focus();
+                  }
                 }}
-                className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-sm rounded-xl transition-colors shadow-sm"
+                className="w-full py-3.5 bg-neutral-900 hover:bg-neutral-800 text-white font-semibold text-sm rounded-xl transition-colors shadow-sm cursor-pointer"
               >
                 Mulai Gratis Sekarang
               </button>
             </div>
 
-            {/* Plan Pro (Proposed Concept / Beta) */}
-            <div className="p-6 sm:p-8 rounded-3xl bg-white border border-neutral-300 flex flex-col justify-between">
+            {/* 2. PLAN CAPSTER (POPULAR HIGHLIGHT) */}
+            <div className="p-6 sm:p-7 rounded-3xl bg-[#F7F6F2] border-2 border-[#285844] shadow-md flex flex-col justify-between relative">
+              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                <span className="px-3.5 py-1 rounded-full bg-[#285844] text-white text-[11px] font-bold tracking-wide shadow-sm flex items-center gap-1">
+                  <Sparkles className="w-3 h-3 text-amber-300" />
+                  <span>Paling Populer</span>
+                </span>
+              </div>
+
               <div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-neutral-100 text-neutral-600 text-xs font-semibold mb-4">
-                  <span>Tahap Beta / Rencana</span>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D9E5DC] text-[#285844] text-xs font-bold mb-4 mt-1">
+                  <span>Capster Mandiri & Home Service</span>
                 </div>
-                <h3 className="font-display font-bold text-2xl text-[#171717] mb-1">Paket Pro</h3>
-                <p className="text-xs text-neutral-600 mb-6">Untuk barbershop komersial yang membutuhkan analitik dan branding penuh.</p>
+                <h3 className="font-display font-bold text-2xl text-[#171717] mb-1">Paket Capster</h3>
+                <p className="text-xs text-neutral-600 mb-6">Untuk capster profesional, stylist mandiri & barber panggilan.</p>
                 
                 <div className="flex items-baseline gap-1 mb-6">
                   <span className="text-4xl font-display font-extrabold text-[#171717]">Rp 49.000</span>
-                  <span className="text-xs font-mono text-neutral-500">/ bulan (estimasi)</span>
+                  <span className="text-xs font-mono text-neutral-500">/ bulan</span>
                 </div>
 
-                <ul className="space-y-3 text-sm text-neutral-600 mb-8">
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-[#285844] shrink-0" />
-                    <span>Semua fitur dalam Paket Gratis</span>
+                <ul className="space-y-3 text-sm text-neutral-700 mb-8">
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span><strong>Semua fitur dalam Paket Free</strong></span>
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-[#285844] shrink-0" />
-                    <span>Dukungan custom domain pribadi</span>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Menu layanan cukur <strong>tanpa batas (Unlimited)</strong></span>
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-[#285844] shrink-0" />
-                    <span>Portfolio foto haircut tanpa batas</span>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Portofolio foto haircut <strong>tanpa batas (Unlimited)</strong></span>
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-[#285844] shrink-0" />
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Mode Home Service & radius area panggilan</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Badge Capster Terverifikasi (Centang Emas Pro)</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Kustomisasi tema warna bio link eksklusif</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Preset sawer tip kopi bebas & fleksibel</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <span>Statistik tayangan profil & klik tautan</span>
                   </li>
-                  <li className="flex items-center gap-2.5">
-                    <Check className="w-4 h-4 text-[#285844] shrink-0" />
+                </ul>
+              </div>
+
+              <button
+                onClick={() => {
+                  setSelectedPlan('capster');
+                  const el = document.getElementById('claim-box');
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth' });
+                    const input = el.querySelector('input');
+                    if (input) input.focus();
+                  }
+                }}
+                className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-sm rounded-xl transition-all shadow-sm cursor-pointer active:scale-98"
+              >
+                Pilih Paket Capster
+              </button>
+            </div>
+
+            {/* 3. PLAN BARBER (STUDIO & BUSINESS) */}
+            <div className="p-6 sm:p-7 rounded-3xl bg-white border border-neutral-300 shadow-xs flex flex-col justify-between hover:border-neutral-400 transition-all">
+              <div>
+                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold mb-4">
+                  <Crown className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Studio & Barbershop</span>
+                </div>
+                <h3 className="font-display font-bold text-2xl text-[#171717] mb-1">Paket Barber</h3>
+                <p className="text-xs text-neutral-600 mb-6">Untuk pemilik barbershop fisik dengan kursi & tim capster.</p>
+                
+                <div className="flex items-baseline gap-1 mb-6">
+                  <span className="text-4xl font-display font-extrabold text-[#171717]">Rp 99.000</span>
+                  <span className="text-xs font-mono text-neutral-500">/ bulan</span>
+                </div>
+
+                <ul className="space-y-3 text-sm text-neutral-700 mb-8">
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span><strong>Semua fitur dalam Paket Capster</strong></span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Manajemen multi-capster & tim barbershop</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Pelanggan bebas pilih capster saat booking</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Rekap finansial & bagi hasil komisi otomatis</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Pengaturan jadwal kerja & shift operasional</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Kit cetak standee QR Code akrilik meja siap print</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                    <span>Ekspor laporan keuangan (Excel / CSV)</span>
+                  </li>
+                  <li className="flex items-start gap-2.5">
+                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
                     <span>Tanpa watermark branding E Cukur</span>
                   </li>
                 </ul>
               </div>
 
               <button
-                onClick={() => alert('Paket Pro sedang dalam tahap persiapan. Kamu tetap bisa menggunakan semua fitur Paket Gratis saat ini!')}
-                className="w-full py-3.5 border border-neutral-300 hover:border-neutral-500 text-neutral-800 font-semibold text-sm rounded-xl transition-colors"
+                onClick={() => {
+                  setSelectedPlan('barber');
+                  const el = document.getElementById('claim-box');
+                  if (el) {
+                    el.scrollIntoView({ behavior: 'smooth' });
+                    const input = el.querySelector('input');
+                    if (input) input.focus();
+                  }
+                }}
+                className="w-full py-3.5 border-2 border-[#285844] text-[#285844] hover:bg-[#285844] hover:text-white font-semibold text-sm rounded-xl transition-all cursor-pointer active:scale-98"
               >
-                Gabung Waitlist Pro
+                Pilih Paket Barber
               </button>
             </div>
 
           </div>
 
-          <p className="text-center text-xs text-neutral-500 mt-6">
-            *Tidak ada komitmen kartu kredit atau biaya tersembunyi.
+          <p className="text-center text-xs text-neutral-500 mt-8">
+            *Tidak ada komitmen kartu kredit atau biaya tersembunyi. Dapat berganti paket kapan saja.
           </p>
 
         </div>
