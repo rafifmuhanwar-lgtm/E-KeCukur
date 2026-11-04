@@ -139,6 +139,7 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
       accountNumber: '',
       accountHolder: ''
     },
+    plan: row.plan || 'free',
     stats: {
       views: 0,
       whatsappClicks: 0,
@@ -156,6 +157,7 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
         if (!row.features && cached.features) barberObj.features = cached.features;
         if (!row.tipping_config && cached.tippingConfig) barberObj.tippingConfig = cached.tippingConfig;
         if (row.tip_balance === undefined && cached.tipBalance !== undefined) barberObj.tipBalance = cached.tipBalance;
+        if (!row.plan && cached.plan) barberObj.plan = cached.plan;
       }
     }
   } catch {}
@@ -957,7 +959,8 @@ export const useStore = create((set, get) => ({
       lookbook: target.lookbook,
       custom_links: target.customLinks,
       team_members: target.teamMembers,
-      services: target.services
+      services: target.services,
+      plan: target.plan || 'free'
     };
 
     await saveBarberPayloadToSupabase(target.id || barberId, payload);

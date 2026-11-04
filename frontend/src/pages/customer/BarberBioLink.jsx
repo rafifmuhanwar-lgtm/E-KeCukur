@@ -16,6 +16,7 @@ import {
   ExternalLink,
   Users,
   Star,
+  Crown,
   Globe,
   Heart,
   Bookmark,
@@ -723,10 +724,25 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
             </div>
 
             {/* Name with Verified Badge */}
-            <h1 className={`font-display font-black ${isPreview ? 'text-base' : 'text-xl sm:text-2xl'} tracking-tight flex items-center justify-center gap-1.5 mt-2.5`}>
-              <span>{barber.name}</span>
-              <CheckCircle2 className={`${isPreview ? 'w-4 h-4' : 'w-5 h-5'} text-[#285844] fill-[#285844] stroke-white inline-block shrink-0`} />
-            </h1>
+            <div className="flex flex-col items-center justify-center mt-2.5">
+              <h1 className={`font-display font-black ${isPreview ? 'text-base' : 'text-xl sm:text-2xl'} tracking-tight flex items-center justify-center gap-1.5`}>
+                <span>{barber.name}</span>
+                <CheckCircle2 className={`${isPreview ? 'w-4 h-4' : 'w-5 h-5'} text-[#285844] fill-[#285844] stroke-white inline-block shrink-0`} />
+              </h1>
+
+              {/* Plan Badge: Capster Pro / Official Studio */}
+              {barber.plan === 'barber' ? (
+                <span className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs" title="Official Studio Barbershop">
+                  <Crown className="w-3 h-3 text-amber-600 shrink-0" />
+                  <span>Official Studio</span>
+                </span>
+              ) : barber.plan === 'capster' ? (
+                <span className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs" title="Capster Terverifikasi Pro">
+                  <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
+                  <span>Verified Capster Pro</span>
+                </span>
+              ) : null}
+            </div>
 
             {/* Handle (@username) */}
             <p className={`font-mono ${isPreview ? 'text-[10px]' : 'text-xs'} mt-0.5 text-neutral-500 font-medium`}>

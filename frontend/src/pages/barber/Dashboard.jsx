@@ -42,7 +42,9 @@ import {
   ShieldCheck,
   ToggleLeft,
   ToggleRight,
-  AlertCircle
+  AlertCircle,
+  Crown,
+  Download
 } from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
@@ -372,6 +374,11 @@ export default function BarberDashboard() {
   };
 
   const handleApplyPreset = (type) => {
+    if (type === 'barbershop' && !isBarberPlan) {
+      setIsUpgradeModalOpen(true);
+      showToast('Mode Barbershop & Studio eksklusif untuk Paket Barber (Rp 99.000/bln)');
+      return;
+    }
     if (type === 'barber') {
       updateBarber(barber.id, {
         profileType: 'barber',
@@ -557,6 +564,58 @@ export default function BarberDashboard() {
 
   // ─── WITHDRAWAL / PENCAIRAN SALDO STATE (MIN. RP 15.000) ───
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+  // ─── SUBSCRIPTION PLAN & QUOTA HELPERS ───
+  const currentPlan = barber.plan || 'free';
+  const isFreePlan = currentPlan === 'free';
+  const isCapsterPlan = currentPlan === 'capster';
+  const isBarberPlan = currentPlan === 'barber';
+
+  const serviceCount = (barber.services || []).length;
+  const isServiceLimitReached = isFreePlan && serviceCount >= 10;
+
+  const lookbookCount = (barber.lookbook || []).length;
+  const isLookbookLimitReached = isFreePlan && lookbookCount >= 10;
+
+  const handleSwitchPlan = async (targetPlan) => {
+    try {
+      await updateBarber(barber.id, { plan: targetPlan });
+      const planNames = { free: 'Paket Free', capster: 'Paket Capster (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
+      showToast(`✓ Berhasil beralih ke ${planNames[targetPlan] || targetPlan}`);
+      setIsUpgradeModalOpen(false);
+    } catch {
+      showToast('Gagal mengubah paket berlangganan');
+    }
+  };
+
+  const handleExportCSV = () => {
+    if (!combinedRecentTransactions || combinedRecentTransactions.length === 0) {
+      showToast('Belum ada data transaksi untuk diekspor');
+      return;
+    }
+
+    const headers = ['ID Transaksi', 'Tanggal & Waktu', 'Tipe', 'Deskripsi / Layanan', 'Nama Pelanggan', 'Nominal (Rp)', 'Status'];
+    const rows = combinedRecentTransactions.map(tx => [
+      `"${tx.id}"`,
+      `"${new Date(tx.date).toLocaleString('id-ID')}"`,
+      `"${tx.badge || tx.type}"`,
+      `"${(tx.title || '').replace(/"/g, '""')}"`,
+      `"${(tx.customerName || '').replace(/"/g, '""')}"`,
+      Number(tx.amount || 0),
+      `"${tx.status || 'Berhasil'}"`
+    ]);
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `laporan_transaksi_${barber.slug || 'barber'}_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('✓ Laporan keuangan berhasil diunduh (CSV)');
+  };
   const [withdrawAmount, setWithdrawAmount] = useState('');
   const [withdrawBank, setWithdrawBank] = useState(barber?.payoutAccount?.bankName || 'BCA');
   const [withdrawAccNumber, setWithdrawAccNumber] = useState(barber?.payoutAccount?.accountNumber || '');
@@ -739,6 +798,11 @@ export default function BarberDashboard() {
   // ─── LOOKBOOK / PORTOFOLIO FILE COMPRESSION & SELECTION ───
   const handleLookbookFileSelect = async (file) => {
     if (!file) return;
+    if (isLookbookLimitReached) {
+      setIsUpgradeModalOpen(true);
+      showToast('Batas kuota 10 foto portofolio untuk Paket Free telah tercapai. Upgrade ke Capster untuk unlimited!');
+      return;
+    }
     if (!file.type?.startsWith('image/') && !file.name?.match(/\.(jpe?g|png|webp|gif|bmp)$/i)) {
       showToast('Harap pilih file gambar yang valid');
       return;
@@ -787,6 +851,11 @@ export default function BarberDashboard() {
 
   // Service Handlers
   const handleOpenAddService = () => {
+    if (isServiceLimitReached) {
+      setIsUpgradeModalOpen(true);
+      showToast('Batas kuota 10 layanan untuk Paket Free telah tercapai. Upgrade ke Capster untuk unlimited!');
+      return;
+    }
     setEditingServiceId(null);
     setNewServiceName('');
     setNewServicePrice('');
@@ -1037,6 +1106,40 @@ export default function BarberDashboard() {
             <span className="hidden sm:inline">Buka Link Bio</span>
             <span className="sm:hidden text-[11px]">Bio</span>
           </a>
+
+          {/* Plan Badge & Upgrade Trigger */}
+          <button
+            type="button"
+            onClick={() => setIsUpgradeModalOpen(true)}
+            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 shadow-2xs ${
+              isBarberPlan
+                ? 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                : isCapsterPlan
+                  ? 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'
+                  : 'bg-neutral-100 text-neutral-700 border border-neutral-200 hover:bg-neutral-200'
+            }`}
+            title="Kelola Paket Berlangganan"
+          >
+            {isBarberPlan ? (
+              <>
+                <Crown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                <span className="hidden sm:inline">Barber Studio</span>
+                <span className="sm:hidden">Studio</span>
+              </>
+            ) : isCapsterPlan ? (
+              <>
+                <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span className="hidden sm:inline">Capster Pro</span>
+                <span className="sm:hidden">Pro</span>
+              </>
+            ) : (
+              <>
+                <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
+                <span>Free</span>
+                <span className="text-[10px] bg-[#285844] text-white px-1.5 py-0.2 rounded font-semibold">Upgrade</span>
+              </>
+            )}
+          </button>
 
           {/* Mobile Preview Button Toggle */}
           <button
@@ -1290,6 +1393,34 @@ export default function BarberDashboard() {
           {/* ══════════════════════════════════════════ */}
           {activeTab === 'team' && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
+              {!isBarberPlan ? (
+                <div className="bg-white p-8 sm:p-12 rounded-2xl border border-neutral-200 text-center max-w-lg mx-auto space-y-4 shadow-sm">
+                  <div className="w-16 h-16 rounded-2xl bg-amber-100 text-amber-800 flex items-center justify-center mx-auto shadow-2xs">
+                    <Crown className="w-8 h-8 text-amber-600" />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-amber-800 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                      Eksklusif Paket Barber (Rp 99K/bln)
+                    </span>
+                    <h3 className="font-display font-black text-xl text-[#171717] mt-3">
+                      Manajemen Tim & Multi-Capster
+                    </h3>
+                    <p className="text-xs text-neutral-600 leading-relaxed mt-1.5 max-w-sm mx-auto">
+                      Kelola profil seluruh staf capster tokomu, jadwal kerja terpisah, dan fitur pemilihan capster oleh pelanggan saat booking online.
+                    </p>
+                  </div>
+                  <div className="pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsUpgradeModalOpen(true)}
+                      className="px-6 py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl shadow-sm transition-transform active:scale-95 cursor-pointer"
+                    >
+                      Tingkatkan ke Paket Barber
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
               
               <div className="bg-white p-5 sm:p-6 rounded-2xl border border-neutral-200/90 shadow-2xs space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1366,6 +1497,9 @@ export default function BarberDashboard() {
                 )}
               </div>
 
+            
+                </>
+              )}
             </motion.div>
           )}
 
@@ -2257,6 +2391,33 @@ export default function BarberDashboard() {
                 </button>
               </div>
 
+              {/* Kuota Layanan Status Banner */}
+              <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-medium ${
+                isFreePlan 
+                  ? 'bg-amber-50/70 border-amber-200/80 text-amber-900' 
+                  : 'bg-emerald-50/70 border-emerald-200/80 text-emerald-900'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {isFreePlan ? <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" /> : <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+                  <span>
+                    {isFreePlan ? (
+                      <>Kuota Menu Layanan: <strong className="font-bold">{serviceCount}/10</strong> digunakan (Paket Free)</>
+                    ) : (
+                      <>Menu Layanan <strong>Unlimited</strong> (${serviceCount} aktif pada Paket ${isBarberPlan ? 'Barber' : 'Capster'})</>
+                    )}
+                  </span>
+                </div>
+                {isFreePlan && (
+                  <button
+                    type="button"
+                    onClick={() => setIsUpgradeModalOpen(true)}
+                    className="text-xs font-bold text-[#285844] hover:underline self-start sm:self-auto cursor-pointer"
+                  >
+                    Tingkatkan ke Unlimited →
+                  </button>
+                )}
+              </div>
+
               {/* Service Cards List */}
               <div className="space-y-3">
                 {(barber.services || []).length === 0 ? (
@@ -2340,7 +2501,7 @@ export default function BarberDashboard() {
           {activeTab === 'lookbook' && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               
-              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm flex items-center justify-between">
+              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
                   <h2 className="font-display font-bold text-lg text-[#171717]">Feed & Galeri Foto Bebas</h2>
                   <p className="text-xs text-neutral-500">
@@ -2349,12 +2510,46 @@ export default function BarberDashboard() {
                 </div>
                 <button
                   type="button"
-                  onClick={() => setIsAddLookbookOpen(true)}
-                  className="px-4 py-2.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-transform active:scale-95"
+                  onClick={() => {
+                    if (isLookbookLimitReached) {
+                      setIsUpgradeModalOpen(true);
+                      showToast('Batas kuota 10 foto portofolio untuk Paket Free telah tercapai');
+                      return;
+                    }
+                    setIsAddLookbookOpen(true);
+                  }}
+                  className="px-4 py-2.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 shrink-0"
                 >
                   <Plus className="w-4 h-4" />
                   <span>Tambah Foto Feed</span>
                 </button>
+              </div>
+
+              {/* Kuota Portofolio Status Banner */}
+              <div className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs font-medium ${
+                isFreePlan 
+                  ? 'bg-amber-50/70 border-amber-200/80 text-amber-900' 
+                  : 'bg-emerald-50/70 border-emerald-200/80 text-emerald-900'
+              }`}>
+                <div className="flex items-center gap-2">
+                  {isFreePlan ? <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" /> : <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
+                  <span>
+                    {isFreePlan ? (
+                      <>Kuota Foto Portofolio: <strong className="font-bold">{lookbookCount}/10</strong> diunggah (Paket Free)</>
+                    ) : (
+                      <>Portofolio Lookbook <strong>Unlimited</strong> ({lookbookCount} foto pada Paket {isBarberPlan ? 'Barber' : 'Capster'})</>
+                    )}
+                  </span>
+                </div>
+                {isFreePlan && (
+                  <button
+                    type="button"
+                    onClick={() => setIsUpgradeModalOpen(true)}
+                    className="text-xs font-bold text-[#285844] hover:underline self-start sm:self-auto cursor-pointer"
+                  >
+                    Tingkatkan ke Unlimited →
+                  </button>
+                )}
               </div>
 
               {/* Lookbook Grid (Instagram Style) */}
@@ -2613,11 +2808,20 @@ export default function BarberDashboard() {
                     Laporan terpadu seluruh pendapatan dari booking layanan cukur dan tip kopi pelanggan.
                   </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={handleExportCSV}
+                    className="px-3.5 py-2 bg-white hover:bg-neutral-50 text-neutral-700 border border-neutral-200 rounded-xl text-xs font-semibold flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                    title="Unduh laporan riwayat transaksi dalam format CSV"
+                  >
+                    <Download className="w-3.5 h-3.5 text-neutral-500" />
+                    <span>Ekspor CSV</span>
+                  </button>
                   <button
                     type="button"
                     onClick={handleOpenWithdrawModal}
-                    className="px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
+                    className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold flex items-center gap-2 shadow-sm transition-all cursor-pointer"
                   >
                     <ArrowDownToLine className="w-4 h-4" />
                     <span>Tarik Saldo</span>
@@ -3824,6 +4028,207 @@ export default function BarberDashboard() {
                 <BarberBioLink customBarber={previewBarber || barber} isPreview={true} />
               </div>
 
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* ━━━ MODAL: KELOLA & UPGRADE PAKET BERLANGGANAN ━━━ */}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <AnimatePresence>
+        {isUpgradeModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.96 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.96 }}
+              className="bg-white rounded-3xl p-6 sm:p-7 max-w-2xl w-full border border-neutral-200 shadow-2xl relative max-h-[90vh] overflow-y-auto"
+            >
+              <button 
+                onClick={() => setIsUpgradeModalOpen(false)}
+                className="absolute top-5 right-5 p-1.5 text-neutral-400 hover:text-black rounded-lg cursor-pointer transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="text-center max-w-md mx-auto mb-6">
+                <span className="text-[11px] font-mono uppercase tracking-wider text-[#285844] font-bold">
+                  Paket & Kuota Akun
+                </span>
+                <h3 className="font-display font-extrabold text-2xl text-[#171717] mt-1">
+                  Pilih Paket Sesuai Kebutuhan
+                </h3>
+                <p className="text-xs text-neutral-500 mt-1">
+                  Tingkatkan paket untuk menambah kuota layanan, portofolio tanpa batas, dan fitur tim barbershop.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                
+                {/* 1. Paket Free */}
+                <div className={`p-4 rounded-2xl border flex flex-col justify-between transition-all ${
+                  isFreePlan ? 'border-2 border-neutral-900 bg-neutral-50/60 shadow-xs' : 'border-neutral-200 bg-white'
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-neutral-800">Free</span>
+                      {isFreePlan && (
+                        <span className="px-2 py-0.5 rounded-full bg-neutral-900 text-white text-[9.5px] font-bold">
+                          Aktif
+                        </span>
+                      )}
+                    </div>
+                    <div className="font-display font-black text-xl text-[#171717] mb-2">
+                      Rp 0 <span className="text-[10px] text-neutral-400 font-mono font-normal">/selamanya</span>
+                    </div>
+                    <ul className="space-y-2 text-[11px] text-neutral-600 mb-4">
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Maks. <strong>10 layanan</strong></span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Maks. <strong>10 portofolio</strong></span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Booking & QRIS</span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Sawer Tip Kopi</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isFreePlan}
+                    onClick={() => handleSwitchPlan('free')}
+                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isFreePlan 
+                        ? 'bg-neutral-200 text-neutral-500 cursor-default' 
+                        : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
+                    }`}
+                  >
+                    {isFreePlan ? 'Paket Aktif' : 'Pilih Free'}
+                  </button>
+                </div>
+
+                {/* 2. Paket Capster */}
+                <div className={`p-4 rounded-2xl border-2 flex flex-col justify-between relative transition-all ${
+                  isCapsterPlan ? 'border-[#285844] bg-[#D9E5DC]/25 shadow-xs' : 'border-[#285844]/60 bg-white'
+                }`}>
+                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
+                    <span className="px-2.5 py-0.5 rounded-full bg-[#285844] text-white text-[9px] font-bold">
+                      🔥 Populer
+                    </span>
+                  </div>
+                  <div>
+                    <div className="flex items-center justify-between mb-2 mt-1">
+                      <span className="text-xs font-bold text-[#285844]">Capster Pro</span>
+                      {isCapsterPlan && (
+                        <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[9.5px] font-bold">
+                          Aktif
+                        </span>
+                      )}
+                    </div>
+                    <div className="font-display font-black text-xl text-[#171717] mb-2">
+                      Rp 49.000 <span className="text-[10px] text-neutral-400 font-mono font-normal">/bln</span>
+                    </div>
+                    <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
+                      <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Layanan <strong>Unlimited</strong></span>
+                      </li>
+                      <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Foto <strong>Unlimited</strong></span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Mode Home Service</span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Centang Emas Pro</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isCapsterPlan}
+                    onClick={() => handleSwitchPlan('capster')}
+                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isCapsterPlan 
+                        ? 'bg-emerald-200 text-emerald-900 cursor-default' 
+                        : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-sm'
+                    }`}
+                  >
+                    {isCapsterPlan ? 'Paket Aktif' : 'Pilih Capster'}
+                  </button>
+                </div>
+
+                {/* 3. Paket Barber */}
+                <div className={`p-4 rounded-2xl border flex flex-col justify-between transition-all ${
+                  isBarberPlan ? 'border-2 border-amber-500 bg-amber-50/40 shadow-xs' : 'border-neutral-200 bg-white'
+                }`}>
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-bold text-amber-900 flex items-center gap-1">
+                        <Crown className="w-3 h-3 text-amber-600" />
+                        <span>Barber Studio</span>
+                      </span>
+                      {isBarberPlan && (
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-bold">
+                          Aktif
+                        </span>
+                      )}
+                    </div>
+                    <div className="font-display font-black text-xl text-[#171717] mb-2">
+                      Rp 99.000 <span className="text-[10px] text-neutral-400 font-mono font-normal">/bln</span>
+                    </div>
+                    <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Semua fitur Capster</span>
+                      </li>
+                      <li className="flex items-center gap-1.5 font-semibold text-amber-900">
+                        <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span><strong>Tim Multi-Capster</strong></span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Pilih Capster saat booking</span>
+                      </li>
+                      <li className="flex items-center gap-1.5">
+                        <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>Ekspor CSV & Official Studio</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isBarberPlan}
+                    onClick={() => handleSwitchPlan('barber')}
+                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      isBarberPlan 
+                        ? 'bg-amber-200 text-amber-900 cursor-default' 
+                        : 'border-2 border-[#285844] text-[#285844] hover:bg-[#285844] hover:text-white'
+                    }`}
+                  >
+                    {isBarberPlan ? 'Paket Aktif' : 'Pilih Barber'}
+                  </button>
+                </div>
+
+              </div>
+
+              <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-center text-[11px] text-neutral-500">
+                💡 Kamu dapat berganti paket kapan saja. Perubahan paket dan batasan kuota berlaku seketika pada akun bio link kamu.
+              </div>
             </motion.div>
           </div>
         )}
