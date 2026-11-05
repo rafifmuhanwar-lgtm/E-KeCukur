@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /admin/
+Disallow: /barber/dashboard
+Disallow: /internal/
+
+Sitemap: https://ecukur.biz.id/sitemap.xml

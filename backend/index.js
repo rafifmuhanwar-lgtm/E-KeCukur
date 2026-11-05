@@ -12,8 +12,23 @@ dotenv.config({ path: path.join(__dirname, '.env') });
 
 const app = express();
 
+const allowedOrigins = [
+  'http://localhost:5173',
+  'http://127.0.0.1:5173',
+  'https://ecukur.biz.id',
+  'https://www.ecukur.biz.id',
+  'https://ecukur.vercel.app',
+  'https://e-cukur.vercel.app'
+];
+
 app.use(cors({
-  origin: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  origin: (origin, callback) => {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true);
+    }
+  },
   credentials: true
 }));
 app.use(express.json());
