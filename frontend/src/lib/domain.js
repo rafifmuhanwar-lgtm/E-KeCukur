@@ -9,5 +9,5 @@ export const getAppDomain = () => {
     }
     return window.location.host;
   }
-  return 'ecukur.id';
+  return 'ecukur.biz.id';
 };
