@@ -147,7 +147,7 @@ export default function CustomerBookings() {
           </div>
         ) : (
           <div className="space-y-4">
-            {bookings.map((b, i) => {
+            {bookings.filter(Boolean).map((b, i) => {
               const shortId = getShortId(b.id);
               const isConfirmed = b.status === 'Terkonfirmasi' || b.paymentStatus === 'PAID';
               const isCompleted = b.status === 'Selesai';

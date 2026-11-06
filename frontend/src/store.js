@@ -223,46 +223,54 @@ export const useStore = create((set, get) => ({
   initApp: async () => {
     set({ isLoading: true });
     
-    // 1. Cek sesi Auth Supabase
-    if (isSupabaseConfigured) {
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        let user = sessionData?.session?.user || null;
-        if (user?.is_anonymous) {
-          const { data: userData, error: userError } = await supabase.auth.getUser();
-          if (userError || !userData?.user) {
-            await supabase.auth.signOut().catch(() => {});
-            user = null;
-          } else {
-            user = userData.user;
+    try {
+      // 1. Cek sesi Auth Supabase
+      if (isSupabaseConfigured) {
+        try {
+          const { data: sessionData } = await supabase.auth.getSession();
+          let user = sessionData?.session?.user || null;
+          if (user?.is_anonymous) {
+            const { data: userData, error: userError } = await supabase.auth.getUser();
+            if (userError || !userData?.user) {
+              await supabase.auth.signOut().catch(() => {});
+              user = null;
+            } else {
+              user = userData.user;
+            }
           }
+          set({ authUser: user });
+
+          // Listen perubahan auth (login / logout di tab lain)
+          supabase.auth.onAuthStateChange(async (_event, session) => {
+            const u = session?.user || null;
+            set({ authUser: u });
+            if (u) {
+              get().matchActiveBarber(u);
+            } else {
+              set({ activeBarber: null, activeBarberId: null });
+            }
+          });
+        } catch (err) {
+          console.warn('Auth session check error:', err);
         }
-        set({ authUser: user });
-
-        // Listen perubahan auth (login / logout di tab lain)
-        supabase.auth.onAuthStateChange(async (_event, session) => {
-          const u = session?.user || null;
-          set({ authUser: u });
-          if (u) {
-            get().matchActiveBarber(u);
-          } else {
-            set({ activeBarber: null, activeBarberId: null });
-          }
-        });
-      } catch (err) {
-        console.warn('Auth session check error:', err);
       }
+
+      // 2. Fetch Services & Barbers dari Supabase (aman dengan fallback)
+      await get().fetchServicesFromSupabase().catch(() => []);
+      await get().fetchBarbersFromSupabase().catch(() => []);
+
+      // 3. Fetch Bookings dari Supabase & subscribe Realtime
+      await get().fetchBookingsFromSupabase().catch(() => []);
+      try {
+        get().subscribeToBookings();
+      } catch (subErr) {
+        console.warn('Realtime subscribe warning:', subErr);
+      }
+    } catch (globalErr) {
+      console.warn('initApp caught error:', globalErr);
+    } finally {
+      set({ isLoading: false });
     }
-
-    // 2. Fetch Services & Barbers dari Supabase
-    await get().fetchServicesFromSupabase();
-    await get().fetchBarbersFromSupabase();
-
-    // 3. Fetch Bookings dari Supabase & subscribe Realtime
-    await get().fetchBookingsFromSupabase();
-    get().subscribeToBookings();
-
-    set({ isLoading: false });
   },
 
   // Match barbershop profile dengan user yang sedang login (termasuk auto-provision untuk Google OAuth)

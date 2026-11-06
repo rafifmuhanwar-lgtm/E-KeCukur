@@ -57,13 +57,19 @@ const computeWeeklyChartData = (bookingsList) => {
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
   const now = Date.now();
   const last7 = [];
+  const list = Array.isArray(bookingsList) ? bookingsList : [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now - i * 24 * 60 * 60 * 1000);
     const dayName = days[d.getDay()];
     const isoDate = d.toISOString().split('T')[0];
-    const count = bookingsList.filter(b => {
-      if (!b.createdAt && !b.date) return false;
-      const bDate = b.createdAt ? b.createdAt.split('T')[0] : b.date;
+    const count = list.filter(b => {
+      if (!b) return false;
+      let bDate = '';
+      if (typeof b.createdAt === 'string') {
+        bDate = b.createdAt.split('T')[0];
+      } else if (typeof b.date === 'string') {
+        bDate = b.date;
+      }
       return bDate === isoDate;
     }).length;
     last7.push({ day: dayName, count });

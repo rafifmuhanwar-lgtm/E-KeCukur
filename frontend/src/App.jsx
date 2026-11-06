@@ -10,6 +10,7 @@ import BarberBioLink from './pages/customer/BarberBioLink';
 import Messages from './pages/Messages';
 import AdminMasterDashboard from './pages/admin/Dashboard';
 import DomainMigrationNotice from './components/DomainMigrationNotice';
+import ErrorBoundary from './components/ErrorBoundary';
 import { useStore } from './store';
 
 export default function App() {
@@ -27,38 +28,40 @@ export default function App() {
   }
 
   return (
-    <Router>
-      <Routes>
-        {/* Public Core Routes */}
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/register" element={<Login defaultTab="register" />} />
-        <Route path="/daftar" element={<Login defaultTab="register" />} />
-        <Route path="/internal" element={<Navigate to="/login" replace />} />
+    <ErrorBoundary>
+      <Router>
+        <Routes>
+          {/* Public Core Routes */}
+          <Route path="/" element={<Home />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Login defaultTab="register" />} />
+          <Route path="/daftar" element={<Login defaultTab="register" />} />
+          <Route path="/internal" element={<Navigate to="/login" replace />} />
 
-        {/* Customer Routes */}
-        <Route path="/customer/barbers" element={<CustomerBarbers />} />
-        <Route path="/customer/barbers/:id" element={<BarberBioLink />} />
-        <Route path="/booking" element={<BookingFlow />} />
-        <Route path="/customer/bookings" element={<CustomerBookings />} />
-        <Route path="/messages" element={<Messages />} />
-        
-        {/* Legacy staff route redirects to Barber Studio Dashboard */}
-        <Route path="/staff/dashboard" element={<Navigate to="/barber/dashboard" replace />} />
-        
-        {/* Master Admin / Super Admin Portal */}
-        <Route path="/admin" element={<AdminMasterDashboard />} />
-        <Route path="/admin/dashboard" element={<AdminMasterDashboard />} />
-        <Route path="/master" element={<Navigate to="/admin" replace />} />
+          {/* Customer Routes */}
+          <Route path="/customer/barbers" element={<CustomerBarbers />} />
+          <Route path="/customer/barbers/:id" element={<BarberBioLink />} />
+          <Route path="/booking" element={<BookingFlow />} />
+          <Route path="/customer/bookings" element={<CustomerBookings />} />
+          <Route path="/messages" element={<Messages />} />
+          
+          {/* Legacy staff route redirects to Barber Studio Dashboard */}
+          <Route path="/staff/dashboard" element={<Navigate to="/barber/dashboard" replace />} />
+          
+          {/* Master Admin / Super Admin Portal */}
+          <Route path="/admin" element={<AdminMasterDashboard />} />
+          <Route path="/admin/dashboard" element={<AdminMasterDashboard />} />
+          <Route path="/master" element={<Navigate to="/admin" replace />} />
 
-        {/* Barber Creator Studio Dashboard */}
-        <Route path="/barber/dashboard" element={<BarberDashboard />} />
-        <Route path="/barber/messages" element={<Messages barberMode />} />
+          {/* Barber Creator Studio Dashboard */}
+          <Route path="/barber/dashboard" element={<BarberDashboard />} />
+          <Route path="/barber/messages" element={<Messages barberMode />} />
 
-        {/* Lynk.id Style Micro-site Personal Link (e.g. /b/reza or /reza) */}
-        <Route path="/b/:id" element={<BarberBioLink />} />
-        <Route path="/:id" element={<BarberBioLink />} />
-      </Routes>
-    </Router>
+          {/* Lynk.id Style Micro-site Personal Link (e.g. /b/reza or /reza) */}
+          <Route path="/b/:id" element={<BarberBioLink />} />
+          <Route path="/:id" element={<BarberBioLink />} />
+        </Routes>
+      </Router>
+    </ErrorBoundary>
   );
 }

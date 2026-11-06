@@ -31,28 +31,33 @@ export default function Barbers() {
     }
   }, [fetchBarbersFromSupabase]);
 
-  // Extract unique cities
+  // Extract unique cities safely
   const uniqueCities = useMemo(() => {
     const set = new Set();
-    barbers.forEach((b) => {
-      if (b.locationCity && b.locationCity.trim()) {
-        set.add(b.locationCity.trim());
-      }
-    });
+    if (Array.isArray(barbers)) {
+      barbers.forEach((b) => {
+        if (b && typeof b.locationCity === 'string' && b.locationCity.trim()) {
+          set.add(b.locationCity.trim());
+        }
+      });
+    }
     return Array.from(set);
   }, [barbers]);
 
-  // Filter barbers
+  // Filter barbers safely
   const filteredBarbers = useMemo(() => {
+    if (!Array.isArray(barbers)) return [];
     return barbers.filter((b) => {
-      const q = searchQuery.toLowerCase().trim();
+      if (!b) return false;
+      const q = (searchQuery || '').toLowerCase().trim();
       const matchSearch = !q || 
-        (b.name || '').toLowerCase().includes(q) ||
-        (b.slug || '').toLowerCase().includes(q) ||
-        (b.specialty || '').toLowerCase().includes(q) ||
-        (b.locationCity || '').toLowerCase().includes(q);
+        String(b.name || '').toLowerCase().includes(q) ||
+        String(b.slug || '').toLowerCase().includes(q) ||
+        String(b.specialty || '').toLowerCase().includes(q) ||
+        String(b.locationCity || '').toLowerCase().includes(q);
 
-      const matchCity = cityFilter === 'ALL' || (b.locationCity || '').trim().toLowerCase() === cityFilter.toLowerCase();
+      const bCity = String(b.locationCity || '').trim().toLowerCase();
+      const matchCity = cityFilter === 'ALL' || bCity === cityFilter.toLowerCase();
       return matchSearch && matchCity;
     });
   }, [barbers, searchQuery, cityFilter]);
