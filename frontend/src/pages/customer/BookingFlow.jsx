@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Check, 
@@ -12,7 +12,6 @@ import {
   Sparkles, 
   ShieldCheck, 
   CreditCard, 
-  Banknote, 
   CheckCircle2,
   ChevronRight
 } from 'lucide-react';
@@ -49,71 +48,52 @@ export default function BookingFlow() {
   const [searchParams] = useSearchParams();
   const initialBarberName = searchParams.get('barber') || '';
 
-  const barbers = useStore((state) => state.barbers);
-  const services = useStore((state) => state.services);
+  const barbers = useStore((state) => state.barbers || []);
+  const services = useStore((state) => state.services || []);
   const addBooking = useStore((state) => state.addBooking);
-  const fetchServicesFromSupabase = useStore((state) => state.fetchServicesFromSupabase);
-  const fetchBarbersFromSupabase = useStore((state) => state.fetchBarbersFromSupabase);
 
-  React.useEffect(() => {
-    if (typeof fetchServicesFromSupabase === 'function') fetchServicesFromSupabase();
-    if (typeof fetchBarbersFromSupabase === 'function') fetchBarbersFromSupabase();
-  }, [fetchServicesFromSupabase, fetchBarbersFromSupabase]);
-
-  const effectiveServices = (services && services.length > 0) ? services : [
-    { id: 's1', name: 'Gentleman Cut & Wash', price: 50000, duration: '45m', description: 'Potongan rambut presisi, cuci rambut relaxing, hot towel & pomade styling.' },
-    { id: 's2', name: 'Signature Fade & Lineup', price: 75000, duration: '60m', description: 'Skin fade halus dengan razor edge lineup super tajam.' },
-    { id: 's3', name: 'Hot Towel Beard Shave', price: 45000, duration: '30m', description: 'Cukur kumis & jenggot bersih dengan handuk hangat aromaterapi.' }
-  ];
-
-  const effectiveBarbers = (barbers && barbers.length > 0) ? barbers : [
-    { id: 'reza', name: 'Reza Fade', specialty: 'Classic Cut & Fade', photo: 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?q=80&w=400' },
-    { id: 'bima', name: 'Bima Texture', specialty: 'Korean Crop & Taper', photo: 'https://images.unsplash.com/photo-1599351431202-1e0f0137899a?q=80&w=400' }
-  ];
-
+  // Steps: 1 = Services, 2 = Date & Time, 3 = Confirmation & Form
   const [step, setStep] = useState(1);
-  
+
   // Selections
-  const [selectedBarber, setSelectedBarber] = useState(
-    initialBarberName || 'Bebas (Capster Tersedia)'
-  );
-  const [selectedService, setSelectedService] = useState(effectiveServices[0]);
-  const [selectedDate, setSelectedDate] = useState(UPCOMING_DATES[0] || null);
-  const [selectedTime, setSelectedTime] = useState(TIME_SLOTS[1]);
-  
-  // Customer Info
+  const [selectedService, setSelectedService] = useState(null);
+  const [selectedBarber, setSelectedBarber] = useState(initialBarberName || 'Bebas (Capster Tersedia)');
+  const [selectedDate, setSelectedDate] = useState(UPCOMING_DATES[0]);
+  const [selectedTime, setSelectedTime] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerNote, setCustomerNote] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('QRIS');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const formatRupiah = (number) => {
-    return new Intl.NumberFormat('id-ID', { 
-      style: 'currency', 
-      currency: 'IDR', 
-      minimumFractionDigits: 0 
-    }).format(number);
-  };
-
-  const STEPS = [
-    { num: 1, title: 'Layanan', desc: 'Pilihan Treatment' },
-    { num: 2, title: 'Capster & Jadwal', desc: 'Pilih Waktu' },
-    { num: 3, title: 'Konfirmasi', desc: 'Data Diri & Bayar' }
+  const effectiveServices = services.length > 0 ? services : [
+    { id: '1', name: 'Signature Haircut', duration: '45m', price: 50000, description: 'Potong rambut presisi, konsultasi bentuk wajah, keramas, dan styling pomade.' },
+    { id: '2', name: 'Beard Grooming & Shave', duration: '30m', price: 35000, description: 'Cukur jenggot & kumis rapi dengan handuk hangat dan shaving foam aromatik.' },
+    { id: '3', name: 'Haircut + Beard Combo', duration: '60m', price: 75000, description: 'Paket lengkap potong rambut dan perapian jenggot untuk penampilan maksimal.' },
+    { id: '4', name: 'Gentlemen Spa & Creambath', duration: '45m', price: 65000, description: 'Pijat kepala rileks dengan tonic ginseng untuk melancarkan sirkulasi darah.' }
   ];
+
+  const effectiveBarbers = barbers.length > 0 ? barbers : [
+    { id: 'b1', name: 'Dimas Fade', specialty: 'Skin Fade & Taper', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300' },
+    { id: 'b2', name: 'Reza Barber', specialty: 'Classic Pompadour', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=300' }
+  ];
+
+  const formatRupiah = (val) => `Rp ${Number(val || 0).toLocaleString('id-ID')}`;
 
   const handleNext = () => {
     if (step === 1 && !selectedService) return;
-    if (step === 2 && (!selectedDate || !selectedTime)) {
-      alert('Silakan pilih tanggal dan jam kunjungan terlebih dahulu.');
-      return;
-    }
-    if (step < 3) setStep(step + 1);
+    if (step === 2 && (!selectedDate || !selectedTime)) return;
+    setStep((prev) => Math.min(prev + 1, 3));
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const handleBack = () => {
-    if (step > 1) setStep(step - 1);
-    else navigate('/');
+    if (step > 1) {
+      setStep((prev) => prev - 1);
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    } else {
+      navigate('/');
+    }
   };
 
   const handleConfirm = (e) => {
@@ -126,7 +106,6 @@ export default function BookingFlow() {
     setIsSubmitting(true);
 
     setTimeout(() => {
-      // Simpan ke Zustand Store
       addBooking({
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
@@ -144,52 +123,67 @@ export default function BookingFlow() {
     }, 600);
   };
 
+  const STEPS = [
+    { num: 1, title: 'Layanan', desc: 'Pilih Treatment' },
+    { num: 2, title: 'Waktu', desc: 'Tanggal & Jam' },
+    { num: 3, title: 'Konfirmasi', desc: 'Data & Bayar' }
+  ];
+
   return (
-    <div className="min-h-screen bg-[#0A0A0C] text-zinc-100 font-sans selection:bg-white selection:text-black antialiased">
+    <div className="min-h-screen bg-[#F7F6F2] text-[#171717] font-sans antialiased flex flex-col selection:bg-[#285844] selection:text-white">
       
       {/* Top Navbar */}
-      <nav className="sticky top-0 z-40 bg-[#0A0A0C]/90 backdrop-blur-xl border-b border-zinc-800/80 px-4 sm:px-8 py-3.5 flex justify-between items-center">
-        <div 
-          onClick={() => navigate('/')}
-          className="cursor-pointer flex items-center gap-2.5 group"
-        >
-          <Logo variant="compact" theme="light" size="sm" />
-          <span className="text-zinc-600">/</span>
-          <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider">Booking Sesi</span>
-        </div>
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-xl bg-[#285844] flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
+              <Scissors className="w-4 h-4" />
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-display font-black text-base tracking-tight text-[#171717]">
+                E-CUKUR
+              </span>
+              <span className="text-neutral-400 text-xs">/</span>
+              <span className="text-[11px] font-bold text-[#285844] tracking-wider uppercase">
+                Booking Sesi
+              </span>
+            </div>
+          </Link>
 
-        <div className="flex items-center gap-2.5">
-          <button 
-            onClick={() => navigate('/customer/bookings')} 
-            className="text-xs font-medium text-zinc-300 hover:text-white px-3 py-1.5 transition-colors hidden sm:block"
-          >
-            Riwayat Pesanan
-          </button>
-          <button 
-            onClick={handleBack} 
-            className="px-3.5 py-1.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>{step === 1 ? 'Beranda' : 'Sebelumnya'}</span>
-          </button>
+          <div className="flex items-center gap-2.5">
+            <Link
+              to="/customer/bookings"
+              className="text-xs font-semibold text-neutral-600 hover:text-neutral-900 px-3 py-1.5 transition-colors hidden sm:block"
+            >
+              Riwayat Pesanan
+            </Link>
+            <button 
+              type="button"
+              onClick={handleBack} 
+              className="px-3.5 py-1.5 border border-neutral-200 hover:border-neutral-300 bg-white text-neutral-700 hover:text-black rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95 cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>{step === 1 ? 'Beranda' : 'Sebelumnya'}</span>
+            </button>
+          </div>
         </div>
-      </nav>
+      </header>
 
       {/* Main Container */}
-      <main className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 md:px-8 pt-8 sm:pt-12 pb-20">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 sm:pt-12 pb-24 flex-1 w-full space-y-8">
         
-        {/* Header Breadcrumb & Title */}
-        <div className="mb-8 md:mb-10 text-center max-w-xl mx-auto">
-          <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-white tracking-tight mb-2">
+        {/* Editorial Heading */}
+        <div className="text-center max-w-xl mx-auto space-y-2">
+          <h1 className="font-display text-2xl sm:text-3xl md:text-4xl font-extrabold text-[#171717] tracking-tight">
             Reservasi Jadwal Cukur
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-400 font-normal leading-relaxed">
-            Pilih layanan, capster, dan jam kunjungan yang paling nyaman untuk Anda tanpa perlu antre di studio.
+          <p className="text-xs sm:text-sm text-neutral-500 font-normal leading-relaxed">
+            Pilih layanan, capster, dan jam kunjungan yang paling nyaman untuk Anda tanpa perlu antre di lokasi.
           </p>
         </div>
 
         {/* Step Indicator */}
-        <div className="max-w-3xl mx-auto mb-10 sm:mb-12">
+        <div className="max-w-2xl mx-auto">
           <div className="grid grid-cols-3 gap-2 sm:gap-4 relative">
             {STEPS.map((s) => {
               const isActive = step === s.num;
@@ -197,33 +191,34 @@ export default function BookingFlow() {
               return (
                 <button
                   key={s.num}
+                  type="button"
                   onClick={() => {
                     if (isPast) setStep(s.num);
                   }}
                   disabled={!isPast && !isActive}
-                  className={`relative p-3 sm:p-4 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                  className={`p-3 sm:p-4 rounded-2xl border text-left transition-all flex flex-col justify-between ${
                     isActive 
-                      ? 'border-white bg-zinc-900/90 shadow-[0_0_30px_rgba(255,255,255,0.06)]' 
+                      ? 'border-[#285844] bg-[#F0F5F2] shadow-2xs' 
                       : isPast 
-                      ? 'border-zinc-800 bg-zinc-950 hover:border-zinc-600 cursor-pointer' 
-                      : 'border-zinc-900/60 bg-zinc-950/40 opacity-40 cursor-not-allowed'
+                      ? 'border-neutral-200 bg-white hover:border-neutral-300 cursor-pointer shadow-2xs' 
+                      : 'border-neutral-200 bg-white/50 opacity-40 cursor-not-allowed'
                   }`}
                 >
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-1.5">
                     <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-mono font-bold ${
-                      isPast ? 'bg-white text-black' : isActive ? 'bg-white text-black' : 'bg-zinc-800 text-zinc-400'
+                      isPast ? 'bg-[#285844] text-white' : isActive ? 'bg-[#285844] text-white' : 'bg-neutral-200 text-neutral-600'
                     }`}>
                       {isPast ? <Check className="w-3.5 h-3.5 stroke-[3]" /> : s.num}
                     </span>
-                    <span className="text-[10px] font-mono uppercase tracking-widest text-zinc-500 hidden sm:inline">
-                      Tahap 0{s.num}
+                    <span className="text-[10px] font-mono uppercase tracking-widest text-neutral-400 hidden sm:inline font-bold">
+                      0{s.num}
                     </span>
                   </div>
                   <div>
-                    <div className="text-xs sm:text-sm font-bold uppercase tracking-tight text-white truncate">
+                    <div className="text-xs sm:text-sm font-bold text-neutral-900 leading-tight">
                       {s.title}
                     </div>
-                    <div className="text-[10px] text-zinc-500 font-light hidden sm:block truncate">
+                    <div className="text-[10px] text-neutral-500 hidden sm:block truncate">
                       {s.desc}
                     </div>
                   </div>
@@ -250,16 +245,16 @@ export default function BookingFlow() {
                   transition={{ duration: 0.3 }}
                   className="space-y-6"
                 >
-                  <div className="flex items-center justify-between border-b border-zinc-900 pb-4">
+                  <div className="flex items-center justify-between border-b border-neutral-200 pb-4">
                     <div>
-                      <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white">
+                      <h2 className="font-display text-xl sm:text-2xl font-bold text-neutral-900">
                         Pilih Treatment
                       </h2>
-                      <p className="text-xs text-zinc-400 font-light mt-0.5">
+                      <p className="text-xs text-neutral-500 mt-0.5">
                         Tentukan layanan grooming yang Anda butuhkan hari ini.
                       </p>
                     </div>
-                    <span className="text-xs font-mono text-zinc-500">{effectiveServices.length} Layanan Tersedia</span>
+                    <span className="text-xs font-mono text-neutral-400 font-semibold">{effectiveServices.length} Layanan</span>
                   </div>
 
                   <div className="grid gap-3 sm:gap-4">
@@ -269,45 +264,45 @@ export default function BookingFlow() {
                         <div
                           key={svc.id}
                           onClick={() => setSelectedService(svc)}
-                          className={`p-5 sm:p-6 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group ${
+                          className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4 group ${
                             isSelected 
-                              ? 'border-white bg-zinc-900/90 shadow-[0_0_30px_rgba(255,255,255,0.05)]' 
-                              : 'border-zinc-800/80 bg-zinc-950 hover:border-zinc-600 hover:bg-zinc-900/40'
+                              ? 'border-[#285844] bg-[#F0F5F2] ring-1 ring-[#285844] shadow-xs' 
+                              : 'border-neutral-200 bg-white hover:border-neutral-300 hover:shadow-2xs'
                           }`}
                         >
                           <div className="flex items-start gap-4">
                             <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
-                              isSelected ? 'bg-white text-black' : 'bg-zinc-900 text-zinc-400 group-hover:text-white'
+                              isSelected ? 'bg-[#285844] text-white' : 'bg-neutral-100 text-neutral-600 group-hover:text-black'
                             }`}>
                               <Scissors className="w-5 h-5" />
                             </div>
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="font-bold uppercase tracking-tight text-white text-base">
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <h3 className="font-display font-bold text-neutral-900 text-base">
                                   {svc.name}
                                 </h3>
                                 {isSelected && (
-                                  <span className="bg-white text-black text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
+                                  <span className="bg-[#285844] text-white text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded-full">
                                     Dipilih
                                   </span>
                                 )}
                               </div>
-                              <p className="text-xs text-zinc-400 font-light leading-relaxed mb-2">
+                              <p className="text-xs text-neutral-500 leading-relaxed">
                                 {svc.description || 'Layanan potong rambut premium dengan teknik presisi.'}
                               </p>
-                              <div className="flex items-center gap-3 text-[11px] font-mono text-zinc-500">
-                                <span className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3 text-zinc-400" /> {svc.duration}
+                              <div className="flex items-center gap-3 text-[11px] font-mono text-neutral-400 pt-0.5">
+                                <span className="flex items-center gap-1 font-semibold text-neutral-600">
+                                  <Clock className="w-3 h-3 text-[#285844]" /> {svc.duration}
                                 </span>
                                 <span>&bull;</span>
-                                <span className="text-zinc-400">Termasuk Konsultasi & Cuci</span>
+                                <span>Konsultasi & Styling Termasuk</span>
                               </div>
                             </div>
                           </div>
 
-                          <div className="sm:text-right shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-zinc-900 flex sm:flex-col justify-between items-center sm:items-end">
-                            <div className="text-xs font-mono text-zinc-500 sm:mb-1">Tarif</div>
-                            <div className="text-xl sm:text-2xl font-black text-white tracking-tight">
+                          <div className="sm:text-right shrink-0 border-t sm:border-t-0 pt-3 sm:pt-0 border-neutral-100 flex sm:flex-col justify-between items-center sm:items-end">
+                            <div className="text-[11px] font-mono text-neutral-400 sm:mb-0.5">Tarif</div>
+                            <div className="text-xl sm:text-2xl font-display font-extrabold text-[#285844] tracking-tight">
                               {formatRupiah(svc.price)}
                             </div>
                           </div>
@@ -318,9 +313,10 @@ export default function BookingFlow() {
 
                   <div className="pt-4 flex justify-end">
                     <button
+                      type="button"
                       onClick={handleNext}
                       disabled={!selectedService}
-                      className="px-8 py-4 bg-white text-black font-bold uppercase tracking-widest text-xs rounded-full hover:bg-zinc-200 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
+                      className="px-8 py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer active:scale-98"
                     >
                       <span>Lanjut Pilih Waktu</span>
                       <ArrowRight className="w-4 h-4" />
@@ -339,36 +335,33 @@ export default function BookingFlow() {
                   transition={{ duration: 0.3 }}
                   className="space-y-8"
                 >
-                  {/* Sub-step A: Capster Selection */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
-                      <div>
-                        <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white">
-                          Pilih Capster
-                        </h2>
-                        <p className="text-xs text-zinc-400 font-light mt-0.5">
-                          Pilih seniman favorit Anda atau biarkan sistem mencocokkan capster yang tersedia.
-                        </p>
-                      </div>
+                  {/* Capster Selection */}
+                  <div className="space-y-3.5">
+                    <div className="border-b border-neutral-200 pb-3">
+                      <h2 className="font-display text-lg sm:text-xl font-bold text-neutral-900">
+                        Pilih Capster
+                      </h2>
+                      <p className="text-xs text-neutral-500 mt-0.5">
+                        Pilih seniman favorit Anda atau biarkan sistem mencocokkan capster yang tersedia.
+                      </p>
                     </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
-                      {/* Option: Any Available Barber */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                       <button
                         type="button"
                         onClick={() => setSelectedBarber('Bebas (Capster Tersedia)')}
-                        className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                        className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                           selectedBarber === 'Bebas (Capster Tersedia)'
-                            ? 'border-white bg-zinc-900 shadow-md'
-                            : 'border-zinc-800/80 bg-zinc-950 hover:border-zinc-700'
+                            ? 'border-[#285844] bg-[#F0F5F2] ring-1 ring-[#285844] shadow-xs'
+                            : 'border-neutral-200 bg-white hover:border-neutral-300'
                         }`}
                       >
-                        <div className="w-8 h-8 rounded-full bg-zinc-800 text-white flex items-center justify-center mb-3">
+                        <div className="w-8 h-8 rounded-full bg-[#E8EFEA] text-[#285844] flex items-center justify-center mb-2">
                           <Sparkles className="w-4 h-4" />
                         </div>
                         <div>
-                          <div className="text-xs font-bold uppercase tracking-tight text-white">Fast Track</div>
-                          <div className="text-[10px] text-zinc-400 font-light">Capster Bebas</div>
+                          <div className="text-xs font-bold text-neutral-900">Fast Track</div>
+                          <div className="text-[10px] text-neutral-500">Capster Bebas</div>
                         </div>
                       </button>
 
@@ -379,18 +372,18 @@ export default function BookingFlow() {
                             key={b.id}
                             type="button"
                             onClick={() => setSelectedBarber(b.name)}
-                            className={`p-3.5 rounded-2xl border text-left transition-all relative overflow-hidden group flex flex-col justify-between ${
+                            className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
                               isSelected
-                                ? 'border-white bg-zinc-900 shadow-md'
-                                : 'border-zinc-800/80 bg-zinc-950 hover:border-zinc-700'
+                                ? 'border-[#285844] bg-[#F0F5F2] ring-1 ring-[#285844] shadow-xs'
+                                : 'border-neutral-200 bg-white hover:border-neutral-300'
                             }`}
                           >
-                            <div className="w-10 h-10 rounded-full overflow-hidden mb-3 border border-zinc-700">
-                              <img src={b.photo} alt={b.name} className="w-full h-full object-cover grayscale" />
+                            <div className="w-8 h-8 rounded-full overflow-hidden mb-2 border border-neutral-200">
+                              <img src={b.photo} alt={b.name} className="w-full h-full object-cover" />
                             </div>
                             <div>
-                              <div className="text-xs font-bold uppercase tracking-tight text-white">{b.name}</div>
-                              <div className="text-[10px] text-zinc-400 font-light truncate">{b.specialty}</div>
+                              <div className="text-xs font-bold text-neutral-900 truncate">{b.name}</div>
+                              <div className="text-[10px] text-neutral-500 truncate">{b.specialty}</div>
                             </div>
                           </button>
                         );
@@ -398,17 +391,15 @@ export default function BookingFlow() {
                     </div>
                   </div>
 
-                  {/* Sub-step B: Tanggal Kunjungan */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
-                      <div>
-                        <h3 className="text-lg font-black uppercase tracking-tight text-white">
-                          Pilih Tanggal
-                        </h3>
-                        <p className="text-xs text-zinc-400 font-light mt-0.5">
-                          Jadwal tersedia untuk 7 hari ke depan.
-                        </p>
-                      </div>
+                  {/* Tanggal Kunjungan */}
+                  <div className="space-y-3.5">
+                    <div className="border-b border-neutral-200 pb-3">
+                      <h3 className="font-display text-lg font-bold text-neutral-900">
+                        Pilih Tanggal
+                      </h3>
+                      <p className="text-xs text-neutral-500 mt-0.5">
+                        Jadwal tersedia untuk 7 hari ke depan.
+                      </p>
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2.5">
@@ -419,14 +410,14 @@ export default function BookingFlow() {
                             key={d.id}
                             type="button"
                             onClick={() => setSelectedDate(d)}
-                            className={`p-3.5 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 ${
+                            className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
                               isSelected
-                                ? 'border-white bg-white text-black shadow-lg scale-102'
-                                : 'border-zinc-800/80 bg-zinc-950 text-zinc-400 hover:border-zinc-600 hover:text-white'
+                                ? 'border-[#285844] bg-[#285844] text-white shadow-xs'
+                                : 'border-neutral-200 bg-white text-neutral-600 hover:border-neutral-300'
                             }`}
                           >
-                            <Calendar className={`w-4 h-4 ${isSelected ? 'text-black' : 'text-zinc-500'}`} />
-                            <div className="text-[11px] font-mono font-bold uppercase tracking-wider">{d.dayName}</div>
+                            <Calendar className={`w-3.5 h-3.5 ${isSelected ? 'text-white' : 'text-neutral-400'}`} />
+                            <div className="text-[10px] font-mono font-bold uppercase">{d.dayName}</div>
                             <div className="text-xs font-bold">{d.short}</div>
                           </button>
                         );
@@ -434,46 +425,34 @@ export default function BookingFlow() {
                     </div>
                   </div>
 
-                  {/* Sub-step C: Jam Kunjungan */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between border-b border-zinc-900 pb-3">
+                  {/* Jam Kunjungan */}
+                  <div className="space-y-3.5">
+                    <div className="border-b border-neutral-200 pb-3 flex items-center justify-between">
                       <div>
-                        <h3 className="text-lg font-black uppercase tracking-tight text-white">
+                        <h3 className="font-display text-lg font-bold text-neutral-900">
                           Pilih Jam Kunjungan
                         </h3>
-                        <p className="text-xs text-zinc-400 font-light mt-0.5">
-                          Durasi sesi disesuaikan dengan paket treatment yang dipilih.
+                        <p className="text-xs text-neutral-500 mt-0.5">
+                          Sesi potong rambut dimulai tepat waktu.
                         </p>
-                      </div>
-                      <div className="flex items-center gap-3 text-[10px] font-mono text-zinc-500 uppercase">
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-white" /> Tersedia
-                        </span>
-                        <span className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full bg-zinc-800" /> Penuh
-                        </span>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
                       {TIME_SLOTS.map((time, i) => {
-                        const isFull = i === 3 || i === 8 || i === 13;
                         const isSelected = selectedTime === time;
                         return (
                           <button
                             key={time}
-                            disabled={isFull}
                             type="button"
                             onClick={() => setSelectedTime(time)}
-                            className={`py-3.5 px-2 rounded-xl border text-center font-mono text-xs font-bold transition-all ${
+                            className={`py-3 px-2 rounded-xl border text-center font-mono text-xs font-bold transition-all cursor-pointer ${
                               isSelected
-                                ? 'border-white bg-white text-black shadow-lg scale-102'
-                                : isFull
-                                ? 'border-zinc-900 bg-zinc-950/40 text-zinc-700 cursor-not-allowed line-through'
-                                : 'border-zinc-800/80 bg-zinc-950 text-zinc-300 hover:border-zinc-600 hover:text-white'
+                                ? 'border-[#285844] bg-[#285844] text-white shadow-xs'
+                                : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50'
                             }`}
                           >
-                            {time}
+                            {time} WIB
                           </button>
                         );
                       })}
@@ -483,15 +462,17 @@ export default function BookingFlow() {
                   {/* Nav Buttons */}
                   <div className="pt-4 flex justify-between items-center">
                     <button
+                      type="button"
                       onClick={() => setStep(1)}
-                      className="px-6 py-3.5 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600 text-xs font-mono uppercase tracking-wider rounded-full transition-colors"
+                      className="px-5 py-2.5 border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                     >
                       Kembali ke Layanan
                     </button>
                     <button
+                      type="button"
                       onClick={handleNext}
                       disabled={!selectedDate || !selectedTime}
-                      className="px-8 py-4 bg-white text-black font-bold uppercase tracking-widest text-xs rounded-full hover:bg-zinc-200 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg"
+                      className="px-8 py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer active:scale-98"
                     >
                       <span>Lanjut Konfirmasi</span>
                       <ArrowRight className="w-4 h-4" />
@@ -508,37 +489,36 @@ export default function BookingFlow() {
                   animate={{ opacity: 1, y: 0 }} 
                   exit={{ opacity: 0, y: -15 }}
                   transition={{ duration: 0.3 }}
-                  className="space-y-8"
+                  className="space-y-6"
                 >
-                  <div className="border-b border-zinc-900 pb-4">
-                    <h2 className="text-xl sm:text-2xl font-black uppercase tracking-tight text-white">
-                      Data Diri & Pembayaran
+                  <div className="border-b border-neutral-200 pb-3">
+                    <h2 className="font-display text-xl sm:text-2xl font-bold text-neutral-900">
+                      Data Pemesan & Pembayaran
                     </h2>
-                    <p className="text-xs text-zinc-400 font-light mt-0.5">
-                      Informasi pemesanan akan dikonfirmasi melalui WhatsApp untuk pengingat jadwal.
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Informasi tiket booking akan dikonfirmasikan via WhatsApp.
                     </p>
                   </div>
 
-                  <form id="booking-final-form" onSubmit={handleConfirm} className="space-y-6">
-                    {/* Input Data Diri */}
+                  <form id="booking-final-form" onSubmit={handleConfirm} className="space-y-5">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-mono uppercase tracking-widest text-zinc-400 flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5" /> Nama Lengkap *
+                        <label className="text-xs font-bold text-neutral-700 flex items-center gap-1.5">
+                          <User className="w-3.5 h-3.5 text-[#285844]" /> Nama Lengkap *
                         </label>
                         <input
                           type="text"
                           required
                           value={customerName}
                           onChange={(e) => setCustomerName(e.target.value)}
-                          placeholder="Contoh: Rafif Muhammad"
-                          className="w-full bg-zinc-950 border border-zinc-800 focus:border-white rounded-xl p-3.5 text-sm text-white placeholder:text-zinc-600 outline-none transition-colors"
+                          placeholder="Contoh: Budi Santoso"
+                          className="w-full bg-white border border-neutral-200 focus:border-[#285844] rounded-xl p-3 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors shadow-2xs"
                         />
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-mono uppercase tracking-widest text-zinc-400 flex items-center gap-1.5">
-                          <span>Nomor WhatsApp *</span>
+                        <label className="text-xs font-bold text-neutral-700">
+                          Nomor WhatsApp *
                         </label>
                         <input
                           type="tel"
@@ -546,41 +526,41 @@ export default function BookingFlow() {
                           value={customerPhone}
                           onChange={(e) => setCustomerPhone(e.target.value)}
                           placeholder="0812-xxxx-xxxx"
-                          className="w-full bg-zinc-950 border border-zinc-800 focus:border-white rounded-xl p-3.5 text-sm text-white placeholder:text-zinc-600 outline-none transition-colors"
+                          className="w-full bg-white border border-neutral-200 focus:border-[#285844] rounded-xl p-3 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors shadow-2xs"
                         />
                       </div>
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-mono uppercase tracking-widest text-zinc-400">
+                      <label className="text-xs font-bold text-neutral-700">
                         Catatan Khusus (Opsional)
                       </label>
                       <input
                         type="text"
                         value={customerNote}
                         onChange={(e) => setCustomerNote(e.target.value)}
-                        placeholder="Contoh: Rambut agak tipis di bagian samping, ingin skin fade rapi..."
-                        className="w-full bg-zinc-950 border border-zinc-800 focus:border-white rounded-xl p-3.5 text-sm text-white placeholder:text-zinc-600 outline-none transition-colors"
+                        placeholder="Contoh: Model taper fade rapi, kumis jangan ditipiskan..."
+                        className="w-full bg-white border border-neutral-200 focus:border-[#285844] rounded-xl p-3 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors shadow-2xs"
                       />
                     </div>
 
                     {/* Pilihan Metode Pembayaran */}
-                    <div className="space-y-3 pt-2">
-                      <label className="text-[11px] font-mono uppercase tracking-widest text-zinc-400 block">
+                    <div className="space-y-2 pt-2">
+                      <label className="text-xs font-bold text-neutral-700 block">
                         Metode Pembayaran
                       </label>
 
-                      <div className="p-4 rounded-2xl border border-white/20 bg-zinc-900 flex items-center justify-between gap-3">
+                      <div className="p-4 rounded-2xl border border-emerald-300 bg-emerald-50/60 flex items-center justify-between gap-3 shadow-2xs">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-white text-black flex items-center justify-center shrink-0 font-bold">
-                            <CreditCard className="w-5 h-5" />
+                          <div className="w-9 h-9 rounded-xl bg-[#285844] text-white flex items-center justify-center shrink-0">
+                            <CreditCard className="w-4 h-4" />
                           </div>
                           <div>
-                            <div className="font-bold text-sm text-white flex items-center gap-2">
+                            <div className="font-bold text-xs text-neutral-900 flex items-center gap-2">
                               <span>QRIS Dinamis (100% Cashless)</span>
-                              <span className="text-[10px] bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full font-mono font-medium">Otomatis Terkunci</span>
+                              <span className="text-[10px] bg-emerald-100 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded-full font-mono font-bold">Otomatis Terverifikasi</span>
                             </div>
-                            <div className="text-[11px] text-zinc-400 font-light mt-0.5">
+                            <div className="text-[11px] text-neutral-500 mt-0.5">
                               BCA, Mandiri, GoPay, DANA, ShopeePay, OVO & semua m-Banking.
                             </div>
                           </div>
@@ -588,11 +568,10 @@ export default function BookingFlow() {
                       </div>
                     </div>
 
-                    {/* Guarantees Box */}
-                    <div className="p-4 rounded-xl bg-zinc-950 border border-zinc-900 flex items-center gap-3 text-xs text-zinc-400">
-                      <ShieldCheck className="w-5 h-5 text-white shrink-0" />
+                    <div className="p-3.5 rounded-xl bg-white border border-neutral-200 flex items-center gap-2.5 text-xs text-neutral-600 shadow-2xs">
+                      <ShieldCheck className="w-4 h-4 text-[#285844] shrink-0" />
                       <span>
-                        Jaminan kepuasan E-CUKUR: Tepat waktu tanpa antrean panjang, alat steril & capster bersertifikat resmi.
+                        Jaminan kepuasan E-CUKUR: Tepat waktu tanpa antrean panjang, alat steril & capster profesional.
                       </span>
                     </div>
 
@@ -601,20 +580,20 @@ export default function BookingFlow() {
                       <button
                         type="button"
                         onClick={() => setStep(2)}
-                        className="px-6 py-3.5 border border-zinc-800 text-zinc-400 hover:text-white hover:border-zinc-600 text-xs font-mono uppercase tracking-wider rounded-full transition-colors"
+                        className="px-5 py-2.5 border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                       >
                         Kembali ke Jadwal
                       </button>
                       <button
                         type="submit"
                         disabled={isSubmitting}
-                        className="px-10 py-4 bg-white text-black font-black uppercase tracking-widest text-xs rounded-full hover:bg-zinc-200 active:scale-95 transition-all flex items-center gap-2 shadow-xl disabled:opacity-50"
+                        className="px-8 py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer active:scale-98"
                       >
                         {isSubmitting ? (
                           <span>Memproses...</span>
                         ) : (
                           <>
-                            <span>Selesaikan Reservasi</span>
+                            <span>Konfirmasi Reservasi</span>
                             <CheckCircle2 className="w-4 h-4" />
                           </>
                         )}
@@ -628,34 +607,32 @@ export default function BookingFlow() {
           </div>
 
           {/* Sticky Summary Card (4 cols) */}
-          <div className="lg:col-span-4 lg:sticky lg:top-28">
-            <div className="rounded-3xl border border-zinc-800 bg-zinc-950/90 backdrop-blur-md p-6 shadow-2xl relative overflow-hidden">
-              <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 blur-3xl pointer-events-none rounded-full" />
-              
-              <div className="flex items-center justify-between border-b border-zinc-900 pb-4 mb-5">
-                <span className="text-xs font-mono uppercase tracking-widest text-zinc-400">
+          <div className="lg:col-span-4 lg:sticky lg:top-24">
+            <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                <span className="text-xs font-bold text-neutral-900">
                   Ringkasan Booking
                 </span>
-                <span className="px-2 py-0.5 bg-zinc-900 border border-zinc-800 text-[10px] font-mono text-zinc-400 rounded-full">
+                <span className="px-2 py-0.5 bg-neutral-100 border border-neutral-200 text-[10px] font-mono font-bold text-neutral-600 rounded-full">
                   Step {step}/3
                 </span>
               </div>
 
               {/* Items List */}
-              <div className="space-y-4 mb-6">
+              <div className="space-y-3.5 text-xs">
                 
                 {/* Layanan */}
-                <div className="flex items-start gap-3 text-sm">
-                  <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 mt-0.5">
-                    <Scissors className="w-3.5 h-3.5 text-white" />
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0 text-[#285844]">
+                    <Scissors className="w-3.5 h-3.5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Layanan Treatment</div>
-                    <div className="font-bold text-white text-sm truncate">
+                    <div className="text-[10px] font-mono uppercase text-neutral-400 font-bold">Layanan</div>
+                    <div className="font-bold text-neutral-900 truncate">
                       {selectedService?.name || 'Belum dipilih'}
                     </div>
                     {selectedService && (
-                      <div className="text-[11px] font-mono text-zinc-400 mt-0.5">
+                      <div className="text-[11px] text-neutral-500 mt-0.5">
                         {selectedService.duration} &bull; {formatRupiah(selectedService.price)}
                       </div>
                     )}
@@ -663,46 +640,45 @@ export default function BookingFlow() {
                 </div>
 
                 {/* Capster */}
-                <div className="flex items-start gap-3 text-sm">
-                  <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 mt-0.5">
-                    <User className="w-3.5 h-3.5 text-white" />
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0 text-[#285844]">
+                    <User className="w-3.5 h-3.5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Artis Capster</div>
-                    <div className="font-bold text-white text-sm truncate">
+                    <div className="text-[10px] font-mono uppercase text-neutral-400 font-bold">Capster</div>
+                    <div className="font-bold text-neutral-900 truncate">
                       {selectedBarber}
                     </div>
                   </div>
                 </div>
 
                 {/* Tanggal & Waktu */}
-                <div className="flex items-start gap-3 text-sm">
-                  <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 mt-0.5">
-                    <Calendar className="w-3.5 h-3.5 text-white" />
+                <div className="flex items-start gap-3">
+                  <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0 text-[#285844]">
+                    <Calendar className="w-3.5 h-3.5" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Jadwal Sesi</div>
-                    <div className="font-bold text-white text-sm">
-                      {selectedDate?.label || 'Belum pilih tanggal'}
+                    <div className="text-[10px] font-mono uppercase text-neutral-400 font-bold">Jadwal Sesi</div>
+                    <div className="font-bold text-neutral-900">
+                      {selectedDate?.label || 'Belum dipilih'}
                     </div>
                     {selectedTime && (
-                      <div className="text-[11px] font-mono text-zinc-300 mt-0.5 flex items-center gap-1">
-                        <Clock className="w-3 h-3 text-white" /> Pukul {selectedTime} WIB
+                      <div className="text-[11px] font-mono text-[#285844] font-bold mt-0.5">
+                        Pukul {selectedTime} WIB
                       </div>
                     )}
                   </div>
                 </div>
 
-                {/* Metode Pembayaran (Saat step 3) */}
                 {step === 3 && (
-                  <div className="flex items-start gap-3 text-sm pt-2 border-t border-zinc-900/60">
-                    <div className="w-7 h-7 rounded-lg bg-zinc-900 border border-zinc-800 flex items-center justify-center shrink-0 mt-0.5">
-                      <CreditCard className="w-3.5 h-3.5 text-white" />
+                  <div className="flex items-start gap-3 pt-2 border-t border-neutral-100">
+                    <div className="w-7 h-7 rounded-lg bg-neutral-100 flex items-center justify-center shrink-0 text-[#285844]">
+                      <CreditCard className="w-3.5 h-3.5" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Pembayaran</div>
-                      <div className="font-bold text-white text-sm">
-                        'QRIS Dinamis (100% Cashless)'
+                      <div className="text-[10px] font-mono uppercase text-neutral-400 font-bold">Pembayaran</div>
+                      <div className="font-bold text-neutral-900">
+                        QRIS Dinamis
                       </div>
                     </div>
                   </div>
@@ -710,25 +686,24 @@ export default function BookingFlow() {
               </div>
 
               {/* Total Price Section */}
-              <div className="border-t border-zinc-900 pt-4 mb-6">
+              <div className="border-t border-neutral-100 pt-3">
                 <div className="flex justify-between items-baseline">
                   <div>
-                    <div className="text-[10px] font-mono uppercase tracking-widest text-zinc-500">Total Biaya</div>
-                    <div className="text-xs text-zinc-400 font-light">Tanpa biaya admin tambahan</div>
+                    <div className="text-[10px] font-mono uppercase text-neutral-400 font-bold">Total Biaya</div>
+                    <div className="text-[11px] text-neutral-500">Tanpa biaya admin</div>
                   </div>
-                  <div className="text-2xl font-black text-white tracking-tight">
+                  <div className="text-xl font-display font-extrabold text-[#285844]">
                     {selectedService ? formatRupiah(selectedService.price) : 'Rp 0'}
                   </div>
                 </div>
               </div>
 
-              {/* CTA based on step */}
               {step < 3 ? (
                 <button
                   type="button"
                   onClick={handleNext}
                   disabled={step === 1 ? !selectedService : (!selectedDate || !selectedTime)}
-                  className="w-full py-4 bg-white text-black font-bold uppercase tracking-widest text-xs rounded-full hover:bg-zinc-200 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="w-full py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <span>{step === 1 ? 'Lanjut ke Jadwal' : 'Lanjut ke Konfirmasi'}</span>
                   <ChevronRight className="w-4 h-4" />
@@ -738,13 +713,13 @@ export default function BookingFlow() {
                   type="submit"
                   form="booking-final-form"
                   disabled={isSubmitting}
-                  className="w-full py-4 bg-white text-black font-black uppercase tracking-widest text-xs rounded-full hover:bg-zinc-200 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-xl disabled:opacity-50"
+                  className="w-full py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-xs disabled:opacity-50 cursor-pointer"
                 >
                   {isSubmitting ? 'Menyimpan...' : 'Konfirmasi Sekarang'}
                 </button>
               )}
 
-              <p className="text-[10px] font-mono text-zinc-600 text-center mt-4 uppercase tracking-wider">
+              <p className="text-[10px] text-neutral-400 text-center font-mono">
                 Reschedule gratis hingga 2 jam sebelum sesi
               </p>
             </div>

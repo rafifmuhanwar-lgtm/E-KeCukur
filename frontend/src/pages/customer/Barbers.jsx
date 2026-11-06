@@ -1,15 +1,29 @@
-import React, { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowRight, ArrowLeft, UserX } from 'lucide-react';
+import { 
+  ArrowRight, 
+  ArrowLeft, 
+  UserX, 
+  Search, 
+  MapPin, 
+  Scissors, 
+  BadgeCheck, 
+  Sparkles,
+  Calendar,
+  ExternalLink
+} from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
 
 export default function Barbers() {
   const navigate = useNavigate();
-  const barbers = useStore((state) => state.barbers);
+  const barbers = useStore((state) => state.barbers || []);
   const fetchBarbersFromSupabase = useStore((state) => state.fetchBarbersFromSupabase);
   const isLoading = useStore((state) => state.isLoading);
+
+  const [searchQuery, setSearchQuery] = useState('');
+  const [cityFilter, setCityFilter] = useState('ALL');
 
   useEffect(() => {
     if (typeof fetchBarbersFromSupabase === 'function') {
@@ -17,65 +31,135 @@ export default function Barbers() {
     }
   }, [fetchBarbersFromSupabase]);
 
+  // Extract unique cities
+  const uniqueCities = useMemo(() => {
+    const set = new Set();
+    barbers.forEach((b) => {
+      if (b.locationCity && b.locationCity.trim()) {
+        set.add(b.locationCity.trim());
+      }
+    });
+    return Array.from(set);
+  }, [barbers]);
+
+  // Filter barbers
+  const filteredBarbers = useMemo(() => {
+    return barbers.filter((b) => {
+      const q = searchQuery.toLowerCase().trim();
+      const matchSearch = !q || 
+        (b.name || '').toLowerCase().includes(q) ||
+        (b.slug || '').toLowerCase().includes(q) ||
+        (b.specialty || '').toLowerCase().includes(q) ||
+        (b.locationCity || '').toLowerCase().includes(q);
+
+      const matchCity = cityFilter === 'ALL' || (b.locationCity || '').trim().toLowerCase() === cityFilter.toLowerCase();
+      return matchSearch && matchCity;
+    });
+  }, [barbers, searchQuery, cityFilter]);
+
   return (
-    <div className="min-h-screen bg-[#0A0A0C] text-zinc-100 font-sans selection:bg-white selection:text-black antialiased pb-24">
+    <div className="min-h-screen bg-[#F7F6F2] text-[#171717] font-sans antialiased flex flex-col selection:bg-[#285844] selection:text-white">
       
       {/* Top Navbar */}
-      <nav className="sticky top-0 z-40 bg-[#0A0A0C]/90 backdrop-blur-xl border-b border-zinc-800/80 px-4 sm:px-8 py-3.5 flex justify-between items-center">
-        <div 
-          onClick={() => navigate('/')}
-          className="cursor-pointer flex items-center gap-2.5 group"
-        >
-          <Logo variant="compact" theme="light" size="sm" />
-          <span className="text-zinc-600">/</span>
-          <span className="text-[11px] font-mono text-zinc-400 uppercase tracking-wider">Capster</span>
-        </div>
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between gap-4">
+          <Link to="/" className="flex items-center gap-2.5 group">
+            <div className="w-8 h-8 rounded-xl bg-[#285844] flex items-center justify-center text-white shadow-xs group-hover:scale-105 transition-transform">
+              <Scissors className="w-4 h-4" />
+            </div>
+            <div className="flex items-baseline gap-1.5">
+              <span className="font-display font-black text-base tracking-tight text-[#171717]">
+                E-CUKUR
+              </span>
+              <span className="text-neutral-400 text-xs">/</span>
+              <span className="text-[11px] font-bold text-[#285844] tracking-wider uppercase">
+                Direktori Barber
+              </span>
+            </div>
+          </Link>
 
-        <div className="flex items-center gap-2.5">
-          <button 
-            onClick={() => navigate('/booking')} 
-            className="text-xs font-medium text-zinc-300 hover:text-white px-3 py-1.5 transition-colors hidden sm:block"
-          >
-            Pesan Cepat
-          </button>
-          <button 
-            onClick={() => navigate('/')} 
-            className="px-3.5 py-1.5 border border-zinc-800 hover:border-zinc-700 bg-zinc-900 text-zinc-300 hover:text-white rounded-xl text-xs font-medium transition-all flex items-center gap-1.5 active:scale-95"
-          >
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Kembali</span>
-          </button>
-        </div>
-      </nav>
+          <div className="flex items-center gap-2.5">
+            <Link
+              to="/customer/bookings"
+              className="text-xs font-semibold text-neutral-600 hover:text-neutral-900 px-3 py-1.5 transition-colors hidden sm:block"
+            >
+              Cek Tiket Reservasi
+            </Link>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-8 pt-10 sm:pt-14">
+            <Link
+              to="/"
+              className="px-3.5 py-1.5 border border-neutral-200 hover:border-neutral-300 bg-white text-neutral-700 hover:text-black rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Kembali</span>
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* Main Content */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 sm:pt-14 pb-24 flex-1 w-full space-y-8">
         
         {/* Editorial Heading */}
-        <div className="mb-10 sm:mb-12 text-center max-w-xl mx-auto">
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight mb-2">
-            Pilih Capster & Stylist
+        <div className="text-center max-w-2xl mx-auto space-y-2">
+          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-[#E8EFEA] text-[#285844] border border-[#D9E5DC]">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Katalog Resmi Stylist & Studio</span>
+          </span>
+          <h1 className="font-display text-3xl sm:text-4xl font-extrabold text-[#171717] tracking-tight">
+            Pilih Capster & Studio Favoritmu
           </h1>
-          <p className="text-xs sm:text-sm text-zinc-400 font-normal leading-relaxed">
-            Lihat portofolio gaya rambut, jam operasional, dan lakukan booking langsung melalui bio link personal masing-masing capster.
+          <p className="text-xs sm:text-sm text-neutral-500 font-normal leading-relaxed">
+            Temukan tukang cukur terbaik di kotamu, intip portofolio gaya rambut di link bio mereka, dan booking sesi cukur tanpa antre.
           </p>
         </div>
 
-        {barbers && barbers.length > 0 ? (
+        {/* Search & Filter Toolbar */}
+        <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-neutral-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <div className="relative flex-1">
+            <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-400" />
+            <input 
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Cari capster, studio, spesialisasi, atau kota..."
+              className="w-full pl-10 pr-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white transition-colors"
+            />
+          </div>
+
+          {uniqueCities.length > 0 && (
+            <select
+              value={cityFilter}
+              onChange={(e) => setCityFilter(e.target.value)}
+              className="px-3.5 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-xs font-semibold outline-none focus:border-[#285844] cursor-pointer text-neutral-700"
+            >
+              <option value="ALL">Semua Kota ({uniqueCities.length})</option>
+              {uniqueCities.map((city) => (
+                <option key={city} value={city}>{city}</option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        {/* Barber Cards Grid */}
+        {filteredBarbers.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-            {barbers.map((capster, i) => {
+            {filteredBarbers.map((capster, i) => {
               const capsterIdentifier = capster.slug || capster.id;
               const photoUrl = capster.photo || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?q=80&w=1000&auto=format&fit=crop';
+              const isStudio = capster.plan === 'barber';
+              const isPro = capster.plan === 'capster';
 
               return (
                 <motion.div 
                   key={capster.id || i}
                   initial={{ opacity: 0, y: 15 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.05, duration: 0.4 }}
+                  transition={{ delay: i * 0.04, duration: 0.3 }}
                   onClick={() => navigate(`/${capsterIdentifier}`)}
-                  className="group cursor-pointer bg-zinc-900/60 border border-zinc-800/80 hover:border-zinc-600 rounded-2xl overflow-hidden transition-all duration-300 flex flex-col justify-between shadow-sm hover:shadow-md"
+                  className="group cursor-pointer bg-white border border-neutral-200 hover:border-neutral-300 rounded-2xl overflow-hidden transition-all duration-300 flex flex-col justify-between shadow-2xs hover:shadow-md"
                 >
-                  <div className="aspect-[4/3] overflow-hidden relative bg-zinc-950">
+                  <div className="aspect-[4/3] overflow-hidden relative bg-neutral-100">
                     <img 
                       src={photoUrl} 
                       alt={capster.name} 
@@ -83,36 +167,47 @@ export default function Barbers() {
                     />
                     
                     {/* Live Status Badge */}
-                    <div className="absolute top-3.5 left-3.5 text-[11px] font-mono px-2.5 py-1 rounded-full border border-emerald-500/40 bg-zinc-950/80 backdrop-blur-md text-emerald-300 flex items-center gap-1.5 font-medium">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <div className="absolute top-3 left-3 text-[11px] font-mono px-2.5 py-1 rounded-full border border-emerald-200 bg-white/95 backdrop-blur-md text-emerald-800 flex items-center gap-1.5 font-bold shadow-2xs">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                       <span>{capster.schedule || 'Siap Terima Booking'}</span>
                     </div>
 
-                    <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent opacity-80" />
+                    {/* Verified Plan Badge */}
+                    {(isStudio || isPro) && (
+                      <div className="absolute top-3 right-3 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#171717]/90 text-white flex items-center gap-1 backdrop-blur-sm shadow-xs">
+                        <BadgeCheck className={`w-3.5 h-3.5 ${isStudio ? 'text-amber-400' : 'text-emerald-400'}`} />
+                        <span>{isStudio ? 'Official Studio' : 'Verified Pro'}</span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="p-5 flex-1 flex flex-col justify-between space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <h3 className="text-lg font-bold text-white group-hover:text-emerald-400 transition-colors">
+                    <div className="space-y-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="font-display font-bold text-base text-neutral-900 group-hover:text-[#285844] transition-colors leading-snug">
                           {capster.name}
                         </h3>
-                        <span className="text-xs font-mono text-zinc-500">
-                          @{capster.slug || capsterIdentifier}
+                        <span className="text-[11px] font-mono text-neutral-400 shrink-0">
+                          /{capster.slug || capsterIdentifier}
                         </span>
                       </div>
                       
-                      <p className="text-xs text-zinc-300 line-clamp-2 leading-relaxed">
+                      <div className="flex items-center gap-1 text-[11px] text-neutral-500">
+                        <MapPin className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                        <span className="truncate">{capster.locationCity || 'Indonesia'} • {capster.segment || 'Capster'}</span>
+                      </div>
+
+                      <p className="text-xs text-neutral-600 line-clamp-2 leading-relaxed pt-1">
                         {capster.specialty || capster.bio || 'Spesialis potong rambut pria & grooming presisi.'}
                       </p>
                     </div>
 
-                    <div className="border-t border-zinc-800/80 pt-3.5 flex items-center justify-between text-xs">
-                      <span className="text-zinc-400 font-medium group-hover:text-white transition-colors">
-                        Buka Link Bio & Jadwal
+                    <div className="border-t border-neutral-100 pt-3.5 flex items-center justify-between text-xs">
+                      <span className="text-neutral-500 font-semibold group-hover:text-[#285844] transition-colors">
+                        Buka Bio Link & Jadwal
                       </span>
-                      <div className="w-7 h-7 rounded-lg bg-zinc-800 group-hover:bg-white group-hover:text-black flex items-center justify-center transition-all">
-                        <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+                      <div className="w-8 h-8 rounded-xl bg-neutral-100 group-hover:bg-[#285844] group-hover:text-white text-neutral-700 flex items-center justify-center transition-all shadow-2xs">
+                        <ArrowRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
                       </div>
                     </div>
                   </div>
@@ -121,26 +216,30 @@ export default function Barbers() {
             })}
           </div>
         ) : (
-          <div className="text-center py-20 border border-zinc-800/80 rounded-2xl bg-zinc-900/30 p-8 max-w-md mx-auto">
-            <div className="w-14 h-14 rounded-2xl bg-zinc-900 border border-zinc-800 flex items-center justify-center mx-auto mb-4 text-zinc-400">
+          <div className="text-center py-16 border border-neutral-200 rounded-2xl bg-white p-8 max-w-md mx-auto shadow-2xs space-y-3">
+            <div className="w-12 h-12 rounded-2xl bg-neutral-100 border border-neutral-200 flex items-center justify-center mx-auto text-neutral-400">
               <UserX className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-white mb-1.5">
-              {isLoading ? 'Memuat Data Capster...' : 'Belum Ada Barber Terdaftar'}
+            <h3 className="font-display font-bold text-base text-neutral-900">
+              {isLoading ? 'Memuat Profil Barber...' : 'Tidak Ditemukan Barber'}
             </h3>
-            <p className="text-zinc-400 text-xs sm:text-sm mb-6 leading-relaxed">
+            <p className="text-neutral-500 text-xs leading-relaxed">
               {isLoading 
-                ? 'Sedang menghubungkan ke server Supabase untuk mengambil daftar profil barber...' 
-                : 'Daftar sebagai capster pertama di platform E-Cukur untuk membuat link bio dan menerima booking online.'}
+                ? 'Sedang menghubungkan ke server untuk mengambil daftar barber...' 
+                : 'Coba ubah kata kunci pencarian atau daftar sebagai capster baru di E-CUKUR.'}
             </p>
-            <button
-              onClick={() => navigate('/login')}
-              className="bg-white text-black px-5 py-2.5 rounded-xl text-xs font-bold hover:bg-zinc-200 transition-all shadow-sm"
-            >
-              Daftar Jadi Barber
-            </button>
+            <div className="pt-2">
+              <Link
+                to="/login?mode=register"
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
+              >
+                <Scissors className="w-3.5 h-3.5" />
+                <span>Daftar Jadi Barber</span>
+              </Link>
+            </div>
           </div>
         )}
+
       </main>
 
     </div>
