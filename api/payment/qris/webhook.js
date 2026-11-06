@@ -65,15 +65,6 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, message: 'Method Not Allowed' });
   }
 
-  // Validasi Secret API Key
-  const apiKey = req.headers['x-api-key'] || (req.headers['authorization'] || '').replace('Bearer ', '').trim();
-  if (!apiKey || apiKey !== EXPECTED_SECRET) {
-    return res.status(401).json({
-      success: false,
-      message: 'Unauthorized: Header x-api-key tidak valid atau tidak disertakan'
-    });
-  }
-
   try {
     let body = req.body;
     if (typeof body === 'string') {
@@ -85,21 +76,66 @@ export default async function handler(req, res) {
     }
 
     const payload = body || {};
+
+    // Validasi Secret API Key (Bisa via Header x-api-key, Bearer token, Query param URL, atau JSON body)
+    const apiKey = (
+      req.headers['x-api-key'] ||
+      (req.headers['authorization'] || '').replace('Bearer ', '') ||
+      req.query?.secret ||
+      req.query?.key ||
+      req.query?.['x-api-key'] ||
+      payload.secret ||
+      payload.api_key ||
+      payload.apiKey ||
+      payload.key ||
+      ''
+    ).trim();
+
+    if (!apiKey || apiKey !== EXPECTED_SECRET) {
+      return res.status(401).json({
+        success: false,
+        message: 'Unauthorized: Secret key tidak valid. Sertakan header x-api-key atau param ?secret=ecukur_qris_secret_2026'
+      });
+    }
+
+    // Tangani Test Connection / Ping dari aplikasi seperti Payhook
+    if (payload.test || payload.ping || payload.action === 'test' || payload.event === 'ping' || payload.type === 'test') {
+      return res.status(200).json({
+        success: true,
+        message: 'Koneksi Payhook berhasil terhubung ke server E-CUKUR!',
+        service: 'E-CUKUR QRIS Webhook'
+      });
+    }
+
     let targetAmount = 0;
 
     if (payload.amount) {
       targetAmount = parseNotificationAmount(payload.amount);
+    } else if (payload.nominal) {
+      targetAmount = parseNotificationAmount(payload.nominal);
+    } else if (payload.total) {
+      targetAmount = parseNotificationAmount(payload.total);
+    } else if (payload.value) {
+      targetAmount = parseNotificationAmount(payload.value);
     }
 
-    // Gabungkan title, text, notification, message agar tidak ada data yang terlewat
+    // Gabungkan seluruh kemungkinan field teks notifikasi dari Payhook / Android listener
     if (!targetAmount) {
       const combinedText = [
         payload.title,
         payload.text,
+        payload.content,
+        payload.subtext,
+        payload.big_text,
         payload.notification,
         payload.message,
         payload.body,
-        payload.raw_text
+        payload.raw_text,
+        payload.description,
+        payload.desc,
+        payload.keterangan,
+        payload.sender,
+        typeof payload.data === 'string' ? payload.data : ''
       ].filter(Boolean).join(' ');
 
       targetAmount = parseNotificationAmount(combinedText);
@@ -108,9 +144,10 @@ export default async function handler(req, res) {
     console.log('[Vercel QRIS Webhook] Parsed Amount:', targetAmount, 'from payload:', JSON.stringify(payload));
 
     if (!targetAmount || targetAmount <= 0) {
-      return res.status(400).json({
-        success: false,
-        message: 'Tidak dapat menemukan angka nominal pada payload notifikasi'
+      return res.status(200).json({
+        success: true,
+        matched: false,
+        message: 'Notifikasi berhasil diterima, namun tidak ada nominal transaksi pembayaran yang cocok.'
       });
     }
 
