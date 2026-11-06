@@ -1418,7 +1418,8 @@ export default function AdminMasterDashboard() {
                   <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                       <span className="text-neutral-500 block text-[10px]">Merchant Terdaftar:</span>
-                      <strong className="text-neutral-900 text-xs">BAYAR QRIS bypipx, Ahli Chiropractic</strong>
+                      <strong className="text-neutral-900 text-xs">BAYAR VIA QRIS, Digital & Kreatif</strong>
+                      <span className="text-neutral-400 block text-[9.5px]">PERUM GRIYA SETU PERMAI BLOK D.5NO.20</span>
                     </div>
                     <div>
                       <span className="text-neutral-500 block text-[10px]">NMID Nasional (ASPI):</span>
