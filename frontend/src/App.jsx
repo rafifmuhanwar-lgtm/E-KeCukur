@@ -9,6 +9,7 @@ import BarberDashboard from './pages/barber/Dashboard';
 import BarberBioLink from './pages/customer/BarberBioLink';
 import Messages from './pages/Messages';
 import AdminMasterDashboard from './pages/admin/Dashboard';
+import DomainMigrationNotice from './components/DomainMigrationNotice';
 import { useStore } from './store';
 
 export default function App() {
@@ -17,6 +18,13 @@ export default function App() {
   useEffect(() => {
     initApp();
   }, [initApp]);
+
+  // Deteksi jika pengunjung membuka lewat domain lama vercel.app
+  const isVercelDomain = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
+
+  if (isVercelDomain) {
+    return <DomainMigrationNotice />;
+  }
 
   return (
     <Router>
