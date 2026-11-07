@@ -434,9 +434,9 @@ export default function BarberDashboard() {
   const [prevBarberSlug, setPrevBarberSlug] = useState(barber?.slug);
   const [slugStatus, setSlugStatus] = useState({ valid: true, msg: '' });
 
-  if (barber?.slug !== undefined && barber.slug !== prevBarberSlug) {
-    setPrevBarberSlug(barber.slug);
-    setSlugInput(barber.slug);
+  if (barber?.slug !== undefined && barber?.slug !== prevBarberSlug) {
+    setPrevBarberSlug(barber?.slug);
+    setSlugInput(barber?.slug || '');
   }
 
   const handleSlugChange = (raw) => {
@@ -573,15 +573,15 @@ export default function BarberDashboard() {
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
 
   // ─── SUBSCRIPTION PLAN & QUOTA HELPERS ───
-  const currentPlan = barber.plan || 'free';
+  const currentPlan = barber?.plan || 'free';
   const isFreePlan = currentPlan === 'free';
   const isCapsterPlan = currentPlan === 'capster';
   const isBarberPlan = currentPlan === 'barber';
 
-  const serviceCount = (barber.services || []).length;
+  const serviceCount = (barber?.services || []).length;
   const isServiceLimitReached = isFreePlan && serviceCount >= 10;
 
-  const lookbookCount = (barber.lookbook || []).length;
+  const lookbookCount = (barber?.lookbook || []).length;
   const isLookbookLimitReached = isFreePlan && lookbookCount >= 10;
 
   const handleSwitchPlan = async (targetPlan) => {

@@ -152,8 +152,8 @@ export default function Barbers() {
             {filteredBarbers.map((capster, i) => {
               const capsterIdentifier = capster.slug || capster.id;
               const photoUrl = capster.photo || 'https://images.unsplash.com/photo-1622286342621-4bd786c2447c?q=80&w=1000&auto=format&fit=crop';
-              const isStudio = capster.plan === 'barber';
-              const isPro = capster.plan === 'capster';
+              const isStudio = capster?.plan === 'barber';
+              const isPro = capster?.plan === 'capster';
 
               return (
                 <motion.div 

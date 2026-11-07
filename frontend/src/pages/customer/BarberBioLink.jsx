@@ -731,12 +731,12 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               </h1>
 
               {/* Plan Badge: Capster Pro / Official Studio */}
-              {barber.plan === 'barber' ? (
+              {barber?.plan === 'barber' ? (
                 <span className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs" title="Official Studio Barbershop">
                   <Crown className="w-3 h-3 text-amber-600 shrink-0" />
                   <span>Official Studio</span>
                 </span>
-              ) : barber.plan === 'capster' ? (
+              ) : barber?.plan === 'capster' ? (
                 <span className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs" title="Capster Terverifikasi Pro">
                   <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
                   <span>Verified Capster Pro</span>
