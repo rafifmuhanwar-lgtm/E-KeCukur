@@ -1,6 +1,8 @@
 # Dependencies
 node_modules/
 */node_modules/
+payment-monitor/venv/
+payment-monitor/__pycache__/
 
 # Production builds
 dist/
@@ -11,6 +13,7 @@ frontend/dist/
 .env
 .env.*
 .env*.local
+payment-monitor/.env
 backend/.env
 frontend/.env
 frontend/.env.local
