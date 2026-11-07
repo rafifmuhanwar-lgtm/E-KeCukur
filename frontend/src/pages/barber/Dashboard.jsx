@@ -1239,63 +1239,145 @@ export default function BarberDashboard() {
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-                  {/* Preset 1: Capster Mandiri */}
-                  <div 
-                    onClick={() => handleApplyPreset('barber')}
-                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                      (barber.profileType || 'barber') === 'barber'
-                        ? 'border-[#285844] bg-[#D9E5DC]/20 shadow-xs'
-                        : 'border-neutral-200 bg-neutral-50/60 hover:border-neutral-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-2xl">💈</span>
-                        {(barber.profileType || 'barber') === 'barber' && (
-                          <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[10px] font-bold">
-                            Aktif
-                          </span>
-                        )}
+                {isFreePlan ? (
+                  <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-[#285844]/5 via-[#F7F6F2] to-[#285844]/10 border border-[#285844]/20 space-y-4">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-[#285844] text-white flex items-center justify-center shadow-xs shrink-0">
+                          <Crown className="w-5 h-5 text-amber-300" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-display font-extrabold text-sm sm:text-base text-[#171717]">
+                              Buka Mode Khusus Bisnismu
+                            </h3>
+                            <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold">
+                              Eksklusif Pro & Studio
+                            </span>
+                          </div>
+                          <p className="text-xs text-neutral-500 mt-0.5">
+                            Saat ini akunmu menggunakan Paket Free. Tingkatkan paket untuk memilih preset khusus usahamu.
+                          </p>
+                        </div>
                       </div>
-                      <h3 className="font-display font-bold text-sm text-[#171717]">Mode Capster Mandiri</h3>
-                      <p className="text-[11px] text-neutral-600 mt-1 leading-relaxed">
-                        Untuk capster / tukang cukur perorangan & freelance. Tampilkan portofolio karya, menu tarif, dan terima booking langsung ke jadwalmu.
-                      </p>
-                    </div>
-                    <span className="text-[10px] font-mono font-semibold text-[#285844] mt-3 block">
-                      Fokus Personal Branding →
-                    </span>
-                  </div>
 
-                  {/* Preset 2: Barbershop & Studio */}
-                  <div 
-                    onClick={() => handleApplyPreset('barbershop')}
-                    className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                      barber.profileType === 'barbershop'
-                        ? 'border-[#285844] bg-[#D9E5DC]/20 shadow-xs'
-                        : 'border-neutral-200 bg-neutral-50/60 hover:border-neutral-300'
-                    }`}
-                  >
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-2xl">🏢</span>
-                        {barber.profileType === 'barbershop' && (
-                          <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[10px] font-bold">
-                            Aktif
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="font-display font-bold text-sm text-[#171717]">Mode Barbershop & Studio</h3>
-                      <p className="text-[11px] text-neutral-600 mt-1 leading-relaxed">
-                        Untuk pemilik barbershop / studio pangkas. Dilengkapi lokasi fisik Google Maps, jam operasional toko, dan manajemen tim capster.
-                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsUpgradeModalOpen(true)}
+                        className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-bold transition-all shadow-2xs hover:shadow-xs active:scale-95 flex items-center gap-1.5 shrink-0 cursor-pointer"
+                      >
+                        <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                        <span>Pilih Paket & Upgrade</span>
+                      </button>
                     </div>
-                    <span className="text-[10px] font-mono font-semibold text-[#285844] mt-3 block">
-                      Dilengkapi Manajemen Tim Capster →
-                    </span>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                      <div 
+                        onClick={() => setIsUpgradeModalOpen(true)}
+                        className="p-4 rounded-xl bg-white border border-neutral-200/90 hover:border-[#285844]/60 transition-all cursor-pointer group shadow-2xs flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-2xl">💈</span>
+                            <span className="text-[10px] font-bold text-[#285844] bg-[#D9E5DC]/60 px-2.5 py-0.5 rounded-full">
+                              Paket Capster (Rp 49K)
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-xs text-[#171717] group-hover:text-[#285844] transition-colors">
+                            Mode Capster Mandiri
+                          </h4>
+                          <p className="text-[11px] text-neutral-500 mt-1 leading-relaxed">
+                            Khusus tukang cukur perorangan & freelance. Portofolio tanpa batas, tip sawer kopi digital, dan bio link personal.
+                          </p>
+                        </div>
+                        <span className="text-[10.5px] font-bold text-[#285844] mt-3 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                          Aktifkan Mode Capster →
+                        </span>
+                      </div>
+
+                      <div 
+                        onClick={() => setIsUpgradeModalOpen(true)}
+                        className="p-4 rounded-xl bg-white border border-neutral-200/90 hover:border-[#285844]/60 transition-all cursor-pointer group shadow-2xs flex flex-col justify-between"
+                      >
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-2xl">🏢</span>
+                            <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-200 px-2.5 py-0.5 rounded-full">
+                              Paket Barber Studio (Rp 99K)
+                            </span>
+                          </div>
+                          <h4 className="font-bold text-xs text-[#171717] group-hover:text-[#285844] transition-colors">
+                            Mode Barbershop & Studio
+                          </h4>
+                          <p className="text-[11px] text-neutral-500 mt-1 leading-relaxed">
+                            Khusus barbershop & studio pangkas. Manajemen tim multi-capster, jam toko, lokasi fisik Google Maps, dan branding resmi.
+                          </p>
+                        </div>
+                        <span className="text-[10.5px] font-bold text-amber-700 mt-3 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                          Aktifkan Mode Barbershop →
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                    {/* Preset 1: Capster Mandiri */}
+                    <div 
+                      onClick={() => handleApplyPreset('barber')}
+                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                        (barber.profileType || 'barber') === 'barber'
+                          ? 'border-[#285844] bg-[#D9E5DC]/20 shadow-xs'
+                          : 'border-neutral-200 bg-neutral-50/60 hover:border-neutral-300'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-2xl">💈</span>
+                          {(barber.profileType || 'barber') === 'barber' && (
+                            <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[10px] font-bold">
+                              Aktif
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-display font-bold text-sm text-[#171717]">Mode Capster Mandiri</h3>
+                        <p className="text-[11px] text-neutral-600 mt-1 leading-relaxed">
+                          Untuk capster / tukang cukur perorangan & freelance. Tampilkan portofolio karya, menu tarif, dan terima booking langsung ke jadwalmu.
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-mono font-semibold text-[#285844] mt-3 block">
+                        Fokus Personal Branding →
+                      </span>
+                    </div>
+
+                    {/* Preset 2: Barbershop & Studio */}
+                    <div 
+                      onClick={() => handleApplyPreset('barbershop')}
+                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
+                        barber.profileType === 'barbershop'
+                          ? 'border-[#285844] bg-[#D9E5DC]/20 shadow-xs'
+                          : 'border-neutral-200 bg-neutral-50/60 hover:border-neutral-300'
+                      }`}
+                    >
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-2xl">🏢</span>
+                          {barber.profileType === 'barbershop' && (
+                            <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[10px] font-bold">
+                              Aktif
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-display font-bold text-sm text-[#171717]">Mode Barbershop & Studio</h3>
+                        <p className="text-[11px] text-neutral-600 mt-1 leading-relaxed">
+                          Untuk pemilik barbershop / studio pangkas. Dilengkapi lokasi fisik Google Maps, jam operasional toko, dan manajemen tim capster.
+                        </p>
+                      </div>
+                      <span className="text-[10px] font-mono font-semibold text-[#285844] mt-3 block">
+                        Dilengkapi Manajemen Tim Capster →
+                      </span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Modular Feature Toggles */}
