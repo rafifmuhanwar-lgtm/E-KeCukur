@@ -71,7 +71,31 @@ export default async function handler(req, res) {
     } = req.body || {};
 
     const baseAmount = Number(amount) || 0;
-    const uniqueCode = Math.floor(100 + Math.random() * 899);
+
+    // Cegah tabrakan nominal jika ada transaksi bersamaan: cari kode unik yang belum dipakai
+    let occupiedTotals = new Set();
+    try {
+      const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const { data: pendingRows } = await supabase
+        .from('qris_payments')
+        .select('total_amount')
+        .eq('status', 'PENDING')
+        .gte('created_at', fifteenMinsAgo);
+
+      if (pendingRows && pendingRows.length > 0) {
+        pendingRows.forEach(r => occupiedTotals.add(Number(r.total_amount)));
+      }
+    } catch {}
+
+    // Cari kode unik acak yang belum ada di transaksi PENDING lainnya
+    let uniqueCode = Math.floor(100 + Math.random() * 899);
+    for (let attempt = 0; attempt < 50; attempt++) {
+      if (!occupiedTotals.has(baseAmount + uniqueCode)) {
+        break;
+      }
+      uniqueCode = Math.floor(100 + Math.random() * 899);
+    }
+
     const totalAmount = baseAmount + uniqueCode;
     const referenceId = `ECK-${Date.now().toString(36).toUpperCase()}-${uniqueCode}`;
     const dynamicQrisStr = generateDynamicQris(totalAmount);
