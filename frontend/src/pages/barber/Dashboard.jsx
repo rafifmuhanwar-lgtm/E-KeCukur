@@ -363,7 +363,24 @@ export default function BarberDashboard() {
 
   // Mode & Feature Toggle helpers
   const handleToggleFeature = (featureKey) => {
-    const currentFeatures = barber.features || {
+    // Validasi hak akses paket langganan
+    if (featureKey === 'team' && !isBarberPlan) {
+      setIsUpgradeModalOpen(true);
+      showToast('🔒 Fitur Tim Capster eksklusif untuk Paket Barber Studio (Rp 99K/bln)');
+      return;
+    }
+    if (featureKey === 'location' && !isBarberPlan) {
+      setIsUpgradeModalOpen(true);
+      showToast('🔒 Fitur Lokasi Studio & Maps eksklusif untuk Paket Barber Studio (Rp 99K/bln)');
+      return;
+    }
+    if (featureKey === 'tipping' && isFreePlan) {
+      setIsUpgradeModalOpen(true);
+      showToast('🔒 Fitur Sawer Tip Digital eksklusif untuk Paket Capster (Rp 49K) & Barber Studio');
+      return;
+    }
+
+    const currentFeatures = barber?.features || {
       booking: true,
       services: true,
       lookbook: true,
@@ -1396,42 +1413,51 @@ export default function BarberDashboard() {
                       name: 'Sistem Booking Jadwal Mandiri Online',
                       desc: 'Pelanggan bisa memilih tanggal & jam slot langsung di web tanpa harus chat bolak-balik.',
                       icon: Calendar,
-                      active: barber.features?.booking !== false
-                    },
-                    {
-                      key: 'team',
-                      name: 'Tim Capster (Banyak Tukang Cukur)',
-                      desc: 'Aktifkan jika usahamu memiliki beberapa capster. Pelanggan bisa memilih capster saat booking jadwal.',
-                      icon: Users,
-                      active: barber.features?.team === true
+                      active: barber.features?.booking !== false,
+                      isLocked: false
                     },
                     {
                       key: 'services',
                       name: 'Daftar Layanan & Transparansi Tarif',
                       desc: 'Menampilkan menu potong rambut, durasi pengerjaan, dan harga yang jelas untuk pelanggan.',
                       icon: Scissors,
-                      active: barber.features?.services !== false
+                      active: barber.features?.services !== false,
+                      isLocked: false
                     },
                     {
                       key: 'lookbook',
                       name: 'Galeri Portofolio Hasil Potong (Lookbook)',
                       desc: 'Pamerkan foto hasil guntingan terbaik. Matikan jika kamu belum sempat mengunggah foto portofolio.',
                       icon: Sparkles,
-                      active: barber.features?.lookbook !== false
-                    },
-                    {
-                      key: 'location',
-                      name: 'Lokasi Studio Fisik & Google Maps',
-                      desc: 'Menampilkan alamat lengkap dan rute navigasi. Matikan jika kamu melayani panggilan ke rumah (home service).',
-                      icon: MapPin,
-                      active: barber.features?.location !== false
+                      active: barber.features?.lookbook !== false,
+                      isLocked: false
                     },
                     {
                       key: 'tipping',
                       name: 'Sawer Tip Digital (Tip Kopi)',
-                      desc: 'Beri opsi bagi pelanggan yang puas untuk mengirim tip apresiasi kopi secara digital.',
+                      desc: 'Beri opsi bagi pelanggan yang puas untuk mengirim tip apresiasi kopi secara digital via QRIS.',
                       icon: Coffee,
-                      active: barber.features?.tipping !== false
+                      active: !isFreePlan && barber.features?.tipping !== false,
+                      isLocked: isFreePlan,
+                      lockLabel: 'Paket Capster & Studio'
+                    },
+                    {
+                      key: 'location',
+                      name: 'Lokasi Studio Fisik & Google Maps',
+                      desc: 'Menampilkan alamat lengkap dan rute navigasi. Khusus barbershop studio toko fisik.',
+                      icon: MapPin,
+                      active: isBarberPlan && barber.features?.location !== false,
+                      isLocked: !isBarberPlan,
+                      lockLabel: 'Paket Barber Studio'
+                    },
+                    {
+                      key: 'team',
+                      name: 'Tim Capster (Banyak Tukang Cukur)',
+                      desc: 'Aktifkan jika usahamu memiliki beberapa capster. Pelanggan bisa memilih capster saat booking jadwal.',
+                      icon: Users,
+                      active: isBarberPlan && barber.features?.team === true,
+                      isLocked: !isBarberPlan,
+                      lockLabel: 'Paket Barber Studio'
                     }
                   ].map((feat) => {
                     const Icon = feat.icon;
@@ -1439,18 +1465,31 @@ export default function BarberDashboard() {
                       <div key={feat.key} className="py-3.5 flex items-start justify-between gap-4">
                         <div className="flex items-start gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
-                            feat.active ? 'bg-[#D9E5DC] text-[#285844]' : 'bg-neutral-100 text-neutral-400'
+                            feat.isLocked 
+                              ? 'bg-amber-100/70 text-amber-700' 
+                              : feat.active ? 'bg-[#D9E5DC] text-[#285844]' : 'bg-neutral-100 text-neutral-400'
                           }`}>
                             <Icon className="w-4 h-4" />
                           </div>
                           <div>
-                            <div className="flex items-center gap-2">
+                            <div className="flex flex-wrap items-center gap-2">
                               <span className="text-xs font-bold text-[#171717]">{feat.name}</span>
-                              <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-semibold ${
-                                feat.active ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-500'
-                              }`}>
-                                {feat.active ? 'Aktif' : 'Nonaktif'}
-                              </span>
+                              {feat.isLocked ? (
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleFeature(feat.key)}
+                                  className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded-full flex items-center gap-1 hover:bg-amber-200 transition-colors cursor-pointer"
+                                  title="Fitur terkunci, klik untuk upgrade"
+                                >
+                                  <span>🔒 {feat.lockLabel}</span>
+                                </button>
+                              ) : (
+                                <span className={`text-[10px] font-mono px-1.5 py-0.2 rounded font-semibold ${
+                                  feat.active ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-100 text-neutral-500'
+                                }`}>
+                                  {feat.active ? 'Aktif' : 'Nonaktif'}
+                                </span>
+                              )}
                             </div>
                             <p className="text-[11px] text-neutral-500 mt-0.5 leading-relaxed">{feat.desc}</p>
                           </div>
@@ -1460,12 +1499,17 @@ export default function BarberDashboard() {
                           type="button"
                           onClick={() => handleToggleFeature(feat.key)}
                           className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 mt-1 ${
-                            feat.active ? 'bg-[#285844]' : 'bg-neutral-300'
+                            feat.isLocked 
+                              ? 'bg-neutral-200 border border-neutral-300' 
+                              : feat.active ? 'bg-[#285844]' : 'bg-neutral-300'
                           }`}
+                          title={feat.isLocked ? `Fitur khusus ${feat.lockLabel}` : feat.active ? 'Klik untuk mematikan' : 'Klik untuk menyalakan'}
                         >
-                          <span className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
-                            feat.active ? 'right-1' : 'left-1'
-                          }`} />
+                          <span className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform flex items-center justify-center text-[8px] ${
+                            feat.isLocked ? 'left-1 text-neutral-400' : feat.active ? 'right-1' : 'left-1'
+                          }`}>
+                            {feat.isLocked && '🔒'}
+                          </span>
                         </button>
                       </div>
                     );
