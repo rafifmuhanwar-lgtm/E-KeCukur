@@ -109,14 +109,9 @@ export default async function handler(req, res) {
 
     let targetAmount = 0;
 
-    if (payload.amount) {
-      targetAmount = parseNotificationAmount(payload.amount);
-    } else if (payload.nominal) {
-      targetAmount = parseNotificationAmount(payload.nominal);
-    } else if (payload.total) {
-      targetAmount = parseNotificationAmount(payload.total);
-    } else if (payload.value) {
-      targetAmount = parseNotificationAmount(payload.value);
+    const rawAmt = payload.amount ?? payload.nominal ?? payload.total ?? payload.value ?? payload.data?.amount ?? payload.data?.nominal ?? payload.data?.transaction?.amount;
+    if (rawAmt !== undefined && rawAmt !== null) {
+      targetAmount = parseNotificationAmount(rawAmt);
     }
 
     // Gabungkan seluruh kemungkinan field teks notifikasi dari Payhook / Android listener
