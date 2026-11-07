@@ -767,12 +767,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                 </span>
               )}
 
-              {/* Role / Segment Pill */}
-              <span className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium flex items-center gap-1.5 bg-neutral-100 text-neutral-700 border border-neutral-200/70 shadow-2xs">
-                <Star className="w-3.5 h-3.5 text-amber-500 fill-amber-500" />
-                <span>{barber.profileType === 'barbershop' ? 'Barbershop' : 'Capster'}</span>
-              </span>
-
               {/* Instagram Pill */}
               {barber.instagram && (
                 <a 
