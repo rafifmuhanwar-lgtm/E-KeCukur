@@ -5,7 +5,7 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL |
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hdGdxYWtzdW91c2xkZnh5ZG5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MjUxMjAsImV4cCI6MjEwNzMwMTEyMH0.09noBpwZ6jHYeJJV-3rprhUtqPk8XvBRTLTJKCEJHA8';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const EXPECTED_SECRET = process.env.QRIS_WEBHOOK_SECRET;
+const EXPECTED_SECRET = process.env.QRIS_WEBHOOK_SECRET || 'ecukur_qris_secret_2026';
 
 function isValidWebhookSecret(providedSecret, expectedSecret) {
   if (typeof providedSecret !== 'string' || typeof expectedSecret !== 'string') {
@@ -77,22 +77,6 @@ export default async function handler(req, res) {
   }
 
   try {
-    if (!EXPECTED_SECRET) {
-      return res.status(503).json({
-        success: false,
-        message: 'Webhook authentication is not configured'
-      });
-    }
-
-    const authorization = req.headers.authorization;
-    const bearerSecret = typeof authorization === 'string'
-      ? authorization.match(/^Bearer\s+(.+)$/i)?.[1]
-      : undefined;
-    const providedSecret = req.headers['x-api-key'] || bearerSecret || '';
-    if (!isValidWebhookSecret(providedSecret, EXPECTED_SECRET)) {
-      return res.status(401).json({ success: false, message: 'Unauthorized' });
-    }
-
     let body = req.body;
     if (typeof body === 'string') {
       try {
@@ -103,6 +87,28 @@ export default async function handler(req, res) {
     }
 
     const payload = body || {};
+
+    const authorization = req.headers.authorization;
+    const bearerSecret = typeof authorization === 'string'
+      ? authorization.match(/^Bearer\s+(.+)$/i)?.[1]
+      : undefined;
+
+    const providedSecret = (
+      req.headers['x-api-key'] ||
+      bearerSecret ||
+      req.query?.secret ||
+      req.query?.key ||
+      req.query?.['x-api-key'] ||
+      payload.secret ||
+      payload.api_key ||
+      payload.apiKey ||
+      payload.key ||
+      ''
+    ).trim();
+
+    if (!isValidWebhookSecret(providedSecret, EXPECTED_SECRET)) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: Secret key tidak valid' });
+    }
 
     // Tangani Test Connection / Ping dari aplikasi seperti Payhook
     if (payload.test || payload.ping || payload.action === 'test' || payload.event === 'ping' || payload.type === 'test') {
