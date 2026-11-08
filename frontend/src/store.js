@@ -968,7 +968,7 @@ export const useStore = create((set, get) => ({
       custom_links: target.customLinks,
       team_members: target.teamMembers,
       services: target.services,
-      plan: target.plan || 'free'
+      plan: target?.plan || 'free'
     };
 
     await saveBarberPayloadToSupabase(target.id || barberId, payload);

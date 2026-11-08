@@ -9,12 +9,9 @@ import {
   MapPin, 
   Scissors, 
   BadgeCheck, 
-  Sparkles,
-  Calendar,
-  ExternalLink
+  Sparkles
 } from 'lucide-react';
 import { useStore } from '../../store';
-import Logo from '../../components/Logo';
 
 export default function Barbers() {
   const navigate = useNavigate();

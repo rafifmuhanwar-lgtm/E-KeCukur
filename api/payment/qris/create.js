@@ -67,7 +67,7 @@ export default async function handler(req, res) {
       barberId = null,
       customerName = 'Pelanggan',
       customerPhone = '',
-      qrisImageUrl = null
+      _qrisImageUrl = null
     } = req.body || {};
 
     const baseAmount = Number(amount) || 0;

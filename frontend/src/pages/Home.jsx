@@ -13,8 +13,7 @@ import {
   Calendar,
   BarChart2,
   Store,
-  Crown,
-  ShieldCheck
+  Crown
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Logo from '../components/Logo';

@@ -1,24 +1,18 @@
 import React, { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Clock, 
   Calendar, 
-  PlusCircle, 
   CheckCircle2, 
   Copy, 
   Check, 
   Scissors, 
-  ArrowLeft, 
-  QrCode,
-  Sparkles,
-  ExternalLink
+  ArrowLeft
 } from 'lucide-react';
-import Logo from '../../components/Logo';
 import { useStore } from '../../store';
 
 export default function CustomerBookings() {
-  const navigate = useNavigate();
   const bookings = useStore((state) => state.bookings || []);
   const fetchBookings = useStore((state) => state.fetchBookings);
   const subscribeToBookings = useStore((state) => state.subscribeToBookings);

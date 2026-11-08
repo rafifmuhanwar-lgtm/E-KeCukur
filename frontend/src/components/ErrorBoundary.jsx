@@ -1,6 +1,5 @@
 import React from 'react';
-import { AlertTriangle, RefreshCw, Home, ShieldAlert } from 'lucide-react';
-import Logo from './Logo';
+import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 
 export class ErrorBoundary extends React.Component {
   constructor(props) {

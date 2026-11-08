@@ -16,7 +16,6 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useStore } from '../../store';
-import Logo from '../../components/Logo';
 
 const TIME_SLOTS = [
   '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', 
@@ -63,7 +62,7 @@ export default function BookingFlow() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerNote, setCustomerNote] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('QRIS');
+  const [paymentMethod] = useState('QRIS');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const effectiveServices = services.length > 0 ? services : [
@@ -439,7 +438,7 @@ export default function BookingFlow() {
                     </div>
 
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-                      {TIME_SLOTS.map((time, i) => {
+                      {TIME_SLOTS.map((time) => {
                         const isSelected = selectedTime === time;
                         return (
                           <button

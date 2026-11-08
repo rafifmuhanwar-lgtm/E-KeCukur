@@ -5,7 +5,6 @@ import {
   Scissors, 
   User, 
   MapPin, 
-  Phone, 
   ExternalLink, 
   Copy, 
   Check, 
@@ -39,9 +38,6 @@ import {
   Wallet,
   TrendingUp,
   Receipt,
-  ShieldCheck,
-  ToggleLeft,
-  ToggleRight,
   AlertCircle,
   Crown,
   Download
@@ -269,7 +265,7 @@ export default function BarberDashboard() {
 
   const tipsList = React.useMemo(() => {
     return Array.isArray(barber?.tipsHistory) ? barber.tipsHistory : [];
-  }, [barber?.tipsHistory]);
+  }, [barber]);
 
   const totalTipRevenue = React.useMemo(() => {
     return tipsList.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
@@ -279,7 +275,7 @@ export default function BarberDashboard() {
 
   const totalWithdrawn = React.useMemo(() => {
     return (barber?.withdrawalsHistory || []).reduce((acc, w) => acc + (Number(w.amount) || 0), 0);
-  }, [barber?.withdrawalsHistory]);
+  }, [barber]);
 
   const availableBalance = Math.max(0, totalCombinedRevenue - totalWithdrawn);
 
@@ -643,7 +639,6 @@ export default function BarberDashboard() {
   const [withdrawBank, setWithdrawBank] = useState(barber?.payoutAccount?.bankName || 'BCA');
   const [withdrawAccNumber, setWithdrawAccNumber] = useState(barber?.payoutAccount?.accountNumber || '');
   const [withdrawAccHolder, setWithdrawAccHolder] = useState(barber?.payoutAccount?.accountHolder || barber?.name || '');
-  const [activeLedgerTab, setActiveLedgerTab] = useState('incoming'); // 'incoming' | 'withdrawals'
   const handleOpenWithdrawModal = () => {
     setWithdrawBank(barber?.payoutAccount?.bankName || 'BCA');
     setWithdrawAccNumber(barber?.payoutAccount?.accountNumber || '');
@@ -1779,12 +1774,12 @@ export default function BarberDashboard() {
                   />
 
                   {/* Banner Display or Upload Dropzone */}
-                  {(pendingBannerPreview || barber.bannerImage) ? (
+                  {(pendingBannerPreview || barber?.bannerImage) ? (
                     <div className="space-y-3 mb-3">
                       {/* Banner Preview Card */}
                       <div className="relative rounded-2xl overflow-hidden border border-neutral-200 bg-neutral-900 h-36 sm:h-44 group shadow-sm">
                         <img 
-                          src={pendingBannerPreview || barber.bannerImage} 
+                          src={pendingBannerPreview || barber?.bannerImage} 
                           alt="Banner Preview" 
                           className="w-full h-full object-cover opacity-90 transition-transform group-hover:scale-102"
                         />

@@ -115,7 +115,7 @@ export default function DomainMigrationNotice() {
 
       {/* Footer */}
       <footer className="max-w-xl w-full mx-auto text-center text-xs text-neutral-400">
-        © {new Date().getFullYear()} E Cukur • ecukur.biz.id
+        © 2026 E Cukur • ecukur.biz.id
       </footer>
     </div>
   );

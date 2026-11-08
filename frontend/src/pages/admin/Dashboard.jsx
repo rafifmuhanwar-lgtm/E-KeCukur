@@ -7,7 +7,6 @@ import {
   Calendar, 
   TrendingUp, 
   CheckCircle2, 
-  Clock, 
   Smartphone, 
   Copy, 
   Check, 
@@ -160,9 +159,9 @@ export default function AdminMasterDashboard() {
   // ─── 1. METRICS & AGGREGATIONS ───
   const metrics = useMemo(() => {
     const totalBarbers = barbers.length;
-    const freeBarbers = barbers.filter(b => (b.plan || 'free') === 'free').length;
-    const capsterBarbers = barbers.filter(b => b.plan === 'capster').length;
-    const studioBarbers = barbers.filter(b => b.plan === 'barber').length;
+    const freeBarbers = barbers.filter(b => (b?.plan || 'free') === 'free').length;
+    const capsterBarbers = barbers.filter(b => b?.plan === 'capster').length;
+    const studioBarbers = barbers.filter(b => b?.plan === 'barber').length;
 
     const totalBookings = bookings.length;
     const confirmedBookings = bookings.filter(b => b.status === 'Terkonfirmasi' || b.status === 'Selesai').length;
@@ -222,8 +221,8 @@ export default function AdminMasterDashboard() {
         (b.slug || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b.locationCity || '').toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchSegment = segmentFilter === 'ALL' || (b.segment || 'capster') === segmentFilter;
-      const matchPlan = planFilter === 'ALL' || (b.plan || 'free') === planFilter;
+      const matchSegment = segmentFilter === 'ALL' || (b?.segment || 'capster') === segmentFilter;
+      const matchPlan = planFilter === 'ALL' || (b?.plan || 'free') === planFilter;
       return matchSearch && matchSegment && matchPlan;
     });
   }, [barbers, searchQuery, segmentFilter, planFilter]);
@@ -745,11 +744,11 @@ export default function AdminMasterDashboard() {
                           <div className="flex items-center gap-1.5">
                             <h4 className="font-bold text-xs text-neutral-900 truncate">{barber.name}</h4>
                             <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
-                              barber.plan === 'barber' ? 'bg-amber-100 text-amber-800' :
-                              barber.plan === 'capster' ? 'bg-emerald-100 text-emerald-800' :
+                              barber?.plan === 'barber' ? 'bg-amber-100 text-amber-800' :
+                              barber?.plan === 'capster' ? 'bg-emerald-100 text-emerald-800' :
                               'bg-neutral-100 text-neutral-600'
                             }`}>
-                              {barber.plan || 'Free'}
+                              {barber?.plan || 'Free'}
                             </span>
                           </div>
                           <span className="text-[11px] text-neutral-400 font-mono block">
@@ -917,7 +916,7 @@ export default function AdminMasterDashboard() {
                     ) : (
                       filteredBarbers.map((b) => {
                         const barberBookingsCount = bookings.filter(x => x.barberId === b.id || x.barberName === b.name).length;
-                        const currentPlan = b.plan || 'free';
+                        const currentPlan = b?.plan || 'free';
 
                         return (
                           <tr key={b.id} className="hover:bg-neutral-50/70 transition-colors">
