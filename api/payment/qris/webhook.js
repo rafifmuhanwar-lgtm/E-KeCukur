@@ -1,10 +1,21 @@
 import { createClient } from '@supabase/supabase-js';
+import { timingSafeEqual } from 'node:crypto';
 
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://natgqaksuousldfxydnr.supabase.co';
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hdGdxYWtzdW91c2xkZnh5ZG5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MjUxMjAsImV4cCI6MjEwNzMwMTEyMH0.09noBpwZ6jHYeJJV-3rprhUtqPk8XvBRTLTJKCEJHA8';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const EXPECTED_SECRET = 'ecukur_qris_secret_2026';
+const EXPECTED_SECRET = process.env.QRIS_WEBHOOK_SECRET;
+
+function isValidWebhookSecret(providedSecret, expectedSecret) {
+  if (typeof providedSecret !== 'string' || typeof expectedSecret !== 'string') {
+    return false;
+  }
+
+  const provided = Buffer.from(providedSecret, 'utf8');
+  const expected = Buffer.from(expectedSecret, 'utf8');
+  return provided.length === expected.length && timingSafeEqual(provided, expected);
+}
 
 function parseNotificationAmount(input) {
   if (typeof input === 'number') return Math.round(input);
@@ -56,7 +67,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       status: 'active',
       message: 'E-CUKUR QRIS Webhook Listener is live on Vercel',
-      expectedHeader: 'x-api-key: ecukur_qris_secret_2026',
+      requiredHeader: 'x-api-key',
       method: 'POST'
     });
   }
@@ -66,6 +77,22 @@ export default async function handler(req, res) {
   }
 
   try {
+    if (!EXPECTED_SECRET) {
+      return res.status(503).json({
+        success: false,
+        message: 'Webhook authentication is not configured'
+      });
+    }
+
+    const authorization = req.headers.authorization;
+    const bearerSecret = typeof authorization === 'string'
+      ? authorization.match(/^Bearer\s+(.+)$/i)?.[1]
+      : undefined;
+    const providedSecret = req.headers['x-api-key'] || bearerSecret || '';
+    if (!isValidWebhookSecret(providedSecret, EXPECTED_SECRET)) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
     let body = req.body;
     if (typeof body === 'string') {
       try {
@@ -76,27 +103,6 @@ export default async function handler(req, res) {
     }
 
     const payload = body || {};
-
-    // Validasi Secret API Key (Bisa via Header x-api-key, Bearer token, Query param URL, atau JSON body)
-    const apiKey = (
-      req.headers['x-api-key'] ||
-      (req.headers['authorization'] || '').replace('Bearer ', '') ||
-      req.query?.secret ||
-      req.query?.key ||
-      req.query?.['x-api-key'] ||
-      payload.secret ||
-      payload.api_key ||
-      payload.apiKey ||
-      payload.key ||
-      ''
-    ).trim();
-
-    if (!apiKey || apiKey !== EXPECTED_SECRET) {
-      return res.status(401).json({
-        success: false,
-        message: 'Unauthorized: Secret key tidak valid. Sertakan header x-api-key atau param ?secret=ecukur_qris_secret_2026'
-      });
-    }
 
     // Tangani Test Connection / Ping dari aplikasi seperti Payhook
     if (payload.test || payload.ping || payload.action === 'test' || payload.event === 'ping' || payload.type === 'test') {
@@ -136,7 +142,7 @@ export default async function handler(req, res) {
       targetAmount = parseNotificationAmount(combinedText);
     }
 
-    console.log('[Vercel QRIS Webhook] Parsed Amount:', targetAmount, 'from payload:', JSON.stringify(payload));
+    console.log('[Vercel QRIS Webhook] Parsed Amount:', targetAmount);
 
     if (!targetAmount || targetAmount <= 0) {
       return res.status(200).json({

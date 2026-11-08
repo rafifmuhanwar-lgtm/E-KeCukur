@@ -1,7 +1,18 @@
 import express from 'express';
+import { timingSafeEqual } from 'node:crypto';
 import { supabase } from '../supabase.js';
 
 const router = express.Router();
+
+function isValidWebhookSecret(providedSecret, expectedSecret) {
+  if (typeof providedSecret !== 'string' || typeof expectedSecret !== 'string') {
+    return false;
+  }
+
+  const provided = Buffer.from(providedSecret, 'utf8');
+  const expected = Buffer.from(expectedSecret, 'utf8');
+  return provided.length === expected.length && timingSafeEqual(provided, expected);
+}
 
 // Memory store fallback (agar pembayaran tetap berjalan mulus meskipun tabel Supabase belum dimigrasi)
 const memoryPayments = new Map();
@@ -223,12 +234,22 @@ router.get('/status/:referenceId', async (req, res) => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.post('/webhook', async (req, res) => {
   try {
-    const secretKey = process.env.QRIS_WEBHOOK_SECRET || 'ecukur_qris_secret_2026';
-    const providedKey = req.headers['x-api-key'] || req.headers['authorization'] || req.query.key;
+    const secretKey = process.env.QRIS_WEBHOOK_SECRET;
+    if (!secretKey) {
+      return res.status(503).json({
+        success: false,
+        message: 'Webhook authentication is not configured'
+      });
+    }
 
-    // Optional API Key check: jika ada env key yang diset ketat
-    if (process.env.STRICT_WEBHOOK_KEY === 'true' && providedKey !== secretKey) {
-      return res.status(401).json({ success: false, message: 'Unauthorized: Invalid API Key' });
+    const authorization = req.headers.authorization;
+    const bearerSecret = typeof authorization === 'string'
+      ? authorization.match(/^Bearer\s+(.+)$/i)?.[1]
+      : undefined;
+    const providedSecret = req.headers['x-api-key'] || bearerSecret || '';
+
+    if (!isValidWebhookSecret(providedSecret, secretKey)) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
     }
 
     // Ekstraksi nominal dari berbagai variasi payload (MacroDroid / Tasker / Custom JSON)
@@ -247,7 +268,7 @@ router.post('/webhook', async (req, res) => {
       targetAmount = parseNotificationAmount(rawPayload.raw_text);
     }
 
-    console.log(`[QRIS Webhook Received]: Parsed Amount = ${targetAmount} | Raw =`, JSON.stringify(rawPayload));
+    console.log(`[QRIS Webhook Received]: Parsed Amount = ${targetAmount}`);
 
     if (!targetAmount || targetAmount <= 0) {
       return res.status(400).json({
@@ -376,6 +397,7 @@ router.post('/simulate', async (req, res) => {
     amount: targetAmount,
     raw_text: `[SIMULASI DEV] Pembayaran QRIS Rp ${targetAmount} berhasil diterima`
   };
+  req.headers['x-api-key'] = process.env.QRIS_WEBHOOK_SECRET || '';
   return router.handle(req, res);
 });
 
@@ -390,15 +412,15 @@ router.get('/instructions', (req, res) => {
   res.json({
     success: true,
     webhookUrl,
-    apiKey: process.env.QRIS_WEBHOOK_SECRET || 'ecukur_qris_secret_2026',
+    requiredHeader: 'x-api-key',
+    secretConfiguration: 'Set QRIS_WEBHOOK_SECRET in the server environment and configure its value privately on the device.',
     macroDroidConfig: {
       trigger: 'Notification Received -> Pilih Aplikasi Merchant/Bank (BCA/GoBiz/DANA/dsb)',
       action: 'HTTP Request',
       method: 'POST',
       url: webhookUrl,
       headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.QRIS_WEBHOOK_SECRET || 'ecukur_qris_secret_2026'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({
         text: '{not_text}',
@@ -410,4 +432,3 @@ router.get('/instructions', (req, res) => {
 });
 
 export default router;
-
