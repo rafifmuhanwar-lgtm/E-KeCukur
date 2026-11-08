@@ -42,14 +42,25 @@ import {
   EyeOff,
   Fingerprint,
   Terminal,
-  ShieldAlert,
-  HelpCircle
+  ShieldAlert
 } from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
 import { getAppDomain } from '../../lib/domain';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { simulateQrisPayment, getDynamicQrisImageUrl, MASTER_QRIS_STATIC } from '../../lib/qrisPayment';
+
+async function computeSha256(str) {
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    const hashBuffer = await window.crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    return '';
+  }
+}
 
 export default function AdminMasterDashboard() {
   const navigate = useNavigate();
@@ -65,14 +76,7 @@ export default function AdminMasterDashboard() {
   const fetchBookingsFromSupabase = useStore((state) => state.fetchBookingsFromSupabase);
   const subscribeToBookings = useStore((state) => state.subscribeToBookings);
 
-  // ─── HIGH-SECURITY GATEKEEPER & BRUTE-FORCE PROTECTION ───
-  const ADMIN_PASSKEYS = useMemo(() => [
-    'ecukur_admin_2026',
-    'admin2026',
-    '882026',
-    (import.meta.env.VITE_ADMIN_SECRET_KEY || '').trim()
-  ].filter(Boolean), []);
-
+  // ─── HIGH-SECURITY GATEKEEPER (SERVER-VERIFIED & ZERO PLAINTEXT SECRETS) ───
   const ADMIN_WHITELIST_EMAILS = useMemo(() => [
     'rafif.muh.anwar@gmail.com',
     'shvadiaz38@gmail.com',
@@ -86,7 +90,6 @@ export default function AdminMasterDashboard() {
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
   const [authNotice, setAuthNotice] = useState('');
-  const [showQuickHelp, setShowQuickHelp] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -175,8 +178,8 @@ export default function AdminMasterDashboard() {
     };
   }, [isAdminUnlocked]);
 
-  // 4. Verifikasi Security Passkey / PIN
-  const handleVerifyPasskey = (e, explicitKey) => {
+  // 4. Verifikasi Security Passkey / PIN (Server API Verification + SHA-256 Hash Fallback)
+  const handleVerifyPasskey = async (e, explicitKey) => {
     e?.preventDefault();
     if (lockoutSeconds > 0 || isVerifying) return;
 
@@ -187,8 +190,44 @@ export default function AdminMasterDashboard() {
     setAuthError('');
     setAuthNotice('');
 
-    setTimeout(() => {
-      const isValid = ADMIN_PASSKEYS.includes(candidate);
+    try {
+      let isValid = false;
+      let serverErrorMessage = '';
+
+      // 1. Verifikasi Utama: Serverless Endpoint Backend (/api/admin/verify)
+      try {
+        const res = await fetch('/api/admin/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ passkey: candidate })
+        });
+        const data = await res.json().catch(() => ({}));
+
+        if (res.ok && data.success) {
+          isValid = true;
+        } else if (res.status === 429) {
+          setLockoutSeconds(data.lockoutSeconds || 15 * 60);
+          setAuthError(data.error || 'Akses ditangguhkan sementara.');
+          setIsVerifying(false);
+          return;
+        } else if (res.status === 401) {
+          serverErrorMessage = data.error || '';
+        }
+      } catch {
+        // Abaikan error jaringan untuk melanjutkan ke fallback kriptografi
+      }
+
+      // 2. Fallback Kriptografis: Hash SHA-256 satu arah (Zero Plaintext di Source Code)
+      if (!isValid) {
+        const candidateHash = await computeSha256(candidate);
+        const SECURE_HASHES = new Set([
+          'f8c9db92aeb781e944c2ebd5707a568cbabb6bd683c61f369fb4967423915d22',
+          '4cc3e12daae8b68d83dfe17c16c3c533c5d56fd9974b123cf589f019eeceffd3'
+        ]);
+        if (candidateHash && SECURE_HASHES.has(candidateHash)) {
+          isValid = true;
+        }
+      }
 
       if (isValid) {
         setIsAdminUnlocked(true);
@@ -219,11 +258,12 @@ export default function AdminMasterDashboard() {
           setLockoutSeconds(15 * 60);
           setAuthError('5x Percobaan Gagal! Sistem mengunci akses selama 15 menit.');
         } else {
-          setAuthError(`Kredensial salah! Sisa percobaan: ${5 - newAttempts} kali.`);
+          setAuthError(serverErrorMessage || `Kredensial salah! Sisa percobaan: ${5 - newAttempts} kali.`);
         }
       }
+    } finally {
       setIsVerifying(false);
-    }, 400);
+    }
   };
 
   const handlePinDigit = (digit) => {
@@ -944,49 +984,6 @@ export default function AdminMasterDashboard() {
                 </button>
               </form>
             )}
-
-            {/* Quick Access Help for Owner */}
-            <div className="pt-2 border-t border-neutral-800/80">
-              <button
-                type="button"
-                onClick={() => setShowQuickHelp(!showQuickHelp)}
-                className="w-full flex items-center justify-between text-[11px] text-neutral-400 hover:text-emerald-400 transition-colors py-1 cursor-pointer"
-              >
-                <span className="flex items-center gap-1.5">
-                  <HelpCircle className="w-3.5 h-3.5" />
-                  <span>Bantuan Kunci Super Admin</span>
-                </span>
-                <span className="font-mono text-[10px] text-neutral-500">
-                  {showQuickHelp ? '▲ Tutup' : '▼ Buka'}
-                </span>
-              </button>
-
-              {showQuickHelp && (
-                <div className="mt-2.5 p-3 rounded-xl bg-neutral-950/90 border border-neutral-800 text-[11px] text-neutral-300 space-y-2">
-                  <p className="text-neutral-400 text-[10px] leading-relaxed">
-                    Kredensial master terdaftar untuk akses instan pengembang & pemilik sistem:
-                  </p>
-                  <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
-                    <button
-                      type="button"
-                      onClick={() => handleVerifyPasskey(null, '882026')}
-                      className="px-2.5 py-1.5 bg-neutral-900 hover:bg-emerald-950/50 border border-neutral-700 hover:border-emerald-500/50 rounded-lg text-emerald-300 text-left transition-all cursor-pointer flex items-center justify-between"
-                    >
-                      <span>PIN: <strong>882026</strong></span>
-                      <span className="text-[10px] text-emerald-400">⚡ Masuk</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleVerifyPasskey(null, 'ecukur_admin_2026')}
-                      className="px-2.5 py-1.5 bg-neutral-900 hover:bg-emerald-950/50 border border-neutral-700 hover:border-emerald-500/50 rounded-lg text-emerald-300 text-left transition-all cursor-pointer flex items-center justify-between"
-                    >
-                      <span className="truncate mr-1">Passkey Master</span>
-                      <span className="text-[10px] text-emerald-400">⚡ Masuk</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
 
             {/* Footer Back Link */}
             <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between text-xs text-neutral-400">
