@@ -194,7 +194,13 @@ class BotCommandTests(unittest.TestCase):
         with (
             patch.object(bot, "TELEGRAM_GROUP_ID", "-100123"),
             patch.object(bot, "_group_connection_verified", False),
-            patch.dict(os.environ, {"BACKEND_API_KEY": "test-key"}),
+            patch.dict(
+                os.environ,
+                {
+                    "BACKEND_API_URL": "https://backend.example",
+                    "BACKEND_API_KEY": "test-key",
+                },
+            ),
             patch.object(
                 bot,
                 "_monitoring_api_get",
@@ -219,7 +225,13 @@ class BotCommandTests(unittest.TestCase):
     def test_backend_unauthorized_is_not_reported_as_offline(self) -> None:
         context = SimpleNamespace(bot=FakeTelegramConnection())
         with (
-            patch.dict(os.environ, {"BACKEND_API_KEY": "test-key"}),
+            patch.dict(
+                os.environ,
+                {
+                    "BACKEND_API_URL": "https://backend.example",
+                    "BACKEND_API_KEY": "test-key",
+                },
+            ),
             patch.object(
                 bot,
                 "_monitoring_api_get",
@@ -238,7 +250,13 @@ class BotCommandTests(unittest.TestCase):
     def test_monitoring_404_falls_back_to_existing_qris_route(self) -> None:
         context = SimpleNamespace(bot=FakeTelegramConnection())
         with (
-            patch.dict(os.environ, {"BACKEND_API_KEY": "test-key"}),
+            patch.dict(
+                os.environ,
+                {
+                    "BACKEND_API_URL": "https://backend.example",
+                    "BACKEND_API_KEY": "test-key",
+                },
+            ),
             patch.object(
                 bot,
                 "_monitoring_api_get",
