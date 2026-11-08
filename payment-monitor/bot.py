@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import re
 from urllib.error import HTTPError, URLError
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 from dotenv import load_dotenv
@@ -46,6 +46,13 @@ def _pending_alert_minutes() -> int:
 
 
 PAYMENT_PENDING_ALERT_MINUTES = _pending_alert_minutes()
+
+
+class MonitoringAPIError(Exception):
+    def __init__(self, status: int, code: str | None = None) -> None:
+        super().__init__(code or "Monitoring API request failed")
+        self.status = status
+        self.code = code
 
 
 async def _require_admin(update: Update) -> bool:
@@ -96,18 +103,11 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "/testgroup - Mengirim pesan pengujian ke grup / Send a test message (admin)\n"
         "/today - Ringkasan pembayaran hari ini / Today's payment summary (admin)\n"
         "/pending - Daftar pembayaran pending / Pending payments (admin)\n"
-        "/failed - Daftar pembayaran gagal / Failed payments (admin)\n"
+        "/failed - Daftar gagal/kedaluwarsa / Failed or expired payments (admin)\n"
         "/alerts - Riwayat masalah pembayaran / Payment issue history (admin)\n"
         "/details REF - Detail transaksi / Payment details (admin)\n"
         "/health - Kondisi layanan monitoring / Monitoring service health (admin)"
     )
-
-
-def _backend_health_request() -> bool | None:
-    payload = _backend_get_json("/api/health")
-    if payload is None:
-        return None
-    return payload.get("status") == "ok"
 
 
 def _backend_url(path: str) -> str | None:
@@ -127,19 +127,6 @@ def _backend_url(path: str) -> str | None:
         raise ValueError("BACKEND_API_URL must be a base HTTP(S) URL.")
 
     return f"{base_url.rstrip('/')}{path}"
-
-
-def _backend_get_json(path: str) -> dict[str, object] | None:
-    url = _backend_url(path)
-    if url is None:
-        return None
-
-    request = Request(url, headers={"Accept": "application/json"})
-    with urlopen(request, timeout=5) as response:
-        payload = json.loads(response.read(4096))
-        if response.status != 200 or not isinstance(payload, dict):
-            raise ValueError("Backend returned an unexpected response.")
-        return payload
 
 
 def _backend_qris_route_is_available() -> bool:
@@ -165,11 +152,42 @@ def _backend_qris_route_is_available() -> bool:
         )
 
 
-def _backend_payment_details(reference: str) -> dict[str, object] | None:
-    safe_reference = quote(reference, safe="")
-    return _backend_get_json(
-        f"/api/payment/qris/status/{safe_reference}"
+def _monitoring_api_get(
+    action: str, params: dict[str, str] | None = None
+) -> dict[str, object]:
+    url = _backend_url(f"/api/monitoring/{quote(action, safe='')}")
+    api_key = os.getenv("BACKEND_API_KEY", "").strip()
+    if not url or not api_key:
+        raise MonitoringAPIError(0, "MONITORING_API_NOT_CONFIGURED")
+
+    if params:
+        url = f"{url}?{urlencode(params)}"
+    request = Request(
+        url,
+        headers={
+            "Accept": "application/json",
+            "x-api-key": api_key,
+        },
     )
+    try:
+        with urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read(16384))
+    except HTTPError as error:
+        try:
+            error_payload = json.loads(error.read(4096))
+        except (json.JSONDecodeError, OSError):
+            error_payload = {}
+        code = (
+            error_payload.get("code")
+            if isinstance(error_payload, dict)
+            and isinstance(error_payload.get("code"), str)
+            else None
+        )
+        raise MonitoringAPIError(error.code, code) from None
+
+    if not isinstance(payload, dict):
+        raise ValueError("Monitoring API returned an invalid response.")
+    return payload
 
 
 async def _service_status_lines(
@@ -194,52 +212,61 @@ async def _service_status_lines(
             "CONNECTED" if _group_connection_verified else "NOT VERIFIED"
         )
 
-    backend_status: str
-    try:
-        backend_health = await asyncio.to_thread(_backend_health_request)
-        if backend_health is None:
-            backend_status = "NOT CONFIGURED"
-        else:
-            backend_status = "ONLINE" if backend_health else "OFFLINE"
-    except HTTPError as error:
-        if error.code in {401, 403}:
-            backend_status = (
-                f"UNKNOWN (HTTP {error.code}; ACCESS DENIED)"
+    backend_status = "NOT CONFIGURED"
+    supabase_status = "UNKNOWN"
+    payment_monitoring_status = "NOT CONNECTED"
+    alerts_status = "NOT CONFIGURED"
+    provider_status = "NOT VERIFIED"
+    payhook_status = "NOT VERIFIED"
+
+    if os.getenv("BACKEND_API_URL", "").strip() and os.getenv(
+        "BACKEND_API_KEY", ""
+    ).strip():
+        try:
+            health = await asyncio.to_thread(_monitoring_api_get, "health")
+            backend_status = str(health.get("backendStatus", "ONLINE"))
+            supabase_status = str(health.get("supabaseStatus", "UNKNOWN"))
+            payment_monitoring_status = str(
+                health.get("paymentMonitoringStatus", "NOT CONNECTED")
             )
-            LOGGER.warning(
-                "Backend health endpoint rejected access (HTTP %s).",
-                error.code,
+            alerts_status = str(health.get("alertsStatus", "NOT CONFIGURED"))
+            provider_status = str(
+                health.get("paymentProviderStatus", "NOT VERIFIED")
             )
-        elif error.code == 404:
-            try:
-                qris_available = await asyncio.to_thread(
-                    _backend_qris_route_is_available
-                )
-            except (OSError, TimeoutError, ValueError, URLError) as probe_error:
-                qris_available = False
-                LOGGER.warning(
-                    "Backend API route check failed (%s).",
-                    type(probe_error).__name__,
-                )
-            if qris_available:
+            payhook_status = str(health.get("payhookStatus", "NOT VERIFIED"))
+        except MonitoringAPIError as error:
+            if error.status in {401, 403}:
                 backend_status = (
-                    "API REACHABLE (health endpoint not deployed)"
+                    f"UNKNOWN (HTTP {error.status}; ACCESS DENIED)"
                 )
+            elif error.status == 404:
+                try:
+                    qris_available = await asyncio.to_thread(
+                        _backend_qris_route_is_available
+                    )
+                except (OSError, TimeoutError, ValueError, URLError):
+                    qris_available = False
+                backend_status = (
+                    "API REACHABLE (monitoring API not deployed)"
+                    if qris_available
+                    else "OFFLINE"
+                )
+            elif error.code == "SUPABASE_NOT_CONFIGURED":
+                backend_status = "API REACHABLE"
+                supabase_status = "NOT CONFIGURED"
             else:
-                backend_status = "OFFLINE"
-                LOGGER.warning(
-                    "Backend health and QRIS API routes were not found."
-                )
-        else:
+                backend_status = "API REACHABLE (monitoring unavailable)"
+            LOGGER.warning(
+                "Monitoring API health check returned HTTP %s (%s).",
+                error.status,
+                error.code or "no error code",
+            )
+        except (OSError, TimeoutError, ValueError, URLError) as error:
             backend_status = "OFFLINE"
             LOGGER.warning(
-                "Backend health check failed (HTTP %s).", error.code
+                "Monitoring API health check failed (%s).",
+                type(error).__name__,
             )
-    except (OSError, TimeoutError, ValueError, URLError) as error:
-        backend_status = "OFFLINE"
-        LOGGER.warning(
-            "Backend health check failed (%s).", type(error).__name__
-        )
 
     return [
         "Telegram Bot: ONLINE",
@@ -247,10 +274,10 @@ async def _service_status_lines(
         f"Telegram Group: {group_status}",
         f"Telegram Group Connection: {group_connection}",
         f"Backend ecukur: {backend_status}",
-        "Supabase: UNKNOWN (not checked by the backend health endpoint)",
-        "Payment Monitoring: NOT CONNECTED",
-        "Payment Provider: NOT VERIFIED",
-        "PayHook Android: NOT VERIFIED",
+        f"Supabase: {supabase_status}",
+        f"Payment Monitoring: {payment_monitoring_status}",
+        f"Payment Provider: {provider_status}",
+        f"PayHook Android: {payhook_status}",
     ]
 
 
@@ -262,22 +289,107 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await update.message.reply_text("\n".join(lines))
 
 
-async def _data_source_unavailable(update: Update) -> None:
-    if update.message is not None:
-        await update.message.reply_text(
-            "Riwayat lengkap belum tersedia: backend belum menyediakan endpoint "
-            "daftar transaksi/alert. Tidak ada data contoh yang ditampilkan.\n"
-            "Full history is unavailable because the backend has no transaction "
-            "or alert list endpoint."
+def _monitoring_api_error_text(error: MonitoringAPIError) -> str:
+    if error.status == 0:
+        return (
+            "API monitoring belum dikonfigurasi. Isi BACKEND_API_URL dan "
+            "BACKEND_API_KEY di payment-monitor/.env."
         )
+    if error.status in {401, 403}:
+        return (
+            "Akses API monitoring ditolak. Pastikan BACKEND_API_KEY di bot "
+            "sama dengan konfigurasi server."
+        )
+    if error.code == "ALERT_HISTORY_NOT_CONFIGURED":
+        return (
+            "Riwayat alert belum tersedia karena penyimpanan alert belum "
+            "disiapkan. Database tidak diubah."
+        )
+    if error.code == "PAYMENT_NOT_FOUND":
+        return "Transaksi dengan reference tersebut tidak ditemukan."
+    if error.status == 404:
+        return "Endpoint monitoring belum ter-deploy. Deploy perubahan API terlebih dahulu."
+    if error.status == 503:
+        return (
+            "Backend menerima permintaan, tetapi Supabase atau konfigurasi "
+            "monitoring belum siap."
+        )
+    return "Backend monitoring gagal memproses permintaan. Coba lagi nanti."
+
+
+async def _run_monitoring_command(
+    update: Update,
+    action: str,
+    params: dict[str, str] | None = None,
+) -> dict[str, object] | None:
+    if update.message is None or not await _require_admin(update):
+        return None
+
+    try:
+        return await asyncio.to_thread(_monitoring_api_get, action, params)
+    except MonitoringAPIError as error:
+        await update.message.reply_text(_monitoring_api_error_text(error))
+    except (OSError, TimeoutError, ValueError, URLError) as error:
+        LOGGER.warning(
+            "Monitoring request failed (%s).", type(error).__name__
+        )
+        await update.message.reply_text(
+            "Backend monitoring tidak dapat dihubungi atau merespons data "
+            "yang tidak valid. Coba lagi nanti."
+        )
+    return None
+
+
+def _payment_item_lines(
+    item: dict[str, object], index: int
+) -> list[str]:
+    reference = item.get("reference_id")
+    status_value = item.get("status")
+    amount = item.get("total_amount")
+    created_at = item.get("created_at")
+    if not isinstance(reference, str) or not isinstance(status_value, str):
+        return []
+
+    lines = [f"{index}. {reference} — {status_value}"]
+    if isinstance(amount, (int, float)) and not isinstance(amount, bool):
+        lines.append(f"   Nominal: Rp{amount:,.0f}")
+    if isinstance(created_at, str) and len(created_at) <= 64:
+        lines.append(f"   Dibuat: {created_at}")
+    return lines
+
+
+async def _send_payment_list(
+    update: Update,
+    action: str,
+    heading: str,
+) -> None:
+    payload = await _run_monitoring_command(update, action)
+    if payload is None or update.message is None:
+        return
+
+    items = payload.get("items")
+    if not isinstance(items, list):
+        await update.message.reply_text(
+            "Backend mengembalikan format daftar yang tidak dikenal."
+        )
+        return
+    valid_items = [item for item in items if isinstance(item, dict)]
+    count = payload.get("count")
+    total = count if isinstance(count, int) else len(valid_items)
+    if not valid_items:
+        await update.message.reply_text(f"{heading}\nBelum ada data.")
+        return
+
+    lines = [f"{heading} (menampilkan {len(valid_items)} dari {total}):"]
+    for index, item in enumerate(valid_items, start=1):
+        lines.extend(_payment_item_lines(item, index))
+    await update.message.reply_text("\n".join(lines))
 
 
 async def transactions(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
-    if update.message is None or not await _require_admin(update):
-        return
-    await _data_source_unavailable(update)
+    await _send_payment_list(update, "transactions", "Transaksi terbaru")
 
 
 async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -376,26 +488,53 @@ async def testgroup(
         )
 
 
-async def _admin_data_command(update: Update) -> None:
-    if update.message is None or not await _require_admin(update):
-        return
-    await _data_source_unavailable(update)
-
-
 async def today(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _admin_data_command(update)
+    payload = await _run_monitoring_command(update, "today")
+    if payload is None or update.message is None:
+        return
+
+    counts = payload.get("counts")
+    if not isinstance(counts, dict):
+        await update.message.reply_text(
+            "Backend mengembalikan format ringkasan yang tidak dikenal."
+        )
+        return
+    date = payload.get("date", "hari ini")
+    status_order = (
+        "PENDING",
+        "PAYMENT_DETECTED",
+        "PAID",
+        "EXPIRED",
+        "FAILED",
+        "REVIEW_REQUIRED",
+        "CANCELLED",
+    )
+    lines = [f"Ringkasan pembayaran {date} (Asia/Jakarta):"]
+    lines.extend(
+        f"{status}: {counts.get(status, 0)}"
+        for status in status_order
+    )
+    await update.message.reply_text("\n".join(lines))
 
 
 async def pending(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _admin_data_command(update)
+    await _send_payment_list(update, "pending", "Pembayaran pending")
 
 
 async def failed(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _admin_data_command(update)
+    await _send_payment_list(
+        update,
+        "failed",
+        "Pembayaran gagal/kedaluwarsa/dibatalkan",
+    )
 
 
 async def alerts(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    await _admin_data_command(update)
+    payload = await _run_monitoring_command(update, "alerts")
+    if payload is not None and update.message is not None:
+        await update.message.reply_text(
+            "Backend belum menyediakan riwayat alert."
+        )
 
 
 async def details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -410,24 +549,18 @@ async def details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text("Reference tidak valid.")
         return
 
-    try:
-        payment = await asyncio.to_thread(
-            _backend_payment_details, reference
-        )
-    except (OSError, TimeoutError, ValueError, URLError) as error:
-        LOGGER.warning(
-            "Backend payment lookup failed (%s).", type(error).__name__
-        )
-        await update.message.reply_text(
-            "Backend tidak dapat dihubungi atau mengembalikan respons yang "
-            "tidak valid. Coba lagi nanti.\n"
-            "The backend is unavailable or returned an invalid response."
-        )
+    payload = await _run_monitoring_command(
+        update,
+        "details",
+        {"referenceId": reference},
+    )
+    if payload is None or update.message is None:
         return
 
-    if payment is None:
+    payment = payload.get("payment")
+    if not isinstance(payment, dict):
         await update.message.reply_text(
-            "BACKEND_API_URL belum dikonfigurasi di payment-monitor/.env."
+            "Backend mengembalikan detail transaksi yang tidak dikenal."
         )
         return
 
@@ -449,15 +582,21 @@ async def details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     result_lines = [
         f"Reference: {reference}",
-        f"Status dari backend: {status_value}",
+        f"Status: {status_value}",
     ]
-    amount = payment.get("totalAmount")
+    amount = payment.get("total_amount")
     if isinstance(amount, (int, float)) and not isinstance(amount, bool):
         result_lines.append(f"Nominal: Rp{amount:,.0f}")
     payment_type = payment.get("type")
     if payment_type in {"BOOKING", "TIP"}:
         result_lines.append(f"Tipe: {payment_type}")
-    paid_at = payment.get("paidAt")
+    created_at = payment.get("created_at")
+    if isinstance(created_at, str) and len(created_at) <= 64:
+        result_lines.append(f"Dibuat: {created_at}")
+    expires_at = payment.get("expires_at")
+    if isinstance(expires_at, str) and len(expires_at) <= 64:
+        result_lines.append(f"Kedaluwarsa: {expires_at}")
+    paid_at = payment.get("paid_at")
     if (
         isinstance(paid_at, str)
         and len(paid_at) <= 64
@@ -465,9 +604,8 @@ async def details(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ):
         result_lines.append(f"Paid at: {paid_at}")
     result_lines.append(
-        "Catatan: status dari endpoint backend ini belum merupakan verifikasi "
-        "independen; endpoint saat ini juga dapat mengembalikan PENDING untuk "
-        "reference yang tidak ditemukan."
+        "Catatan: status ini berasal dari data QRIS backend; monitoring provider "
+        "independen belum tersedia."
     )
     await update.message.reply_text("\n".join(result_lines))
 

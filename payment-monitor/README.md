@@ -2,74 +2,67 @@
 
 ## Progress checkpoint — 2026-11-08
 
-### Verified working
+### Previously verified
 
 - Telegram bot starts and Bot API responds: `Telegram Bot: ONLINE`,
   `Telegram Connection: CONNECTED`.
 - Telegram group ID is configured, and sending to the group has succeeded:
   `Telegram Group Connection: CONNECTED`.
-- Bot reaches the deployed ecukur QRIS API. Its existing per-reference status
-  route responded successfully during a non-payment probe.
-- `/status` accurately reports the current boundary:
-  `Backend ecukur: API REACHABLE (health endpoint not deployed)`,
-  `Supabase: UNKNOWN`, `Payment Monitoring: NOT CONNECTED`,
-  `Payment Provider: NOT VERIFIED`, `PayHook Android: NOT VERIFIED`.
-- The bot's local unit suite last passed with 17 tests; Python compilation
-  passed. Rerun the checks below after further changes.
 - Bot-side monitoring commands are admin-restricted. No secrets or `.env`
   values belong in this document.
 
-### Not implemented or not verified
+### Implemented in source; deployment/configuration still required
 
-- `/api/health` is not deployed on the public ecukur API host (HTTP 404). The
-  QRIS API being reachable does not mean the separate Express backend health
-  route is deployed.
-- Supabase connectivity has not been checked by an API health route.
-- `/today`, `/pending`, `/failed`, `/alerts`, and `/transactions` cannot show
-  real data because no monitoring history/query API exists.
-- `/details REF` calls the existing QRIS status route, but that route is
-  unauthenticated and may return `PENDING` for an unknown reference. Treat the
-  result as backend-reported only, not payment proof.
-- Persistent payment events, trusted status transitions, pending/expiry
-  detection, alert deduplication, and notification retry/outbox are not
-  connected.
+- Added authenticated Vercel actions at
+  `GET /api/monitoring/{health,today,pending,failed,transactions,details,alerts}`.
+  The function is mirrored in `api/` and `frontend/api/` to match both existing
+  Vercel function roots.
+- Connected `/today`, `/pending`, `/failed`, `/transactions`, `/details REF`,
+  `/alerts`, `/status`, and `/health` to the monitoring API.
+- API uses `BACKEND_API_KEY` via `x-api-key`, constant-time key comparison,
+  no-store responses, safe payment-field selection, and bounded lists.
+- Health checks read access to existing `qris_payments`; no schema migration
+  or database write is performed.
+- **Not yet deployed or live-verified:** configure the same strong random
+  `BACKEND_API_KEY` in Vercel and the bot's local `.env`, deploy, then test the
+  authenticated endpoints.
+
+### Still not implemented or verified
+
+- `/alerts` remains unavailable because there is no alert table/outbox.
+- Payment event history, automatic pending/expiry alerts, persistent
+  deduplication, and notification retry/outbox are not implemented.
 - Provider verification and PayHook are not verified. Do not treat Android
   notification text as proof of `PAID`.
-- The backend QRIS schema does not yet include all monitoring statuses or the
-  event/alert/notification log tables.
+- Current schema only permits `PENDING`, `PAID`, `EXPIRED`, and `CANCELLED`.
+  `/failed` reports `FAILED`, `EXPIRED`, and `CANCELLED` if present.
 
 ### Suggested next steps
 
-1. Keep the bot on the existing reachable API URL; do not change it to a
-   Supabase URL. Restart the bot after local `.env` changes.
-2. Decide whether to deploy the Express service separately or intentionally
-   add and secure equivalent health/monitoring routes to the deployed API.
-   Do not expose a credential to current unauthenticated endpoints.
-3. Before writing migrations, review the existing QRIS schema and approve the
-   status/event/outbox data model with the backend owner.
-4. Implement a backend-authenticated monitoring contract for admin queries,
-   health checks, trusted payment events, idempotency, and durable notification
-   retries. Only backend-verified payment evidence may set `PAID`.
-5. Add contract tests and end-to-end tests with non-financial test events
-   before enabling automatic alerts. Until then, monitoring remains explicitly
-   inactive.
+1. Generate a dedicated random API secret locally. Configure it as
+   `BACKEND_API_KEY` in Vercel Project Settings and in
+   `payment-monitor/.env`; never commit or paste the value into chat.
+2. Deploy the Vercel functions. Verify `/api/monitoring/health` returns HTTP
+   401 without a key and health JSON with the configured key.
+3. Restart the bot and test `/status`, `/today`, `/pending`, `/failed`,
+   `/transactions`, and `/details REF` as an allowed Telegram admin.
+4. Keep `/alerts` inactive until durable alert storage is approved and
+   implemented.
+5. Before automatic alerts, agree on database changes and trusted payment
+   verification. Only independently verified backend evidence may set `PAID`.
 
 ## Current scope
 
 The Telegram bot supports the existing commands and the monitoring commands
 `/today`, `/pending`, `/failed`, `/alerts`, `/details REF`, and `/health`.
 Monitoring commands are restricted to Telegram user IDs in
-`TELEGRAM_ADMIN_IDS`. They report that payment data is unavailable until an
-authenticated backend monitoring API exists; they do not return sample data.
+`TELEGRAM_ADMIN_IDS`.
 
-The configured backend health check uses the existing `GET /api/health` route.
-The `/details REF` command uses the existing
-`GET /api/payment/qris/status/:referenceId` route. That route is not
-authenticated and may report `PENDING` for a reference it did not find, so
-details must be treated as backend-reported information, not independent proof
-of payment. The health endpoint reports backend process health only; neither
-route verifies Supabase or provides payment history, event, alert, or retry
-operations.
+The new `/api/monitoring/[action]` function reads existing `qris_payments` rows
+only after `BACKEND_API_KEY` authentication. It returns only payment metadata
+needed for monitoring; it excludes customer names, phone numbers, and raw
+notifications. `/details REF` uses this authenticated endpoint instead of the
+public QRIS status route.
 
 The current QRIS schema migration contains `PENDING`, `PAID`, `EXPIRED`, and
 `CANCELLED`, but not the complete monitoring status set. It does not define
@@ -94,61 +87,41 @@ Keep all values in `payment-monitor/.env`, which must not be committed:
   `10`. It is configuration only until the trusted event source and backend
   persistence are implemented.
 - `BACKEND_API_URL` — backend base HTTP(S) URL. The bot probes the existing
-  `/api/health` route and queries existing per-reference QRIS status. Set it
-  to the origin/base URL only (for example, `https://api.example.com`).
-- `BACKEND_API_KEY` — reserved for the authenticated monitoring API contract
-  below. It is not sent to existing routes because they do not implement
-  authentication.
+  `/api/monitoring/*` routes. Set it to the API origin/base URL only.
+- `BACKEND_API_KEY` — dedicated shared secret; set the same value in the bot
+  `.env` and Vercel project environment.
 
-The bot does not use or log `BACKEND_API_KEY` until an endpoint with a defined
-authentication contract is implemented.
+The bot sends this key only in the `x-api-key` header to
+`/api/monitoring/*`; it never logs the key or sends it to the old public routes.
+Do not reuse the Telegram token, Supabase key, or webhook secret.
 
-## Backend contract required before live monitoring
+## Requirements before automatic alerts
 
-The repository currently has no authenticated monitoring API. Do not configure
-the bot to read or mutate payment rows directly through the public QRIS routes.
-Before enabling payment monitoring, backend owners need to agree and implement
-the following operations and persistence semantics. This document intentionally
-does not assign URL paths or claim these operations already exist.
+The read-only query API does not provide authoritative payment event ingestion.
+Before enabling automatic alerts, backend owners must agree on and implement:
 
-1. **Trusted event ingestion:** accept validated backend payment lifecycle
-   events with a globally unique event ID, event type, reference ID, event time,
-   and safe amount/booking metadata. Enforce idempotency on the event ID and
-   persist each accepted event. Android notification data may create
-   `PAYMENT_DETECTED` or `REVIEW_REQUIRED`, but must never establish `PAID`.
-   Only the backend's independently trusted verification may transition a
-   payment to `PAID`.
-2. **Atomic payment history:** expose payment data and event history, including
-   `PENDING`, `PAYMENT_DETECTED`, `PAID`, `EXPIRED`, `FAILED`, and
-   `REVIEW_REQUIRED`, with explicit transition and amount/reference validation.
-   The existing QRIS schema needs an approved migration before these statuses
-   can be stored there.
-3. **Monitoring queries:** provide authenticated, paginated operations for
-   today's summary, pending payments, failed payments, alert history, and
-   payment details by reference. Return only fields needed by admins; never
-   return full customer contact or credentials.
-4. **Alert outbox and retry:** persist a stable alert/idempotency key and
-   notification delivery state (`PENDING`, `SENT`, `FAILED`, retry metadata).
-   Create an alert only for a new issue, status change, or escalation. A
-   successful payment should close or resolve prior alerts. Telegram send
-   failure must not change payment status; retries must reuse the stable alert
-   key and be safe after process restarts.
-5. **Pending monitor and health:** use server-side timestamps to alert when a
-   pending payment exceeds `PAYMENT_PENDING_ALERT_MINUTES`, then separately
-   report expiry. Do not infer failure from silence. Expose health checks that
-   distinguish backend process health, Supabase availability, event ingestion,
-   payment provider verification, and Android notification-source status.
-6. **Authentication and audit:** require a dedicated service credential for
-   monitor API operations, compare it server-side, rate-limit requests, validate
-   payloads, and redact secrets and customer data from logs. Admin Telegram
-   commands remain independently restricted by `TELEGRAM_ADMIN_IDS`.
+1. A trusted payment lifecycle event with a globally unique event ID, event
+   type, reference, event time, and validated amount. Enforce idempotency and
+   persist every accepted event. Android notification data may indicate
+   `PAYMENT_DETECTED` or `REVIEW_REQUIRED`, but may never establish `PAID`.
+   Only independent trusted verification may set `PAID`.
+2. An approved schema migration for the remaining statuses and durable
+   `payment_events`, `payment_alerts`, and `notification_logs`/outbox records.
+3. Server-side pending thresholds and expiry detection. Do not infer failure
+   from silence. Resolve alerts on verified payment, and avoid repeat alerts
+   unless the issue changes or escalates.
+4. Durable Telegram retry state with idempotent alert keys so a delivery
+   failure never changes payment status and retries survive restarts.
+5. Health reporting for backend, Supabase, trusted payment verification, and
+   PayHook source separately. Keep service authentication and Telegram admin
+   authorization as separate controls.
 
-Until that contract is implemented and tested, payment event storage,
-automatic pending/error alerts, alert deduplication/retry, and transaction
-history remain inactive. `/details REF` is limited to the existing public
-per-reference status endpoint and clearly marks returned payment status as
-unverified. No SQLite transaction store or simulated payment is used by this
-bot.
+This first API stage provides read-only query access to existing QRIS rows.
+Payment event storage, automatic pending/error alerts, alert
+deduplication/retry, and alert history remain inactive. `/details REF` reports
+the stored backend status and does not independently verify payment. No
+SQLite transaction store, simulated payment, or database migration is used by
+this bot.
 
 ## Run locally
 
