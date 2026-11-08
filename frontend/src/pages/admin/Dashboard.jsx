@@ -42,8 +42,11 @@ import {
   EyeOff,
   Fingerprint,
   Terminal,
-  ShieldAlert
+  ShieldAlert,
+  Database,
+  Edit3
 } from 'lucide-react';
+import SupabaseStudio from './SupabaseStudio';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
 import { getAppDomain } from '../../lib/domain';
@@ -533,6 +536,36 @@ export default function AdminMasterDashboard() {
       showToast(`Paket berhasil diubah menjadi ${newPlan.toUpperCase()}!`);
     } catch (err) {
       showToast('Gagal mengubah paket: ' + err.message);
+    }
+  };
+
+  // ─── HANDLE DELETE BARBER DARI SUPABASE ───
+  const handleDeleteBarber = async (barber) => {
+    if (!window.confirm(`Hapus akun barber "${barber.name}" (${barber.slug || barber.id}) secara permanen dari Supabase? Tindakan ini tidak dapat dibatalkan.`)) return;
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from('barbers').delete().eq('id', barber.id);
+        if (error) throw error;
+      }
+      showToast(`Barber "${barber.name}" berhasil dihapus.`);
+      if (typeof fetchBarbersFromSupabase === 'function') fetchBarbersFromSupabase();
+    } catch (err) {
+      showToast(`Gagal menghapus barber: ${err.message}`);
+    }
+  };
+
+  // ─── HANDLE DELETE BOOKING DARI SUPABASE ───
+  const handleDeleteBooking = async (booking) => {
+    if (!window.confirm(`Hapus reservasi "${booking.id}" atas nama ${booking.customerName} secara permanen dari Supabase?`)) return;
+    try {
+      if (isSupabaseConfigured) {
+        const { error } = await supabase.from('bookings').delete().eq('id', booking.id);
+        if (error) throw error;
+      }
+      showToast(`Booking ${booking.id} berhasil dihapus.`);
+      if (typeof fetchBookingsFromSupabase === 'function') fetchBookingsFromSupabase();
+    } catch (err) {
+      showToast(`Gagal menghapus booking: ${err.message}`);
     }
   };
 
@@ -1088,9 +1121,10 @@ export default function AdminMasterDashboard() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex overflow-x-auto no-scrollbar gap-1 pt-1 pb-2">
           {[
             { id: 'overview', label: 'Ringkasan Platform', icon: Activity },
-            { id: 'barbers', label: 'Daftar Pengguna / Barber', icon: Users, badge: barbers.length },
+            { id: 'database', label: 'Supabase Data Studio (CRUD)', icon: Database, highlight: true },
+            { id: 'barbers', label: 'Daftar Barber', icon: Users, badge: barbers.length },
             { id: 'bookings', label: 'Semua Booking Reservasi', icon: Calendar, badge: bookings.filter(b => b.status === 'Menunggu').length || null },
-            { id: 'gateway', label: 'Pusat Payhook & QRIS', icon: Smartphone, highlight: true },
+            { id: 'gateway', label: 'Pusat Payhook & QRIS', icon: Smartphone },
             { id: 'withdrawals', label: 'Pencairan Saldo Tip', icon: Landmark, badge: metrics.pendingWithdrawalsCount || null },
             { id: 'settings', label: 'Pengaturan Platform', icon: Sliders },
           ].map((tab) => {
@@ -1379,6 +1413,24 @@ export default function AdminMasterDashboard() {
           </motion.div>
         )}
 
+        {/* ══════════════════════════════════════════════════════════ */}
+        {/* TAB DATABASE: SUPABASE LIVE DATA STUDIO & FULL CRUD       */}
+        {/* ══════════════════════════════════════════════════════════ */}
+        {activeTab === 'database' && (
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
+            <SupabaseStudio
+              onDataMutated={(table) => {
+                if (table === 'barbers' && typeof fetchBarbersFromSupabase === 'function') {
+                  fetchBarbersFromSupabase();
+                }
+                if (table === 'bookings' && typeof fetchBookingsFromSupabase === 'function') {
+                  fetchBookingsFromSupabase();
+                }
+              }}
+            />
+          </motion.div>
+        )}
+
         {/* ══════════════════════════════════════════ */}
         {/* TAB 2: MANAJEMEN SEMUA BARBER / BIO LINK   */}
         {/* ══════════════════════════════════════════ */}
@@ -1557,6 +1609,15 @@ export default function AdminMasterDashboard() {
                                 >
                                   {b.accountStatus === 'ACTIVE' ? 'Suspend' : 'Aktifkan'}
                                 </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteBarber(b)}
+                                  className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                  title="Hapus Barber dari Supabase"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               </div>
                             </td>
                           </tr>
@@ -1726,6 +1787,15 @@ export default function AdminMasterDashboard() {
                                   Selesai
                                 </button>
                               )}
+
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteBooking(b)}
+                                className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                title="Hapus Booking dari Supabase"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                             </div>
                           </td>
                         </tr>
