@@ -58,6 +58,57 @@ function parseNotificationAmount(input) {
   return 0;
 }
 
+async function sendTelegramPaymentNotification(payment, targetAmount) {
+  try {
+    const token = (process.env.TELEGRAM_BOT_TOKEN || '9097305625:AAErXwtUFsUDMyEtgNOWkocERssk3_kKFLw').trim();
+    const groupId = (process.env.TELEGRAM_GROUP_ID || '-1004385368403').trim();
+    if (!token || !groupId) return;
+
+    const isTip = payment?.type === 'TIP' || payment?.coffeeLabel;
+    const typeLabel = isTip ? '☕ TIP KOPI CAPSTER' : '💈 BOOKING CUKUR';
+    const customer = payment?.customer_name || payment?.customerName || 'Pelanggan E-CUKUR';
+    const amountVal = targetAmount || payment?.total_amount || payment?.total_price || 0;
+    const formattedAmount = Number(amountVal).toLocaleString('id-ID');
+    const ref = payment?.reference_id || payment?.id || 'ECK-' + Date.now().toString().slice(-6);
+    const service = payment?.service_name || payment?.serviceName || '';
+    const barber = payment?.barber_name || payment?.barberName || '';
+    const nowStr = new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
+
+    let text = 
+      `💸 <b>[PEMBAYARAN QRIS DITERIMA]</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━\n` +
+      `🏷️ <b>Tipe:</b> ${typeLabel}\n` +
+      `👤 <b>Pelanggan:</b> ${customer}\n`;
+
+    if (barber) {
+      text += `💈 <b>Barber:</b> ${barber}\n`;
+    }
+    if (service) {
+      text += `✂️ <b>Layanan:</b> ${service}\n`;
+    }
+
+    text += 
+      `💰 <b>Total Lunas:</b> Rp ${formattedAmount}\n` +
+      `🔖 <b>Ref:</b> <code>${ref}</code>\n` +
+      `🕒 <b>Waktu:</b> ${nowStr} WIB\n` +
+      `━━━━━━━━━━━━━━━━━━━\n` +
+      `✅ Status: <b>LUNAS OTOMATIS</b>\n` +
+      `<i>Jadwal & mutasi telah diperbarui ke sistem.</i>`;
+
+    await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: groupId,
+        text,
+        parse_mode: 'HTML'
+      })
+    });
+  } catch (err) {
+    console.warn('[Telegram Alert Failed]:', err.message);
+  }
+}
+
 export default async function handler(req, res) {
   // Set CORS headers
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -160,7 +211,12 @@ export default async function handler(req, res) {
     console.log('[Vercel QRIS Webhook] Parsed Amount:', targetAmount);
 
     if (!targetAmount || targetAmount <= 0) {
-      return res.status(200).json({
+      if (matched && matchDetails) {
+      // Trigger notifikasi instan ke Grup Telegram
+      sendTelegramPaymentNotification(matchDetails, targetAmount).catch(() => {});
+    }
+
+    return res.status(200).json({
         success: true,
         matched: false,
         message: 'Notifikasi berhasil diterima, namun tidak ada nominal transaksi pembayaran yang cocok.'
@@ -273,6 +329,11 @@ export default async function handler(req, res) {
       } catch (err) {
         console.warn('Booking direct match warning:', err.message);
       }
+    }
+
+    if (matched && matchDetails) {
+      // Trigger notifikasi instan ke Grup Telegram
+      sendTelegramPaymentNotification(matchDetails, targetAmount).catch(() => {});
     }
 
     return res.status(200).json({

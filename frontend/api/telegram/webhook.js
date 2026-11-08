@@ -32,7 +32,24 @@ function makeSupabaseClient() {
   });
 }
 
-async function sendTelegramMessage(chatId, text, parseMode = '') {
+const inlineKeyboardMain = {
+  inline_keyboard: [
+    [
+      { text: '📊 Transaksi Hari Ini', callback_data: 'cb_today' },
+      { text: '⏳ Antrean Pending', callback_data: 'cb_pending' }
+    ],
+    [
+      { text: '📜 10 Transaksi Baru', callback_data: 'cb_transactions' },
+      { text: '💸 Penarikan Saldo', callback_data: 'cb_withdrawals' }
+    ],
+    [
+      { text: '🔄 Cek Status Server', callback_data: 'cb_status' },
+      { text: '🌐 Dashboard Admin', url: 'https://ecukur.biz.id/admin/dashboard' }
+    ]
+  ]
+};
+
+async function sendTelegramMessage(chatId, text, parseMode = 'HTML', replyMarkup = null) {
   const token = getBotToken();
   const url = `https://api.telegram.org/bot${token}/sendMessage`;
 
@@ -40,9 +57,8 @@ async function sendTelegramMessage(chatId, text, parseMode = '') {
     chat_id: chatId,
     text: text
   };
-  if (parseMode) {
-    body.parse_mode = parseMode;
-  }
+  if (parseMode) body.parse_mode = parseMode;
+  if (replyMarkup) body.reply_markup = replyMarkup;
 
   try {
     const res = await fetch(url, {
@@ -55,6 +71,21 @@ async function sendTelegramMessage(chatId, text, parseMode = '') {
     console.error('[Telegram Webhook] Failed to send message:', err);
     return null;
   }
+}
+
+async function answerCallbackQuery(callbackQueryId, text = '') {
+  const token = getBotToken();
+  const url = `https://api.telegram.org/bot${token}/answerCallbackQuery`;
+  try {
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: text
+      })
+    });
+  } catch {}
 }
 
 function jakartaDateRange() {
@@ -71,6 +102,222 @@ function jakartaDateRange() {
   const start = new Date(Date.UTC(year, month - 1, day) - 7 * 60 * 60 * 1000);
   const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
   return { date, start: start.toISOString(), end: end.toISOString() };
+}
+
+// ─── QUERY HELPERS ───
+
+async function getTodaySummaryText(supabase) {
+  if (!supabase) return '❌ Database Supabase belum terhubung.';
+  const range = jakartaDateRange();
+  const statuses = ['PENDING', 'PAID', 'EXPIRED', 'FAILED', 'CANCELLED'];
+
+  try {
+    const counts = await Promise.all(
+      statuses.map(async (st) => {
+        const { count } = await supabase
+          .from('qris_payments')
+          .select('reference_id', { count: 'exact', head: true })
+          .eq('status', st)
+          .gte('created_at', range.start)
+          .lt('created_at', range.end);
+        return [st, count || 0];
+      })
+    );
+    const countMap = Object.fromEntries(counts);
+
+    return (
+      `📅 <b>Ringkasan Transaksi Hari Ini (${range.date})</b>\n` +
+      `━━━━━━━━━━━━━━━━━━━\n` +
+      `✅ <b>LUNAS (PAID):</b> ${countMap.PAID || 0}\n` +
+      `⏳ <b>PENDING:</b> ${countMap.PENDING || 0}\n` +
+      `❌ <b>EXPIRED / GAGAL:</b> ${(countMap.EXPIRED || 0) + (countMap.FAILED || 0) + (countMap.CANCELLED || 0)}\n` +
+      `━━━━━━━━━━━━━━━━━━━\n` +
+      `Ketik <code>/pending</code> atau tap tombol untuk rincian.`
+    );
+  } catch (e) {
+    return `❌ Gagal memuat data hari ini: ${e.message}`;
+  }
+}
+
+async function getPendingPaymentsText(supabase) {
+  if (!supabase) return '❌ Database Supabase belum terhubung.';
+  try {
+    const { data, error } = await supabase
+      .from('qris_payments')
+      .select('reference_id,total_amount,created_at,type')
+      .eq('status', 'PENDING')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return '✓ Tidak ada tagihan QRIS yang berstatus PENDING saat ini.';
+    }
+
+    let msg = `⏳ <b>DAFTAR PEMBAYARAN PENDING (${data.length}):</b>\n━━━━━━━━━━━━━━━━━━━\n`;
+    data.forEach((item, idx) => {
+      const timeStr = new Date(item.created_at).toLocaleTimeString('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      msg += `${idx + 1}. <code>${item.reference_id}</code>\n   💰 Rp ${(item.total_amount || 0).toLocaleString('id-ID')} | 🕒 ${timeStr} WIB\n`;
+    });
+    msg += `\nKetik <code>/details &lt;REF&gt;</code> untuk rincian lengkap.`;
+    return msg;
+  } catch (e) {
+    return `❌ Gagal memuat daftar pending: ${e.message}`;
+  }
+}
+
+async function getRecentTransactionsText(supabase) {
+  if (!supabase) return '❌ Database Supabase belum terhubung.';
+  try {
+    const { data, error } = await supabase
+      .from('qris_payments')
+      .select('reference_id,total_amount,status,created_at,type')
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return 'Belum ada riwayat transaksi QRIS.';
+    }
+
+    let msg = `📜 <b>10 TRANSAKSI TERBARU:</b>\n━━━━━━━━━━━━━━━━━━━\n`;
+    data.forEach((item, idx) => {
+      const badge = item.status === 'PAID' ? '✅' : item.status === 'PENDING' ? '⏳' : '❌';
+      msg += `${idx + 1}. ${badge} <code>${item.reference_id}</code>\n   Rp ${(item.total_amount || 0).toLocaleString('id-ID')} [${item.status}]\n`;
+    });
+    return msg;
+  } catch (e) {
+    return `❌ Gagal memuat riwayat transaksi: ${e.message}`;
+  }
+}
+
+async function getWithdrawalsText(supabase) {
+  if (!supabase) return '❌ Database belum terhubung.';
+  try {
+    const { data: barbers, error } = await supabase
+      .from('barbers')
+      .select('id, name, withdrawals_history, payout_account')
+      .limit(50);
+
+    if (error) throw error;
+
+    let allWithdrawals = [];
+    (barbers || []).forEach((b) => {
+      const list = Array.isArray(b.withdrawals_history) ? b.withdrawals_history : [];
+      list.forEach((w) => {
+        allWithdrawals.push({
+          ...w,
+          barberName: b.name
+        });
+      });
+    });
+
+    allWithdrawals.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
+    if (allWithdrawals.length === 0) {
+      return '✓ Belum ada riwayat penarikan saldo dari capster.';
+    }
+
+    let msg = `💸 <b>RIWAYAT PENARIKAN SALDO CAPSTER:</b>\n━━━━━━━━━━━━━━━━━━━\n`;
+    allWithdrawals.slice(0, 10).forEach((w, idx) => {
+      const dateStr = w.date
+        ? new Date(w.date).toLocaleDateString('id-ID', { timeZone: 'Asia/Jakarta' })
+        : '-';
+      const statusIcon = (w.status || '').toLowerCase().includes('berhasil') ? '✅' : '⏳';
+      msg += `${idx + 1}. ${statusIcon} <b>${w.barberName}</b>\n`;
+      msg += `   💰 Rp ${(Number(w.amount) || 0).toLocaleString('id-ID')} | 🏦 ${w.bankName || 'BCA'} ${w.accountNumber || ''} (a.n ${w.accountHolder || '-'})\n`;
+      msg += `   📅 ${dateStr} • Status: <i>${w.status || 'Diproses'}</i>\n`;
+    });
+    return msg;
+  } catch (e) {
+    return `❌ Gagal memuat data penarikan: ${e.message}`;
+  }
+}
+
+async function searchCustomerText(supabase, keyword) {
+  if (!supabase) return '❌ Database belum terhubung.';
+  if (!keyword || keyword.trim().length < 2) {
+    return 'ℹ️ Masukkan kata kunci pencarian minimal 2 karakter.\nContoh: <code>/cari 0812</code> atau <code>/cari Dimas</code>';
+  }
+
+  const cleanKw = keyword.trim();
+  try {
+    // 1. Cari di tabel bookings
+    const { data: bookings } = await supabase
+      .from('bookings')
+      .select('id, customer_name, customer_phone, service_name, barber_name, date, time, total_price, booking_status, payment_status')
+      .or(`customer_name.ilike.%${cleanKw}%,customer_phone.ilike.%${cleanKw}%,id.ilike.%${cleanKw}%`)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (bookings && bookings.length > 0) {
+      let msg = `🔎 <b>HASIL PENCARIAN PELANGGAN ("${cleanKw}"):</b>\n━━━━━━━━━━━━━━━━━━━\n`;
+      bookings.forEach((b, idx) => {
+        const lunas = b.payment_status === 'PAID' ? '✅ Lunas (QRIS)' : '⏳ Belum Bayar';
+        msg += `<b>${idx + 1}. ${b.customer_name || 'Pelanggan'}</b> (<code>${b.customer_phone || '-'}</code>)\n`;
+        msg += `   💈 Barber: ${b.barber_name || '-'}\n`;
+        msg += `   ✂️ Layanan: ${b.service_name || '-'}\n`;
+        msg += `   📅 Jadwal: ${b.date || '-'} jam ${b.time || '-'} WIB\n`;
+        msg += `   💰 Rp ${(Number(b.total_price) || 0).toLocaleString('id-ID')} [${lunas}]\n`;
+        msg += `   📌 Status Booking: <b>${b.booking_status || 'CONFIRMED'}</b>\n\n`;
+      });
+      return msg;
+    }
+
+    // 2. Fallback: Cari di tabel qris_payments
+    const { data: qrisList } = await supabase
+      .from('qris_payments')
+      .select('reference_id, customer_name, total_amount, status, created_at')
+      .or(`customer_name.ilike.%${cleanKw}%,reference_id.ilike.%${cleanKw}%`)
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    if (qrisList && qrisList.length > 0) {
+      let msg = `🔎 <b>HASIL DITEMUKAN PADA TAGIHAN QRIS ("${cleanKw}"):</b>\n━━━━━━━━━━━━━━━━━━━\n`;
+      qrisList.forEach((q, idx) => {
+        msg += `<b>${idx + 1}. ${q.customer_name || 'Pelanggan'}</b>\n`;
+        msg += `   🔖 Ref: <code>${q.reference_id}</code>\n`;
+        msg += `   💰 Rp ${(Number(q.total_amount) || 0).toLocaleString('id-ID')}\n`;
+        msg += `   📌 Status: <b>${q.status}</b>\n\n`;
+      });
+      return msg;
+    }
+
+    return `🔍 Tidak ditemukan data booking atau pembayaran dengan kata kunci <b>"${cleanKw}"</b>.`;
+  } catch (e) {
+    return `❌ Gagal mencari data: ${e.message}`;
+  }
+}
+
+async function getStatusText(supabase) {
+  let supabaseStatus = 'DISCONNECTED';
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('qris_payments')
+        .select('reference_id', { head: true, count: 'exact' })
+        .limit(1);
+      supabaseStatus = error ? 'ERROR' : 'CONNECTED';
+    } catch {
+      supabaseStatus = 'ERROR';
+    }
+  }
+
+  const groupId = getGroupId();
+  return (
+    `📊 <b>STATUS SISTEM E-CUKUR</b>\n` +
+    `━━━━━━━━━━━━━━━━━━━\n` +
+    `• <b>Telegram Bot:</b> ONLINE (Vercel Serverless 24/7)\n` +
+    `• <b>Backend API:</b> ONLINE (https://ecukur.biz.id)\n` +
+    `• <b>Supabase DB:</b> ${supabaseStatus}\n` +
+    `• <b>Target Alert Grup:</b> <code>${groupId}</code>\n` +
+    `• <b>Payment Monitoring:</b> AKTIF\n` +
+    `• <b>Jam Server:</b> ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`
+  );
 }
 
 export default async function handler(req, res) {
@@ -122,41 +369,91 @@ export default async function handler(req, res) {
     }
   }
 
+  const supabase = makeSupabaseClient();
+  const adminIds = getAdminIds();
+
+  // ─── A. INTERCEPT INLINE KEYBOARD CALLBACK QUERIES (FITUR #2) ───
+  if (update?.callback_query) {
+    const cb = update.callback_query;
+    const fromId = String(cb.from?.id || '');
+    const chatId = cb.message?.chat?.id || fromId;
+    const data = cb.data;
+
+    await answerCallbackQuery(cb.id);
+
+    if (!adminIds.includes(fromId)) {
+      await sendTelegramMessage(chatId, '⚠️ Hanya admin yang dapat menggunakan menu ini.');
+      return res.status(200).json({ ok: true });
+    }
+
+    if (data === 'cb_today') {
+      const text = await getTodaySummaryText(supabase);
+      await sendTelegramMessage(chatId, text, 'HTML', inlineKeyboardMain);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (data === 'cb_pending') {
+      const text = await getPendingPaymentsText(supabase);
+      await sendTelegramMessage(chatId, text, 'HTML', inlineKeyboardMain);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (data === 'cb_transactions') {
+      const text = await getRecentTransactionsText(supabase);
+      await sendTelegramMessage(chatId, text, 'HTML', inlineKeyboardMain);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (data === 'cb_withdrawals') {
+      const text = await getWithdrawalsText(supabase);
+      await sendTelegramMessage(chatId, text, 'HTML', inlineKeyboardMain);
+      return res.status(200).json({ ok: true });
+    }
+
+    if (data === 'cb_status') {
+      const text = await getStatusText(supabase);
+      await sendTelegramMessage(chatId, text, 'HTML', inlineKeyboardMain);
+      return res.status(200).json({ ok: true });
+    }
+
+    return res.status(200).json({ ok: true });
+  }
+
+  // ─── B. HANDLE REGULAR TEXT MESSAGES ───
   const message = update?.message || update?.edited_message || update?.channel_post;
   if (!message || !message.text) {
-    // Akui update non-pesan agar Telegram tidak retry
     return res.status(200).json({ ok: true });
   }
 
   const chatId = message.chat.id;
   const fromUser = message.from;
   const fromUserId = fromUser ? String(fromUser.id) : '';
-  const adminIds = getAdminIds();
   const isAdmin = adminIds.includes(fromUserId);
   const text = message.text.trim();
 
   // Pisahkan perintah dan argumen
   const parts = text.split(/\s+/);
-  const command = (parts[0] || '').toLowerCase().replace(/@.+$/, ''); // hilangkan @botusername
+  const command = (parts[0] || '').toLowerCase().replace(/@.+$/, '');
+  const args = parts.slice(1).join(' ').trim();
   const arg1 = parts[1] || '';
 
-  // ─── /start & /help (Dapat diakses siapa saja) ───
-  if (command === '/start' || command === '/help') {
+  // ─── /start & /help ───
+  if (command === '/start' || command === '/help' || command === '/menu') {
     const helpMsg = 
       `💈 <b>ecukur Payment Monitor Bot</b> (Serverless 24/7)\n\n` +
       `Bot monitoring pembayaran QRIS otomatis E-CUKUR siap digunakan.\n\n` +
-      `<b>Daftar Perintah Admin:</b>\n` +
-      `• <code>/status</code> - Status koneksi bot & backend\n` +
+      `<b>Fitur & Perintah Cepat:</b>\n` +
       `• <code>/today</code> - Ringkasan transaksi QRIS hari ini\n` +
       `• <code>/pending</code> - Daftar pembayaran pending\n` +
-      `• <code>/failed</code> - Daftar transaksi gagal / expired\n` +
       `• <code>/transactions</code> - 10 riwayat transaksi terbaru\n` +
+      `• <code>/withdrawals</code> - Cek riwayat penarikan saldo capster\n` +
+      `• <code>/cari &lt;no hp/nama&gt;</code> - Cari riwayat booking pelanggan\n` +
+      `• <code>/status</code> - Kondisi server & database\n` +
       `• <code>/details &lt;REF&gt;</code> - Cek detail pembayaran spesifik\n` +
-      `• <code>/groupid</code> - Menampilkan ID chat / grup Telegram saat ini\n` +
-      `• <code>/testgroup</code> - Kirim pesan uji coba ke grup alert\n` +
-      `• <code>/help</code> - Menampilkan panduan ini`;
+      `• <code>/testgroup</code> - Kirim notifikasi uji coba ke grup alert\n\n` +
+      `<i>Pilih menu di bawah untuk akses cepat:</i>`;
     
-    await sendTelegramMessage(chatId, helpMsg, 'HTML');
+    await sendTelegramMessage(chatId, helpMsg, 'HTML', inlineKeyboardMain);
     return res.status(200).json({ ok: true });
   }
 
@@ -176,35 +473,54 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  const supabase = makeSupabaseClient();
-
   // ─── /status ───
   if (command === '/status' || command === '/health') {
-    let supabaseStatus = 'DISCONNECTED';
-    if (supabase) {
-      try {
-        const { error } = await supabase
-          .from('qris_payments')
-          .select('reference_id', { head: true, count: 'exact' })
-          .limit(1);
-        supabaseStatus = error ? 'ERROR' : 'CONNECTED';
-      } catch {
-        supabaseStatus = 'ERROR';
-      }
+    const statusMsg = await getStatusText(supabase);
+    await sendTelegramMessage(chatId, statusMsg, 'HTML', inlineKeyboardMain);
+    return res.status(200).json({ ok: true });
+  }
+
+  // ─── /today ───
+  if (command === '/today') {
+    const todayMsg = await getTodaySummaryText(supabase);
+    await sendTelegramMessage(chatId, todayMsg, 'HTML', inlineKeyboardMain);
+    return res.status(200).json({ ok: true });
+  }
+
+  // ─── /pending ───
+  if (command === '/pending') {
+    const pendingMsg = await getPendingPaymentsText(supabase);
+    await sendTelegramMessage(chatId, pendingMsg, 'HTML', inlineKeyboardMain);
+    return res.status(200).json({ ok: true });
+  }
+
+  // ─── /transactions ───
+  if (command === '/transactions') {
+    const txMsg = await getRecentTransactionsText(supabase);
+    await sendTelegramMessage(chatId, txMsg, 'HTML', inlineKeyboardMain);
+    return res.status(200).json({ ok: true });
+  }
+
+  // ─── /withdrawals & /tarik (FITUR #4) ───
+  if (command === '/withdrawals' || command === '/tarik') {
+    const wdMsg = await getWithdrawalsText(supabase);
+    await sendTelegramMessage(chatId, wdMsg, 'HTML', inlineKeyboardMain);
+    return res.status(200).json({ ok: true });
+  }
+
+  // ─── /cari (FITUR #5) ───
+  if (command === '/cari' || command === '/search') {
+    if (!args) {
+      await sendTelegramMessage(
+        chatId,
+        'ℹ️ Masukkan nomor HP atau nama pelanggan yang ingin dicari.\nContoh: <code>/cari 08123456789</code> atau <code>/cari Dimas</code>',
+        'HTML'
+      );
+      return res.status(200).json({ ok: true });
     }
 
-    const groupId = getGroupId();
-    const statusMsg = 
-      `📊 <b>STATUS SISTEM E-CUKUR</b>\n` +
-      `━━━━━━━━━━━━━━━━━━━\n` +
-      `• <b>Telegram Bot:</b> ONLINE (Vercel Serverless 24/7)\n` +
-      `• <b>Backend API:</b> ONLINE (https://ecukur.biz.id)\n` +
-      `• <b>Supabase DB:</b> ${supabaseStatus}\n` +
-      `• <b>Target Alert Grup:</b> <code>${groupId}</code>\n` +
-      `• <b>Payment Monitoring:</b> AKTIF\n` +
-      `• <b>Jam Server:</b> ${new Date().toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB`;
-
-    await sendTelegramMessage(chatId, statusMsg, 'HTML');
+    const searchMsg = await searchCustomerText(supabase, args);
+    await sendTelegramMessage(chatId, searchMsg, 'HTML', inlineKeyboardMain);
     return res.status(200).json({ ok: true });
   }
 
@@ -230,116 +546,6 @@ export default async function handler(req, res) {
     return res.status(200).json({ ok: true });
   }
 
-  // ─── /today ───
-  if (command === '/today') {
-    if (!supabase) {
-      await sendTelegramMessage(chatId, '❌ Supabase belum terkonfigurasi.');
-      return res.status(200).json({ ok: true });
-    }
-
-    const range = jakartaDateRange();
-    const statuses = ['PENDING', 'PAID', 'EXPIRED', 'FAILED', 'CANCELLED'];
-
-    try {
-      const counts = await Promise.all(
-        statuses.map(async (st) => {
-          const { count } = await supabase
-            .from('qris_payments')
-            .select('reference_id', { count: 'exact', head: true })
-            .eq('status', st)
-            .gte('created_at', range.start)
-            .lt('created_at', range.end);
-          return [st, count || 0];
-        })
-      );
-      const countMap = Object.fromEntries(counts);
-
-      const todayMsg =
-        `📅 <b>Ringkasan Transaksi Hari Ini (${range.date})</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━\n` +
-        `✅ <b>LUNAS (PAID):</b> ${countMap.PAID || 0}\n` +
-        `⏳ <b>PENDING:</b> ${countMap.PENDING || 0}\n` +
-        `❌ <b>EXPIRED / GAGAL:</b> ${(countMap.EXPIRED || 0) + (countMap.FAILED || 0) + (countMap.CANCELLED || 0)}\n` +
-        `━━━━━━━━━━━━━━━━━━━\n` +
-        `Ketik <code>/pending</code> untuk daftar antrean belum bayar.`;
-
-      await sendTelegramMessage(chatId, todayMsg, 'HTML');
-    } catch (e) {
-      await sendTelegramMessage(chatId, `❌ Gagal memuat data transaksi hari ini: ${e.message}`);
-    }
-    return res.status(200).json({ ok: true });
-  }
-
-  // ─── /pending ───
-  if (command === '/pending') {
-    if (!supabase) {
-      await sendTelegramMessage(chatId, '❌ Supabase belum terkonfigurasi.');
-      return res.status(200).json({ ok: true });
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('qris_payments')
-        .select('reference_id,total_amount,created_at,type')
-        .eq('status', 'PENDING')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-
-      if (!data || data.length === 0) {
-        await sendTelegramMessage(chatId, '✓ Tidak ada tagihan QRIS yang berstatus PENDING saat ini.');
-        return res.status(200).json({ ok: true });
-      }
-
-      let msg = `⏳ <b>DAFTAR PEMBAYARAN PENDING (${data.length}):</b>\n━━━━━━━━━━━━━━━━━━━\n`;
-      data.forEach((item, idx) => {
-        const timeStr = new Date(item.created_at).toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
-        msg += `${idx + 1}. <code>${item.reference_id}</code>\n   💰 Rp ${(item.total_amount || 0).toLocaleString('id-ID')} | 🕒 ${timeStr} WIB\n`;
-      });
-      msg += `\nKetik <code>/details &lt;REF&gt;</code> untuk rincian lengkap.`;
-
-      await sendTelegramMessage(chatId, msg, 'HTML');
-    } catch (e) {
-      await sendTelegramMessage(chatId, `❌ Gagal mengambil daftar pending: ${e.message}`);
-    }
-    return res.status(200).json({ ok: true });
-  }
-
-  // ─── /transactions ───
-  if (command === '/transactions') {
-    if (!supabase) {
-      await sendTelegramMessage(chatId, '❌ Supabase belum terkonfigurasi.');
-      return res.status(200).json({ ok: true });
-    }
-
-    try {
-      const { data, error } = await supabase
-        .from('qris_payments')
-        .select('reference_id,total_amount,status,created_at,type')
-        .order('created_at', { ascending: false })
-        .limit(10);
-
-      if (error) throw error;
-
-      if (!data || data.length === 0) {
-        await sendTelegramMessage(chatId, 'Belum ada riwayat transaksi QRIS.');
-        return res.status(200).json({ ok: true });
-      }
-
-      let msg = `📜 <b>10 TRANSAKSI TERBARU:</b>\n━━━━━━━━━━━━━━━━━━━\n`;
-      data.forEach((item, idx) => {
-        const badge = item.status === 'PAID' ? '✅' : item.status === 'PENDING' ? '⏳' : '❌';
-        msg += `${idx + 1}. ${badge} <code>${item.reference_id}</code>\n   Rp ${(item.total_amount || 0).toLocaleString('id-ID')} [${item.status}]\n`;
-      });
-
-      await sendTelegramMessage(chatId, msg, 'HTML');
-    } catch (e) {
-      await sendTelegramMessage(chatId, `❌ Gagal mengambil riwayat transaksi: ${e.message}`);
-    }
-    return res.status(200).json({ ok: true });
-  }
-
   // ─── /details <REF> ───
   if (command === '/details') {
     if (!arg1) {
@@ -360,7 +566,6 @@ export default async function handler(req, res) {
         .maybeSingle();
 
       if (error) throw error;
-
       if (!data) {
         await sendTelegramMessage(chatId, `❌ Transaksi dengan reference <code>${arg1}</code> tidak ditemukan.`, 'HTML');
         return res.status(200).json({ ok: true });
@@ -379,7 +584,7 @@ export default async function handler(req, res) {
         `• <b>Dibuat:</b> ${createdTime} WIB\n` +
         `• <b>Lunas Pada:</b> ${paidTime} WIB\n`;
 
-      await sendTelegramMessage(chatId, detailMsg, 'HTML');
+      await sendTelegramMessage(chatId, detailMsg, 'HTML', inlineKeyboardMain);
     } catch (e) {
       await sendTelegramMessage(chatId, `❌ Gagal mencari detail pembayaran: ${e.message}`);
     }
@@ -389,8 +594,9 @@ export default async function handler(req, res) {
   // Perintah tidak dikenal
   await sendTelegramMessage(
     chatId,
-    `Perintah tidak dikenal. Ketik <code>/help</code> untuk melihat daftar perintah.`,
-    'HTML'
+    `Perintah tidak dikenal. Ketik <code>/help</code> atau pilih menu di bawah.`,
+    'HTML',
+    inlineKeyboardMain
   );
 
   return res.status(200).json({ ok: true });
