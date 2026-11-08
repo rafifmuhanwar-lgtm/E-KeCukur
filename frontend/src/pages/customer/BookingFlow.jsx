@@ -104,8 +104,8 @@ export default function BookingFlow() {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      addBooking({
+    setTimeout(async () => {
+      const created = await addBooking({
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         note: customerNote.trim() || '-',
@@ -118,7 +118,11 @@ export default function BookingFlow() {
       });
 
       setIsSubmitting(false);
-      navigate('/customer/bookings');
+      if (created?.id) {
+        navigate(`/tiket/${created.id}`);
+      } else {
+        navigate('/customer/bookings');
+      }
     }, 600);
   };
 

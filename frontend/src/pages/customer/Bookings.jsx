@@ -8,7 +8,8 @@ import {
   Copy, 
   Check, 
   Scissors, 
-  ArrowLeft
+  ArrowLeft,
+  Ticket
 } from 'lucide-react';
 import { useStore } from '../../store';
 
@@ -228,13 +229,17 @@ export default function CustomerBookings() {
                       )}
                     </div>
 
-                    <div className="flex items-center justify-between sm:justify-end gap-4">
-                      <span className="text-[11px] font-mono text-neutral-500 uppercase">
-                        {b.paymentMethod || 'QRIS'} {b.paymentStatus ? `(${b.paymentStatus})` : ''}
-                      </span>
+                    <div className="flex items-center justify-between sm:justify-end gap-3">
                       <div className="text-base sm:text-lg font-bold text-[#285844] font-mono">
                         {formatRupiah(b.price || 0)}
                       </div>
+                      <Link
+                        to={`/tiket/${b.id}`}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-bold transition-all shadow-2xs active:scale-95"
+                      >
+                        <Ticket className="w-3.5 h-3.5" />
+                        <span>Lihat Tiket</span>
+                      </Link>
                     </div>
                   </div>
                 </motion.div>

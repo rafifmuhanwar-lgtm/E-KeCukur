@@ -24,7 +24,9 @@ import {
   List,
   MessageSquare,
   Send,
-  Camera
+  Camera,
+  Ticket,
+  Phone
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
@@ -323,6 +325,20 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [copiedBookingAmount, setCopiedBookingAmount] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [simulatingBooking, setSimulatingBooking] = useState(false);
+  const [activeTicket, setActiveTicket] = useState(null);
+
+  // Baca tiket aktif tersimpan di HP pelanggan
+  useEffect(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('ecukur_active_ticket');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.id) setActiveTicket(parsed);
+        }
+      }
+    } catch {}
+  }, []);
 
   // Auto-listen when customer is on QRIS payment step
   useEffect(() => {
@@ -340,7 +356,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
         if (data && (data.payment_status === 'PAID' || data.booking_status === 'CONFIRMED')) {
           if (active) {
-            setBookingSuccessData({
+            const successPayload = {
               id: bookingQrisData.bookingId,
               customerName,
               customerPhone,
@@ -349,7 +365,14 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               time: selectedTime,
               price: bookingQrisData.totalAmount,
               paymentMethod: 'QRIS (Lunas Otomatis)'
-            });
+            };
+            setBookingSuccessData(successPayload);
+            setActiveTicket(successPayload);
+            try {
+              if (typeof localStorage !== 'undefined') {
+                localStorage.setItem('ecukur_active_ticket', JSON.stringify(successPayload));
+              }
+            } catch {}
             setBookingStep('success');
           }
         }
@@ -1613,13 +1636,36 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       <strong className="font-mono text-sm text-[#285844]">{formatRupiah(bookingSuccessData.price)}</strong>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); setBookingQrisData(null); setBookingStep('form'); }}
-                    className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm transition-all cursor-pointer"
-                  >
-                    Selesai & Simpan Tiket
-                  </button>
+                  <div className="space-y-2 pt-1">
+                    <Link
+                      to={`/tiket/${bookingSuccessData.id}`}
+                      className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-center"
+                    >
+                      <Ticket className="w-4 h-4 text-emerald-300" />
+                      <span>Buka & Simpan E-Tiket Digital</span>
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const shortId = `#${String(bookingSuccessData.id).slice(-6).toUpperCase()}`;
+                        const text = `💈 *TIKET RESERVASI E-CUKUR*\nNo. Tiket: ${shortId}\nJadwal: ${bookingSuccessData.date} • ${bookingSuccessData.time} WIB\nLayanan: ${bookingSuccessData.serviceName}\nBuka Tiket: https://ecukur.biz.id/tiket/${bookingSuccessData.id}`;
+                        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                      }}
+                      className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
+                    >
+                      <Phone className="w-3.5 h-3.5" />
+                      <span>Kirim Ringkasan ke WhatsApp Saya</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); setBookingQrisData(null); setBookingStep('form'); }}
+                      className="w-full py-2.5 text-neutral-500 hover:text-neutral-700 font-medium text-xs rounded-xl transition-colors cursor-pointer"
+                    >
+                      Tutup
+                    </button>
+                  </div>
                 </div>
               ) : (
                 /* ── STEP 3: BOOKING FORM ── */
@@ -2188,6 +2234,31 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
           </div>
         )}
       </AnimatePresence>
+
+      {/* ─── FLOATING ACTIVE TICKET PILL ─── */}
+      {activeTicket && !isBookingOpen && !isPreview && (
+        <aside aria-label="Tiket Booking Aktif" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-sm px-4 pointer-events-auto">
+          <Link
+            to={`/tiket/${activeTicket.id}`}
+            className="w-full bg-[#285844] hover:bg-[#1E4334] text-white p-3 rounded-2xl shadow-xl flex items-center justify-between gap-3 border border-white/20 backdrop-blur-md transition-all active:scale-98 group"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-white/15 flex items-center justify-center shrink-0 text-emerald-300">
+                <Ticket className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 text-left">
+                <div className="text-[10px] uppercase font-bold text-emerald-200">Tiket Reservasi Anda Aktif</div>
+                <div className="text-xs font-bold text-white truncate">
+                  {activeTicket.date} • {activeTicket.time} WIB
+                </div>
+              </div>
+            </div>
+            <span className="px-2.5 py-1 bg-white/20 group-hover:bg-white/30 rounded-lg text-[10px] font-bold text-white shrink-0">
+              Buka Tiket →
+            </span>
+          </Link>
+        </aside>
+      )}
 
     </div>
   );

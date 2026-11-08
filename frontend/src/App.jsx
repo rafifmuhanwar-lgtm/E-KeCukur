@@ -4,6 +4,7 @@ import Home from './pages/Home';
 import Login from './pages/Login';
 import CustomerBarbers from './pages/customer/Barbers';
 import CustomerBookings from './pages/customer/Bookings';
+import CustomerTicket from './pages/customer/Ticket';
 import BookingFlow from './pages/customer/BookingFlow';
 import BarberDashboard from './pages/barber/Dashboard';
 import BarberBioLink from './pages/customer/BarberBioLink';
@@ -43,6 +44,8 @@ export default function App() {
           <Route path="/customer/barbers/:id" element={<BarberBioLink />} />
           <Route path="/booking" element={<BookingFlow />} />
           <Route path="/customer/bookings" element={<CustomerBookings />} />
+          <Route path="/tiket/:id" element={<CustomerTicket />} />
+          <Route path="/ticket/:id" element={<CustomerTicket />} />
           <Route path="/messages" element={<Messages />} />
           
           {/* Legacy staff route redirects to Barber Studio Dashboard */}
