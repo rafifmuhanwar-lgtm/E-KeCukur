@@ -11,3 +11,4 @@ echo [PERINGATAN] Bot terhenti pada %date% %time%
 echo Memulai ulang bot dalam 3 detik...
 timeout /t 3 /nobreak >nul
 goto loop
+
