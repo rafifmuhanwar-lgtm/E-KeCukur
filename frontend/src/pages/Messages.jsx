@@ -474,7 +474,7 @@ export default function Messages({ barberMode = false }) {
 
   const profilePath = barberProfileSlug
     ? `/${encodeURIComponent(barberProfileSlug)}`
-    : '/customer/barbers';
+    : '/';
   const messagesLoading = Boolean(selectedConversationId && selectedConversationId !== loadedConversationId);
   const visibleMessages = selectedConversationId === loadedConversationId ? messages : EMPTY_MESSAGES;
 

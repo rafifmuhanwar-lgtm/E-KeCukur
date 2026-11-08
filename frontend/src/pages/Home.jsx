@@ -1360,7 +1360,7 @@ export default function Home() {
             <h4 className="font-mono uppercase font-bold text-[11px] text-neutral-400 tracking-wider">Akses Akun</h4>
             <ul className="space-y-1.5 text-neutral-300">
               <li><a href="/login" className="hover:text-white transition-colors">Masuk ke Akun Barber</a></li>
-              <li><a href="/customer/barbers" className="hover:text-white transition-colors">Cari Barber Sekitar</a></li>
+              <li><a href="/register" className="hover:text-white transition-colors">Daftar Akun Barber</a></li>
             </ul>
           </div>
 

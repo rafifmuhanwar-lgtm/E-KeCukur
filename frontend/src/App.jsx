@@ -2,7 +2,6 @@ import React, { useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Home from './pages/Home';
 import Login from './pages/Login';
-import CustomerBarbers from './pages/customer/Barbers';
 import CustomerTicket from './pages/customer/Ticket';
 import BookingFlow from './pages/customer/BookingFlow';
 import BarberDashboard from './pages/barber/Dashboard';
@@ -39,7 +38,7 @@ export default function App() {
           <Route path="/internal" element={<Navigate to="/login" replace />} />
 
           {/* Customer Routes */}
-          <Route path="/customer/barbers" element={<CustomerBarbers />} />
+          <Route path="/customer/barbers" element={<Navigate to="/" replace />} />
           <Route path="/customer/barbers/:id" element={<BarberBioLink />} />
           <Route path="/booking" element={<BookingFlow />} />
           <Route path="/customer/bookings" element={<Navigate to="/" replace />} />
