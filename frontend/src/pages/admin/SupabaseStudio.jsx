@@ -950,3 +950,4 @@ export default function SupabaseStudio({ onDataMutated }) {
     </div>
   );
 }
+

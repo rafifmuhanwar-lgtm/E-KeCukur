@@ -426,41 +426,44 @@ export default function AdminMasterDashboard() {
 
   // ─── 1. METRICS & AGGREGATIONS ───
   const metrics = useMemo(() => {
-    const totalBarbers = barbers.length;
-    const freeBarbers = barbers.filter(b => (b?.plan || 'free') === 'free').length;
-    const capsterBarbers = barbers.filter(b => b?.plan === 'capster').length;
-    const studioBarbers = barbers.filter(b => b?.plan === 'barber').length;
+    const safeBarbers = Array.isArray(barbers) ? barbers.filter(Boolean) : [];
+    const safeBookings = Array.isArray(bookings) ? bookings.filter(Boolean) : [];
 
-    const totalBookings = bookings.length;
-    const confirmedBookings = bookings.filter(b => b.status === 'Terkonfirmasi' || b.status === 'Selesai').length;
-    const pendingBookings = bookings.filter(b => b.status === 'Menunggu').length;
+    const totalBarbers = safeBarbers.length;
+    const freeBarbers = safeBarbers.filter((b) => (b?.plan || 'free') === 'free').length;
+    const capsterBarbers = safeBarbers.filter((b) => b?.plan === 'capster').length;
+    const studioBarbers = safeBarbers.filter((b) => b?.plan === 'barber').length;
+
+    const totalBookings = safeBookings.length;
+    const confirmedBookings = safeBookings.filter((b) => b?.status === 'Terkonfirmasi' || b?.status === 'Selesai').length;
+    const pendingBookings = safeBookings.filter((b) => b?.status === 'Menunggu').length;
 
     // Hitung total omzet booking di seluruh platform
-    const totalBookingVolume = bookings.reduce((acc, b) => acc + (Number(b.price) || 0), 0);
+    const totalBookingVolume = safeBookings.reduce((acc, b) => acc + (Number(b?.price) || 0), 0);
 
     // Hitung total tip yang beredar di seluruh bio link
-    const totalTipsVolume = barbers.reduce((acc, b) => {
-      const history = Array.isArray(b.tipsHistory) ? b.tipsHistory : [];
-      return acc + history.reduce((sub, t) => sub + (Number(t.amount) || 0), 0);
+    const totalTipsVolume = safeBarbers.reduce((acc, b) => {
+      const history = Array.isArray(b?.tipsHistory) ? b.tipsHistory : [];
+      return acc + history.reduce((sub, t) => sub + (Number(t?.amount) || 0), 0);
     }, 0);
 
     // Total penarikan yang diajukan
-    const allWithdrawals = barbers.flatMap(b => {
-      const list = Array.isArray(b.withdrawalsHistory) ? b.withdrawalsHistory : [];
+    const allWithdrawals = safeBarbers.flatMap((b) => {
+      const list = Array.isArray(b?.withdrawalsHistory) ? b.withdrawalsHistory : [];
       return list.map((w, idx) => ({
         ...w,
         idx,
-        barberName: b.name,
-        barberId: b.id,
-        barberSlug: b.slug
+        barberName: b?.name || 'Barber',
+        barberId: b?.id,
+        barberSlug: b?.slug
       }));
     });
 
-    const pendingWithdrawals = allWithdrawals.filter(w => w.status === 'Menunggu' || w.status === 'Menunggu Transfer' || !w.status);
-    const completedWithdrawals = allWithdrawals.filter(w => w.status === 'Berhasil Ditransfer' || w.status === 'Selesai');
+    const pendingWithdrawals = allWithdrawals.filter((w) => w?.status === 'Menunggu' || w?.status === 'Menunggu Transfer' || !w?.status);
+    const completedWithdrawals = allWithdrawals.filter((w) => w?.status === 'Berhasil Ditransfer' || w?.status === 'Selesai');
 
-    const totalPendingPayoutAmount = pendingWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
-    const totalCompletedPayoutAmount = completedWithdrawals.reduce((sum, w) => sum + (Number(w.amount) || 0), 0);
+    const totalPendingPayoutAmount = pendingWithdrawals.reduce((sum, w) => sum + (Number(w?.amount) || 0), 0);
+    const totalCompletedPayoutAmount = completedWithdrawals.reduce((sum, w) => sum + (Number(w?.amount) || 0), 0);
 
     return {
       totalBarbers,
@@ -483,11 +486,12 @@ export default function AdminMasterDashboard() {
 
   // ─── FILTERED BARBERS ───
   const filteredBarbers = useMemo(() => {
-    return barbers.filter((b) => {
+    const safeBarbers = Array.isArray(barbers) ? barbers.filter(Boolean) : [];
+    return safeBarbers.filter((b) => {
       const matchSearch = 
-        (b.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (b.slug || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (b.locationCity || '').toLowerCase().includes(searchQuery.toLowerCase());
+        (b?.name || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b?.slug || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (b?.locationCity || '').toLowerCase().includes(searchQuery.toLowerCase());
       
       const matchSegment = segmentFilter === 'ALL' || (b?.segment || 'capster') === segmentFilter;
       const matchPlan = planFilter === 'ALL' || (b?.plan || 'free') === planFilter;
@@ -497,19 +501,20 @@ export default function AdminMasterDashboard() {
 
   // ─── FILTERED BOOKINGS ───
   const filteredBookings = useMemo(() => {
-    return bookings.filter((b) => {
-      const matchStatus = bookingStatusFilter === 'ALL' || b.status === bookingStatusFilter;
-      const matchPayment = bookingPaymentFilter === 'ALL' || (b.paymentMethod || 'Tunai') === bookingPaymentFilter;
+    const safeBookings = Array.isArray(bookings) ? bookings.filter(Boolean) : [];
+    return safeBookings.filter((b) => {
+      const matchStatus = bookingStatusFilter === 'ALL' || b?.status === bookingStatusFilter;
+      const matchPayment = bookingPaymentFilter === 'ALL' || (b?.paymentMethod || 'Tunai') === bookingPaymentFilter;
       const matchBarber = bookingBarberFilter === 'ALL' || 
-        (b.barberId && b.barberId === bookingBarberFilter) || 
-        (b.barberName && b.barberName.trim().toLowerCase() === bookingBarberFilter.trim().toLowerCase());
+        (b?.barberId && b.barberId === bookingBarberFilter) || 
+        (b?.barberName && b.barberName.trim().toLowerCase() === bookingBarberFilter.trim().toLowerCase());
       
       const q = bookingSearchQuery.toLowerCase().trim();
       const matchQuery = !q || 
-        (b.customerName || '').toLowerCase().includes(q) ||
-        (b.customerPhone || '').toLowerCase().includes(q) ||
-        (b.serviceName || '').toLowerCase().includes(q) ||
-        (b.id || '').toLowerCase().includes(q);
+        (b?.customerName || '').toLowerCase().includes(q) ||
+        (b?.customerPhone || '').toLowerCase().includes(q) ||
+        (b?.serviceName || '').toLowerCase().includes(q) ||
+        (b?.id || '').toLowerCase().includes(q);
 
       return matchStatus && matchPayment && matchBarber && matchQuery;
     });
@@ -517,7 +522,8 @@ export default function AdminMasterDashboard() {
 
   // ─── FILTERED WITHDRAWALS ───
   const filteredWithdrawals = useMemo(() => {
-    return metrics.allWithdrawals.filter((w) => {
+    const safeWithdrawals = Array.isArray(metrics?.allWithdrawals) ? metrics.allWithdrawals.filter(Boolean) : [];
+    return safeWithdrawals.filter((w) => {
       if (withdrawalStatusFilter === 'ALL') return true;
       if (withdrawalStatusFilter === 'PENDING') {
         return w.status === 'Menunggu' || w.status === 'Menunggu Transfer' || !w.status;
