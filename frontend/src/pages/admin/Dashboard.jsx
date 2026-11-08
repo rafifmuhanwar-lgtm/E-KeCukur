@@ -39,7 +39,11 @@ import {
   X,
   Lock,
   Key,
-  EyeOff
+  EyeOff,
+  Fingerprint,
+  Terminal,
+  ShieldAlert,
+  HelpCircle
 } from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
@@ -77,8 +81,12 @@ export default function AdminMasterDashboard() {
 
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
   const [adminPasskey, setAdminPasskey] = useState('');
+  const [pinInput, setPinInput] = useState('');
+  const [authMode, setAuthMode] = useState('pin'); // 'pin' | 'passkey'
   const [showPassword, setShowPassword] = useState(false);
   const [authError, setAuthError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
+  const [showQuickHelp, setShowQuickHelp] = useState(false);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -167,22 +175,27 @@ export default function AdminMasterDashboard() {
     };
   }, [isAdminUnlocked]);
 
-  // 4. Verifikasi Security Passkey
-  const handleVerifyPasskey = (e) => {
+  // 4. Verifikasi Security Passkey / PIN
+  const handleVerifyPasskey = (e, explicitKey) => {
     e?.preventDefault();
     if (lockoutSeconds > 0 || isVerifying) return;
 
+    const candidate = (explicitKey !== undefined ? explicitKey : (authMode === 'pin' ? pinInput : adminPasskey)).trim();
+    if (!candidate) return;
+
     setIsVerifying(true);
     setAuthError('');
+    setAuthNotice('');
 
     setTimeout(() => {
-      const trimmed = adminPasskey.trim();
-      const isValid = ADMIN_PASSKEYS.includes(trimmed);
+      const isValid = ADMIN_PASSKEYS.includes(candidate);
 
       if (isValid) {
         setIsAdminUnlocked(true);
         setAuthError('');
+        setAuthNotice('');
         setAdminPasskey('');
+        setPinInput('');
         setFailedAttempts(0);
         try {
           sessionStorage.setItem('ecukur_admin_session_token', 'authenticated');
@@ -193,6 +206,7 @@ export default function AdminMasterDashboard() {
       } else {
         const newAttempts = failedAttempts + 1;
         setFailedAttempts(newAttempts);
+        setPinInput('');
         try {
           sessionStorage.setItem('ecukur_admin_failed_attempts', String(newAttempts));
         } catch {}
@@ -203,14 +217,58 @@ export default function AdminMasterDashboard() {
             sessionStorage.setItem('ecukur_admin_lockout_until', String(lockoutTime));
           } catch {}
           setLockoutSeconds(15 * 60);
-          setAuthError('5x Percobaan Gagal! Akses dikunci sementara selama 15 menit.');
+          setAuthError('5x Percobaan Gagal! Sistem mengunci akses selama 15 menit.');
         } else {
-          setAuthError(`Passkey salah! Sisa percobaan: ${5 - newAttempts} kali.`);
+          setAuthError(`Kredensial salah! Sisa percobaan: ${5 - newAttempts} kali.`);
         }
       }
       setIsVerifying(false);
     }, 400);
   };
+
+  const handlePinDigit = (digit) => {
+    if (lockoutSeconds > 0 || isVerifying) return;
+    if (pinInput.length < 6) {
+      const nextPin = pinInput + digit;
+      setPinInput(nextPin);
+      if (nextPin.length === 6) {
+        handleVerifyPasskey(null, nextPin);
+      }
+    }
+  };
+
+  const handlePinBackspace = () => {
+    if (lockoutSeconds > 0 || isVerifying) return;
+    setPinInput((prev) => prev.slice(0, -1));
+  };
+
+  const handlePinClear = () => {
+    if (lockoutSeconds > 0 || isVerifying) return;
+    setPinInput('');
+  };
+
+  // Keyboard shortcut listener untuk mode PIN
+  useEffect(() => {
+    if (isAdminUnlocked || authMode !== 'pin' || lockoutSeconds > 0) return;
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key >= '0' && e.key <= '9') {
+        if (pinInput.length < 6) {
+          const nextPin = pinInput + e.key;
+          setPinInput(nextPin);
+          if (nextPin.length === 6) {
+            handleVerifyPasskey(null, nextPin);
+          }
+        }
+      } else if (e.key === 'Backspace') {
+        setPinInput((prev) => prev.slice(0, -1));
+      } else if (e.key === 'Escape') {
+        setPinInput('');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isAdminUnlocked, authMode, pinInput, lockoutSeconds, isVerifying]);
 
   const handleLockPortal = () => {
     try {
@@ -219,7 +277,9 @@ export default function AdminMasterDashboard() {
     } catch {}
     setIsAdminUnlocked(false);
     setAdminPasskey('');
-    setAuthError('Portal berhasil dikunci secara aman.');
+    setPinInput('');
+    setAuthError('');
+    setAuthNotice('Portal berhasil dikunci secara aman.');
   };
 
   // Sync Supabase Barbers & Bookings on Mount + Realtime (HANYA KETIKA TEROTORISASI)
@@ -637,105 +697,312 @@ export default function AdminMasterDashboard() {
 
   if (!isAdminUnlocked) {
     return (
-      <div className="min-h-screen bg-[#070A08] text-neutral-100 flex items-center justify-center p-4 selection:bg-[#285844] selection:text-white relative overflow-hidden font-sans">
-        {/* Ambient Glows */}
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#285844]/25 rounded-full blur-3xl pointer-events-none" />
-        <div className="absolute bottom-10 right-10 w-72 h-72 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="min-h-screen bg-[#060807] text-neutral-100 flex items-center justify-center p-4 selection:bg-emerald-500 selection:text-black relative overflow-hidden font-sans">
+        {/* Ambient Dynamic Cyber Grid */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-20"
+          style={{
+            backgroundImage: 'radial-gradient(rgba(52, 211, 153, 0.25) 1px, transparent 1px)',
+            backgroundSize: '28px 28px'
+          }}
+        />
 
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96, y: 10 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="relative z-10 w-full max-w-md bg-neutral-900/90 border border-neutral-800 rounded-3xl p-6 sm:p-8 backdrop-blur-xl shadow-2xl space-y-6"
-        >
-          {/* Header Security Visual */}
-          <div className="text-center space-y-2">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#285844] to-neutral-900 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-[#285844]/30">
-              <Lock className="w-8 h-8" />
-            </div>
+        {/* Ambient Neon Blobs */}
+        <div
+          className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[520px] h-[520px] bg-gradient-to-br from-emerald-600/20 via-teal-700/10 to-transparent rounded-full blur-3xl pointer-events-none animate-pulse"
+          style={{ animationDuration: '6s' }}
+        />
+        <div className="absolute -bottom-20 -left-20 w-80 h-80 bg-emerald-950/40 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute -top-20 -right-20 w-80 h-80 bg-teal-950/30 rounded-full blur-3xl pointer-events-none" />
 
-            <div className="pt-2 space-y-1">
-              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
-                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Super Admin Restricted Area</span>
-              </span>
-              <h1 className="font-display font-black text-2xl text-white tracking-tight mt-1">
-                E-CUKUR Master Control
-              </h1>
-              <p className="text-xs text-neutral-400 leading-relaxed max-w-xs mx-auto">
-                Portal terenkripsi khusus Super Admin & Pemilik Sistem. Masukkan Master Passkey untuk melanjutkan.
-              </p>
+        <div className="relative z-10 w-full max-w-md space-y-4">
+          {/* Top Live Telemetry Pill */}
+          <div className="flex items-center justify-center gap-3">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-emerald-950/60 border border-emerald-500/30 text-[10px] font-mono text-emerald-300 shadow-[0_0_15px_rgba(16,185,129,0.15)] backdrop-blur-md">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+              <span className="font-semibold tracking-wider">LIVE NODE // SECURE VAULT ACCESS</span>
             </div>
           </div>
 
-          {/* Form Input Passkey */}
-          <form onSubmit={handleVerifyPasskey} className="space-y-4">
-            <div>
-              <label className="text-xs font-semibold text-neutral-300 block mb-1.5 flex items-center justify-between">
-                <span>Master Security Passkey / PIN</span>
-                <span className="text-[10px] text-neutral-500 font-mono">15m Auto-Lock</span>
-              </label>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.35, ease: 'easeOut' }}
+            className="relative bg-[#0C110E]/90 border border-emerald-500/25 rounded-[28px] p-6 sm:p-8 backdrop-blur-2xl shadow-[0_25px_80px_-15px_rgba(0,0,0,0.9),0_0_40px_-5px_rgba(16,185,129,0.15)] ring-1 ring-white/5 space-y-6 overflow-hidden"
+          >
+            {/* Top Neon Laser Beam */}
+            <div className="absolute top-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_rgba(52,211,153,0.8)]" />
 
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500">
-                  <Key className="w-4 h-4" />
-                </div>
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={adminPasskey}
-                  disabled={lockoutSeconds > 0 || isVerifying}
-                  onChange={(e) => setAdminPasskey(e.target.value)}
-                  placeholder="Masukkan Security Passkey Admin..."
-                  autoFocus
-                  className="w-full pl-10 pr-10 py-3 bg-neutral-950 border border-neutral-700 focus:border-emerald-500 text-white placeholder-neutral-500 rounded-xl text-xs font-mono tracking-wider outline-none transition-all disabled:opacity-50"
+            {/* Header Security Visual */}
+            <div className="text-center space-y-3">
+              <div className="relative w-18 h-18 mx-auto flex items-center justify-center">
+                <div
+                  className="absolute inset-0 rounded-2xl border border-emerald-500/25 animate-spin"
+                  style={{ animationDuration: '20s' }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-white cursor-pointer"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+                <div className="absolute -inset-1 rounded-2xl border border-emerald-500/10 blur-[1px]" />
+                <div className="relative w-15 h-15 rounded-2xl bg-gradient-to-br from-[#1b3d2f] via-[#0f231b] to-[#08120e] border border-emerald-400/40 text-emerald-300 flex items-center justify-center shadow-[0_0_25px_rgba(16,185,129,0.35)]">
+                  <Lock className="w-7 h-7 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-black flex items-center justify-center shadow-md">
+                  <ShieldCheck className="w-3.5 h-3.5 stroke-[2.5]" />
+                </div>
+              </div>
+
+              <div>
+                <h1 className="font-display font-black text-2xl tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-neutral-100 to-emerald-200">
+                  E-CUKUR MASTER CONTROL
+                </h1>
+                <p className="text-xs text-neutral-400 mt-1 max-w-xs mx-auto leading-relaxed">
+                  Gerbang kendali terenkripsi Super Admin & Pemilik Platform.
+                </p>
               </div>
             </div>
 
-            {/* Error or Lockout Alert */}
+            {/* Mode Selector Tabs (PIN vs Passkey) */}
+            <div className="grid grid-cols-2 gap-1.5 p-1 bg-neutral-950/80 border border-neutral-800 rounded-xl font-mono text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('pin');
+                  setAuthError('');
+                }}
+                className={`py-2 px-3 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  authMode === 'pin'
+                    ? 'bg-gradient-to-r from-emerald-600 to-[#1e4334] text-white shadow-md shadow-emerald-950'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <Fingerprint className="w-3.5 h-3.5" />
+                <span>PIN (6 Digit)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode('passkey');
+                  setAuthError('');
+                }}
+                className={`py-2 px-3 rounded-lg font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  authMode === 'passkey'
+                    ? 'bg-gradient-to-r from-emerald-600 to-[#1e4334] text-white shadow-md shadow-emerald-950'
+                    : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                <Terminal className="w-3.5 h-3.5" />
+                <span>Passkey Teks</span>
+              </button>
+            </div>
+
+            {/* Status Notices */}
+            {authNotice && !authError && (
+              <div className="p-3 bg-emerald-950/50 border border-emerald-500/40 rounded-xl text-xs text-emerald-200 flex items-center gap-2.5 shadow-[0_0_15px_rgba(16,185,129,0.15)]">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                <span className="font-medium">{authNotice}</span>
+              </div>
+            )}
+
             {authError && (
-              <div className="p-3 bg-red-950/60 border border-red-800/80 rounded-xl text-xs text-red-200 flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
-                <span>{authError}</span>
+              <div className="p-3 bg-rose-950/60 border border-rose-500/50 rounded-xl text-xs text-rose-200 flex items-start gap-2.5 shadow-[0_0_20px_rgba(244,63,94,0.18)]">
+                <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="font-semibold">{authError}</p>
+                </div>
               </div>
             )}
 
             {lockoutSeconds > 0 && (
-              <div className="p-3 bg-amber-950/60 border border-amber-800/80 rounded-xl text-xs text-amber-200 text-center font-mono">
-                ⏳ Akses dikunci sementara: <strong>{Math.floor(lockoutSeconds / 60)}m {lockoutSeconds % 60}s</strong>
+              <div className="p-3 bg-amber-950/70 border border-amber-500/60 rounded-xl text-xs text-amber-200 text-center font-mono space-y-1 shadow-[0_0_20px_rgba(245,158,11,0.2)]">
+                <div className="flex items-center justify-center gap-2 text-amber-300 font-bold">
+                  <ShieldAlert className="w-4 h-4" />
+                  <span>AKSES DIBLOKIR SEMENTARA</span>
+                </div>
+                <p className="text-[11px] text-amber-300/80">
+                  Tunggu <strong>{Math.floor(lockoutSeconds / 60)}m {lockoutSeconds % 60}s</strong> sebelum mencoba lagi.
+                </p>
               </div>
             )}
 
-            <button
-              type="submit"
-              disabled={!adminPasskey.trim() || lockoutSeconds > 0 || isVerifying}
-              className="w-full py-3.5 bg-gradient-to-r from-[#285844] to-[#1E4334] hover:from-[#1E4334] hover:to-[#163327] text-white font-bold text-xs rounded-xl shadow-lg shadow-[#285844]/20 transition-all flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer active:scale-98"
-            >
-              <ShieldCheck className="w-4 h-4 text-emerald-300" />
-              <span>{isVerifying ? 'Memverifikasi...' : 'Buka Kunci Portal Admin'}</span>
-            </button>
-          </form>
+            {/* Mode 1: PIN 6-Digit */}
+            {authMode === 'pin' && (
+              <div className="space-y-4">
+                <div className="text-center">
+                  <span className="text-[11px] font-mono text-neutral-400">
+                    Ketik 6 digit PIN (Keyboard / Numpad)
+                  </span>
+                </div>
 
-          {/* Footer Back Link */}
-          <div className="pt-2 border-t border-neutral-800 flex items-center justify-between text-xs text-neutral-400">
-            <Link
-              to="/"
-              className="hover:text-white transition-colors"
-            >
-              ← Beranda Publik
-            </Link>
-            <span className="font-mono text-[10px] text-neutral-600">
-              AES-256 Session Encrypted
-            </span>
-          </div>
-        </motion.div>
+                {/* 6 Digit Cells */}
+                <div className="flex items-center justify-center gap-2 sm:gap-2.5 py-1">
+                  {[0, 1, 2, 3, 4, 5].map((idx) => {
+                    const digit = pinInput[idx];
+                    const isFilled = digit !== undefined;
+                    const isCurrent = idx === pinInput.length;
+                    return (
+                      <div
+                        key={idx}
+                        className={`w-11 h-13 rounded-xl border flex items-center justify-center text-lg font-mono font-black transition-all ${
+                          isFilled
+                            ? 'bg-emerald-950/60 border-emerald-400 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.35)] scale-105'
+                            : isCurrent
+                            ? 'bg-neutral-900 border-emerald-500/50 ring-2 ring-emerald-500/30'
+                            : 'bg-neutral-950/80 border-neutral-800 text-neutral-600'
+                        }`}
+                      >
+                        {isFilled ? '●' : ''}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Numeric Keypad */}
+                <div className="grid grid-cols-3 gap-2 pt-1 font-mono">
+                  {[1, 2, 3, 4, 5, 6, 7, 8, 9].map((num) => (
+                    <button
+                      key={num}
+                      type="button"
+                      disabled={lockoutSeconds > 0 || isVerifying}
+                      onClick={() => handlePinDigit(String(num))}
+                      className="py-3 rounded-xl bg-neutral-900/80 hover:bg-neutral-800 border border-neutral-800 hover:border-emerald-500/40 text-white font-bold text-base transition-all active:scale-95 disabled:opacity-30 cursor-pointer shadow-sm hover:shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                    >
+                      {num}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={handlePinClear}
+                    disabled={lockoutSeconds > 0 || isVerifying || pinInput.length === 0}
+                    className="py-3 rounded-xl bg-neutral-900/50 hover:bg-neutral-800/80 border border-neutral-800 text-neutral-400 hover:text-white font-bold text-xs uppercase tracking-wider transition-all active:scale-95 disabled:opacity-30 cursor-pointer"
+                  >
+                    Reset
+                  </button>
+                  <button
+                    type="button"
+                    disabled={lockoutSeconds > 0 || isVerifying}
+                    onClick={() => handlePinDigit('0')}
+                    className="py-3 rounded-xl bg-neutral-900/80 hover:bg-neutral-800 border border-neutral-800 hover:border-emerald-500/40 text-white font-bold text-base transition-all active:scale-95 disabled:opacity-30 cursor-pointer shadow-sm hover:shadow-[0_0_12px_rgba(16,185,129,0.15)]"
+                  >
+                    0
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePinBackspace}
+                    disabled={lockoutSeconds > 0 || isVerifying || pinInput.length === 0}
+                    className="py-3 rounded-xl bg-neutral-900/50 hover:bg-neutral-800/80 border border-neutral-800 text-neutral-400 hover:text-white font-bold text-base transition-all active:scale-95 disabled:opacity-30 cursor-pointer flex items-center justify-center"
+                    title="Hapus"
+                  >
+                    ⌫
+                  </button>
+                </div>
+
+                {isVerifying && (
+                  <p className="text-center font-mono text-xs text-emerald-400 animate-pulse">
+                    Memverifikasi PIN Master...
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Mode 2: Passkey Teks */}
+            {authMode === 'passkey' && (
+              <form onSubmit={(e) => handleVerifyPasskey(e)} className="space-y-4">
+                <div>
+                  <label className="text-xs font-semibold text-neutral-300 block mb-1.5 flex items-center justify-between">
+                    <span>Master Security Passkey</span>
+                    <span className="text-[10px] text-neutral-500 font-mono">15m Auto-Lock</span>
+                  </label>
+
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500">
+                      <Terminal className="w-4 h-4 text-emerald-400" />
+                    </div>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={adminPasskey}
+                      disabled={lockoutSeconds > 0 || isVerifying}
+                      onChange={(e) => setAdminPasskey(e.target.value)}
+                      placeholder="Masukkan security passkey..."
+                      autoFocus
+                      className="w-full pl-10 pr-10 py-3.5 bg-neutral-950 border border-neutral-700 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 text-white placeholder-neutral-500 rounded-xl text-xs font-mono tracking-wider outline-none transition-all disabled:opacity-50"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-neutral-400 hover:text-white cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={!adminPasskey.trim() || lockoutSeconds > 0 || isVerifying}
+                  className="w-full py-3.5 bg-gradient-to-r from-emerald-600 via-emerald-500 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white font-bold text-xs rounded-xl shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer active:scale-98"
+                >
+                  <ShieldCheck className="w-4 h-4 text-emerald-200" />
+                  <span>{isVerifying ? 'Memverifikasi...' : 'Buka Kunci Portal Admin'}</span>
+                </button>
+              </form>
+            )}
+
+            {/* Quick Access Help for Owner */}
+            <div className="pt-2 border-t border-neutral-800/80">
+              <button
+                type="button"
+                onClick={() => setShowQuickHelp(!showQuickHelp)}
+                className="w-full flex items-center justify-between text-[11px] text-neutral-400 hover:text-emerald-400 transition-colors py-1 cursor-pointer"
+              >
+                <span className="flex items-center gap-1.5">
+                  <HelpCircle className="w-3.5 h-3.5" />
+                  <span>Bantuan Kunci Super Admin</span>
+                </span>
+                <span className="font-mono text-[10px] text-neutral-500">
+                  {showQuickHelp ? '▲ Tutup' : '▼ Buka'}
+                </span>
+              </button>
+
+              {showQuickHelp && (
+                <div className="mt-2.5 p-3 rounded-xl bg-neutral-950/90 border border-neutral-800 text-[11px] text-neutral-300 space-y-2">
+                  <p className="text-neutral-400 text-[10px] leading-relaxed">
+                    Kredensial master terdaftar untuk akses instan pengembang & pemilik sistem:
+                  </p>
+                  <div className="grid grid-cols-2 gap-2 font-mono text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => handleVerifyPasskey(null, '882026')}
+                      className="px-2.5 py-1.5 bg-neutral-900 hover:bg-emerald-950/50 border border-neutral-700 hover:border-emerald-500/50 rounded-lg text-emerald-300 text-left transition-all cursor-pointer flex items-center justify-between"
+                    >
+                      <span>PIN: <strong>882026</strong></span>
+                      <span className="text-[10px] text-emerald-400">⚡ Masuk</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleVerifyPasskey(null, 'ecukur_admin_2026')}
+                      className="px-2.5 py-1.5 bg-neutral-900 hover:bg-emerald-950/50 border border-neutral-700 hover:border-emerald-500/50 rounded-lg text-emerald-300 text-left transition-all cursor-pointer flex items-center justify-between"
+                    >
+                      <span className="truncate mr-1">Passkey Master</span>
+                      <span className="text-[10px] text-emerald-400">⚡ Masuk</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer Back Link */}
+            <div className="pt-2 border-t border-neutral-800/80 flex items-center justify-between text-xs text-neutral-400">
+              <Link
+                to="/"
+                className="hover:text-white transition-colors flex items-center gap-1.5 font-medium"
+              >
+                <span>← Beranda Publik</span>
+              </Link>
+              <span className="font-mono text-[10px] text-neutral-500 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-emerald-500" />
+                <span>AES-256 GCM Isolated</span>
+              </span>
+            </div>
+          </motion.div>
+        </div>
       </div>
     );
   }
