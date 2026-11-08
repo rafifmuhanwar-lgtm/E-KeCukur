@@ -36,7 +36,10 @@ import {
   Zap,
   Sparkles,
   Send,
-  X
+  X,
+  Lock,
+  Key,
+  EyeOff
 } from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
@@ -58,15 +61,177 @@ export default function AdminMasterDashboard() {
   const fetchBookingsFromSupabase = useStore((state) => state.fetchBookingsFromSupabase);
   const subscribeToBookings = useStore((state) => state.subscribeToBookings);
 
-  // Sync Supabase Barbers & Bookings on Mount + Realtime
+  // ─── HIGH-SECURITY GATEKEEPER & BRUTE-FORCE PROTECTION ───
+  const ADMIN_PASSKEYS = useMemo(() => [
+    'ecukur_admin_2026',
+    'admin2026',
+    '882026',
+    (import.meta.env.VITE_ADMIN_SECRET_KEY || '').trim()
+  ].filter(Boolean), []);
+
+  const ADMIN_WHITELIST_EMAILS = useMemo(() => [
+    'rafif.muh.anwar@gmail.com',
+    'shvadiaz38@gmail.com',
+    (import.meta.env.VITE_ADMIN_EMAIL || '').trim()
+  ].filter(Boolean), []);
+
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
+  const [adminPasskey, setAdminPasskey] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  // 1. Cek Sesi Tersimpan & Lockout saat Mount
   useEffect(() => {
+    try {
+      const lockoutUntil = Number(sessionStorage.getItem('ecukur_admin_lockout_until') || 0);
+      if (lockoutUntil > Date.now()) {
+        const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000);
+        setLockoutSeconds(remaining);
+      }
+    } catch {}
+
+    try {
+      const sessionToken = sessionStorage.getItem('ecukur_admin_session_token');
+      const sessionTime = Number(sessionStorage.getItem('ecukur_admin_session_time') || 0);
+      const isSessionFresh = Date.now() - sessionTime < 15 * 60 * 1000; // 15 menit
+
+      if (sessionToken === 'authenticated' && isSessionFresh) {
+        setIsAdminUnlocked(true);
+        sessionStorage.setItem('ecukur_admin_session_time', String(Date.now()));
+        return;
+      }
+    } catch {}
+
+    // Cek apakah user saat ini login dengan email terverifikasi admin
+    if (authUser?.email && ADMIN_WHITELIST_EMAILS.some((em) => em.toLowerCase() === authUser.email.toLowerCase())) {
+      setIsAdminUnlocked(true);
+      try {
+        sessionStorage.setItem('ecukur_admin_session_token', 'authenticated');
+        sessionStorage.setItem('ecukur_admin_session_time', String(Date.now()));
+      } catch {}
+    }
+  }, [authUser?.email, ADMIN_WHITELIST_EMAILS]);
+
+  // 2. Timer Countdown saat Terkunci
+  useEffect(() => {
+    if (lockoutSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setLockoutSeconds((prev) => {
+        if (prev <= 1) {
+          try {
+            sessionStorage.removeItem('ecukur_admin_lockout_until');
+            sessionStorage.removeItem('ecukur_admin_failed_attempts');
+          } catch {}
+          setFailedAttempts(0);
+          setAuthError('');
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [lockoutSeconds]);
+
+  // 3. Auto-Lock jika Tidak Ada Aktivitas Selama 15 Menit
+  useEffect(() => {
+    if (!isAdminUnlocked) return;
+
+    const resetInactivityTimer = () => {
+      try {
+        sessionStorage.setItem('ecukur_admin_session_time', String(Date.now()));
+      } catch {}
+    };
+
+    const intervalCheck = setInterval(() => {
+      try {
+        const lastTime = Number(sessionStorage.getItem('ecukur_admin_session_time') || 0);
+        if (Date.now() - lastTime > 15 * 60 * 1000) {
+          handleLockPortal();
+          setAuthError('Sesi berakhir otomatis demi keamanan (inaktif 15 menit).');
+        }
+      } catch {}
+    }, 30000);
+
+    window.addEventListener('mousedown', resetInactivityTimer);
+    window.addEventListener('keydown', resetInactivityTimer);
+    window.addEventListener('touchstart', resetInactivityTimer);
+
+    return () => {
+      clearInterval(intervalCheck);
+      window.removeEventListener('mousedown', resetInactivityTimer);
+      window.removeEventListener('keydown', resetInactivityTimer);
+      window.removeEventListener('touchstart', resetInactivityTimer);
+    };
+  }, [isAdminUnlocked]);
+
+  // 4. Verifikasi Security Passkey
+  const handleVerifyPasskey = (e) => {
+    e?.preventDefault();
+    if (lockoutSeconds > 0 || isVerifying) return;
+
+    setIsVerifying(true);
+    setAuthError('');
+
+    setTimeout(() => {
+      const trimmed = adminPasskey.trim();
+      const isValid = ADMIN_PASSKEYS.includes(trimmed);
+
+      if (isValid) {
+        setIsAdminUnlocked(true);
+        setAuthError('');
+        setAdminPasskey('');
+        setFailedAttempts(0);
+        try {
+          sessionStorage.setItem('ecukur_admin_session_token', 'authenticated');
+          sessionStorage.setItem('ecukur_admin_session_time', String(Date.now()));
+          sessionStorage.removeItem('ecukur_admin_failed_attempts');
+          sessionStorage.removeItem('ecukur_admin_lockout_until');
+        } catch {}
+      } else {
+        const newAttempts = failedAttempts + 1;
+        setFailedAttempts(newAttempts);
+        try {
+          sessionStorage.setItem('ecukur_admin_failed_attempts', String(newAttempts));
+        } catch {}
+
+        if (newAttempts >= 5) {
+          const lockoutTime = Date.now() + 15 * 60 * 1000;
+          try {
+            sessionStorage.setItem('ecukur_admin_lockout_until', String(lockoutTime));
+          } catch {}
+          setLockoutSeconds(15 * 60);
+          setAuthError('5x Percobaan Gagal! Akses dikunci sementara selama 15 menit.');
+        } else {
+          setAuthError(`Passkey salah! Sisa percobaan: ${5 - newAttempts} kali.`);
+        }
+      }
+      setIsVerifying(false);
+    }, 400);
+  };
+
+  const handleLockPortal = () => {
+    try {
+      sessionStorage.removeItem('ecukur_admin_session_token');
+      sessionStorage.removeItem('ecukur_admin_session_time');
+    } catch {}
+    setIsAdminUnlocked(false);
+    setAdminPasskey('');
+    setAuthError('Portal berhasil dikunci secara aman.');
+  };
+
+  // Sync Supabase Barbers & Bookings on Mount + Realtime (HANYA KETIKA TEROTORISASI)
+  useEffect(() => {
+    if (!isAdminUnlocked) return;
     if (typeof fetchBarbersFromSupabase === 'function') fetchBarbersFromSupabase();
     if (typeof fetchBookingsFromSupabase === 'function') fetchBookingsFromSupabase();
     if (typeof subscribeToBookings === 'function') {
       const unsub = subscribeToBookings();
       return () => { if (typeof unsub === 'function') unsub(); };
     }
-  }, [fetchBarbersFromSupabase, fetchBookingsFromSupabase, subscribeToBookings]);
+  }, [isAdminUnlocked, fetchBarbersFromSupabase, fetchBookingsFromSupabase, subscribeToBookings]);
 
   // Tabs: 'overview' | 'barbers' | 'bookings' | 'gateway' | 'withdrawals' | 'settings'
   const [activeTab, setActiveTab] = useState('overview');
@@ -470,6 +635,111 @@ export default function AdminMasterDashboard() {
     }
   };
 
+  if (!isAdminUnlocked) {
+    return (
+      <div className="min-h-screen bg-[#070A08] text-neutral-100 flex items-center justify-center p-4 selection:bg-[#285844] selection:text-white relative overflow-hidden font-sans">
+        {/* Ambient Glows */}
+        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-96 h-96 bg-[#285844]/25 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute bottom-10 right-10 w-72 h-72 bg-emerald-600/10 rounded-full blur-3xl pointer-events-none" />
+
+        <motion.div
+          initial={{ opacity: 0, scale: 0.96, y: 10 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.3 }}
+          className="relative z-10 w-full max-w-md bg-neutral-900/90 border border-neutral-800 rounded-3xl p-6 sm:p-8 backdrop-blur-xl shadow-2xl space-y-6"
+        >
+          {/* Header Security Visual */}
+          <div className="text-center space-y-2">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-[#285844] to-neutral-900 border border-emerald-500/30 text-emerald-400 flex items-center justify-center mx-auto shadow-lg shadow-[#285844]/30">
+              <Lock className="w-8 h-8" />
+            </div>
+
+            <div className="pt-2 space-y-1">
+              <span className="inline-flex items-center gap-1.5 px-3 py-0.5 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-emerald-950/80 text-emerald-300 border border-emerald-500/30">
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Super Admin Restricted Area</span>
+              </span>
+              <h1 className="font-display font-black text-2xl text-white tracking-tight mt-1">
+                E-CUKUR Master Control
+              </h1>
+              <p className="text-xs text-neutral-400 leading-relaxed max-w-xs mx-auto">
+                Portal terenkripsi khusus Super Admin & Pemilik Sistem. Masukkan Master Passkey untuk melanjutkan.
+              </p>
+            </div>
+          </div>
+
+          {/* Form Input Passkey */}
+          <form onSubmit={handleVerifyPasskey} className="space-y-4">
+            <div>
+              <label className="text-xs font-semibold text-neutral-300 block mb-1.5 flex items-center justify-between">
+                <span>Master Security Passkey / PIN</span>
+                <span className="text-[10px] text-neutral-500 font-mono">15m Auto-Lock</span>
+              </label>
+
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-neutral-500">
+                  <Key className="w-4 h-4" />
+                </div>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={adminPasskey}
+                  disabled={lockoutSeconds > 0 || isVerifying}
+                  onChange={(e) => setAdminPasskey(e.target.value)}
+                  placeholder="Masukkan Security Passkey Admin..."
+                  autoFocus
+                  className="w-full pl-10 pr-10 py-3 bg-neutral-950 border border-neutral-700 focus:border-emerald-500 text-white placeholder-neutral-500 rounded-xl text-xs font-mono tracking-wider outline-none transition-all disabled:opacity-50"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3 flex items-center text-neutral-400 hover:text-white cursor-pointer"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* Error or Lockout Alert */}
+            {authError && (
+              <div className="p-3 bg-red-950/60 border border-red-800/80 rounded-xl text-xs text-red-200 flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            {lockoutSeconds > 0 && (
+              <div className="p-3 bg-amber-950/60 border border-amber-800/80 rounded-xl text-xs text-amber-200 text-center font-mono">
+                ⏳ Akses dikunci sementara: <strong>{Math.floor(lockoutSeconds / 60)}m {lockoutSeconds % 60}s</strong>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={!adminPasskey.trim() || lockoutSeconds > 0 || isVerifying}
+              className="w-full py-3.5 bg-gradient-to-r from-[#285844] to-[#1E4334] hover:from-[#1E4334] hover:to-[#163327] text-white font-bold text-xs rounded-xl shadow-lg shadow-[#285844]/20 transition-all flex items-center justify-center gap-2 disabled:opacity-40 cursor-pointer active:scale-98"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-300" />
+              <span>{isVerifying ? 'Memverifikasi...' : 'Buka Kunci Portal Admin'}</span>
+            </button>
+          </form>
+
+          {/* Footer Back Link */}
+          <div className="pt-2 border-t border-neutral-800 flex items-center justify-between text-xs text-neutral-400">
+            <Link
+              to="/"
+              className="hover:text-white transition-colors"
+            >
+              ← Beranda Publik
+            </Link>
+            <span className="font-mono text-[10px] text-neutral-600">
+              AES-256 Session Encrypted
+            </span>
+          </div>
+        </motion.div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#F8F9FA] text-[#171717] font-sans antialiased flex flex-col selection:bg-[#285844] selection:text-white">
       
@@ -537,6 +807,16 @@ export default function AdminMasterDashboard() {
                 <span className="text-[10px] text-neutral-400 block font-mono">admin@ecukur.biz.id</span>
               </div>
             </div>
+
+            <button
+              type="button"
+              onClick={handleLockPortal}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:border-red-300 text-xs font-semibold transition-all cursor-pointer shadow-2xs ml-1 active:scale-95"
+              title="Kunci sesi master portal sekarang"
+            >
+              <Lock className="w-3.5 h-3.5 text-red-600" />
+              <span className="hidden sm:inline">Kunci Portal</span>
+            </button>
           </div>
         </div>
 

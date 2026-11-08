@@ -188,14 +188,8 @@ export default function CustomerTicket() {
           </p>
           <div className="pt-2 flex flex-col gap-2">
             <Link
-              to="/customer/bookings"
-              className="w-full py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all shadow-xs"
-            >
-              Cek Riwayat Reservasi Saya
-            </Link>
-            <Link
               to="/"
-              className="w-full py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all"
+              className="w-full py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all shadow-xs"
             >
               Kembali ke Beranda
             </Link>

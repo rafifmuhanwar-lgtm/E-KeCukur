@@ -121,7 +121,7 @@ export default function BookingFlow() {
       if (created?.id) {
         navigate(`/tiket/${created.id}`);
       } else {
-        navigate('/customer/bookings');
+        navigate('/');
       }
     }, 600);
   };
@@ -154,12 +154,6 @@ export default function BookingFlow() {
           </Link>
 
           <div className="flex items-center gap-2.5">
-            <Link
-              to="/customer/bookings"
-              className="text-xs font-semibold text-neutral-600 hover:text-neutral-900 px-3 py-1.5 transition-colors hidden sm:block"
-            >
-              Riwayat Pesanan
-            </Link>
             <button 
               type="button"
               onClick={handleBack} 

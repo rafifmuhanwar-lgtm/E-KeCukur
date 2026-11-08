@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Home from './pages/Home';
 import Login from './pages/Login';
 import CustomerBarbers from './pages/customer/Barbers';
-import CustomerBookings from './pages/customer/Bookings';
 import CustomerTicket from './pages/customer/Ticket';
 import BookingFlow from './pages/customer/BookingFlow';
 import BarberDashboard from './pages/barber/Dashboard';
@@ -43,7 +42,7 @@ export default function App() {
           <Route path="/customer/barbers" element={<CustomerBarbers />} />
           <Route path="/customer/barbers/:id" element={<BarberBioLink />} />
           <Route path="/booking" element={<BookingFlow />} />
-          <Route path="/customer/bookings" element={<CustomerBookings />} />
+          <Route path="/customer/bookings" element={<Navigate to="/" replace />} />
           <Route path="/tiket/:id" element={<CustomerTicket />} />
           <Route path="/ticket/:id" element={<CustomerTicket />} />
           <Route path="/messages" element={<Messages />} />

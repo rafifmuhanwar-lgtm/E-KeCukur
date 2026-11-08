@@ -82,13 +82,6 @@ export default function Barbers() {
 
           <div className="flex items-center gap-2.5">
             <Link
-              to="/customer/bookings"
-              className="text-xs font-semibold text-neutral-600 hover:text-neutral-900 px-3 py-1.5 transition-colors hidden sm:block"
-            >
-              Cek Tiket Reservasi
-            </Link>
-
-            <Link
               to="/"
               className="px-3.5 py-1.5 border border-neutral-200 hover:border-neutral-300 bg-white text-neutral-700 hover:text-black rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs active:scale-95"
             >
