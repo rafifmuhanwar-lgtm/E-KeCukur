@@ -1043,7 +1043,7 @@ export default function Home() {
                   </li>
                   <li className="flex items-start gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Maksimal <strong>10 menu layanan</strong> cukur</span>
+                    <span>Maksimal <strong>5 menu layanan</strong> cukur</span>
                   </li>
                   <li className="flex items-start gap-2.5">
                     <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />

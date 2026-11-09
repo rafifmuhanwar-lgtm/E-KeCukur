@@ -587,7 +587,7 @@ export default function BarberDashboard() {
   const isBarberPlan = currentPlan === 'barber';
 
   const serviceCount = (barber?.services || []).length;
-  const isServiceLimitReached = isFreePlan && serviceCount >= 10;
+  const isServiceLimitReached = isFreePlan && serviceCount >= 5;
 
   const lookbookCount = (barber?.lookbook || []).length;
   const isLookbookLimitReached = isFreePlan && lookbookCount >= 10;
@@ -866,7 +866,7 @@ export default function BarberDashboard() {
   const handleOpenAddService = () => {
     if (isServiceLimitReached) {
       setIsUpgradeModalOpen(true);
-      showToast('Batas kuota 10 layanan untuk Paket Free telah tercapai. Upgrade ke Capster untuk unlimited!');
+      showToast('Batas kuota 5 layanan untuk Paket Free telah tercapai. Upgrade ke Capster untuk unlimited!');
       return;
     }
     setEditingServiceId(null);
@@ -2494,7 +2494,7 @@ export default function BarberDashboard() {
                   {isFreePlan ? <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" /> : <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
                   <span>
                     {isFreePlan ? (
-                      <>Kuota Menu Layanan: <strong className="font-bold">{serviceCount}/10</strong> digunakan (Paket Free)</>
+                      <>Kuota Menu Layanan: <strong className="font-bold">{serviceCount}/5</strong> digunakan (Paket Free)</>
                     ) : (
                       <>Menu Layanan <strong>Unlimited</strong> (${serviceCount} aktif pada Paket ${isBarberPlan ? 'Barber' : 'Capster'})</>
                     )}
@@ -4178,7 +4178,7 @@ export default function BarberDashboard() {
                     <ul className="space-y-2 text-[11px] text-neutral-600 mb-4">
                       <li className="flex items-center gap-1.5">
                         <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Maks. <strong>10 layanan</strong></span>
+                        <span>Maks. <strong>5 layanan</strong></span>
                       </li>
                       <li className="flex items-center gap-1.5">
                         <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
