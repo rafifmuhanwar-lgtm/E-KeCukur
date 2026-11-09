@@ -341,7 +341,6 @@ export default function AdminMasterDashboard() {
 
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
-  const [segmentFilter, setSegmentFilter] = useState('ALL');
   const [planFilter, setPlanFilter] = useState('ALL');
   const [bookingStatusFilter, setBookingStatusFilter] = useState('ALL');
   const [bookingPaymentFilter, setBookingPaymentFilter] = useState('ALL');
@@ -354,8 +353,6 @@ export default function AdminMasterDashboard() {
   const [newBarberName, setNewBarberName] = useState('');
   const [newBarberSlug, setNewBarberSlug] = useState('');
   const [newBarberCity, setNewBarberCity] = useState('');
-  const [newBarberSegment, setNewBarberSegment] = useState('capster');
-  const [newBarberSpecialty, setNewBarberSpecialty] = useState('');
   const [newBarberPlan, setNewBarberPlan] = useState('free');
 
   // Gateway QRIS & Webhook States
@@ -493,11 +490,10 @@ export default function AdminMasterDashboard() {
         (b?.slug || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
         (b?.locationCity || '').toLowerCase().includes(searchQuery.toLowerCase());
       
-      const matchSegment = segmentFilter === 'ALL' || (b?.segment || 'capster') === segmentFilter;
       const matchPlan = planFilter === 'ALL' || (b?.plan || 'free') === planFilter;
-      return matchSearch && matchSegment && matchPlan;
+      return matchSearch && matchPlan;
     });
-  }, [barbers, searchQuery, segmentFilter, planFilter]);
+  }, [barbers, searchQuery, planFilter]);
 
   // ─── FILTERED BOOKINGS ───
   const filteredBookings = useMemo(() => {
@@ -643,10 +639,9 @@ export default function AdminMasterDashboard() {
       name: newBarberName.trim(),
       slug: slug,
       handle: `@${slug}`,
-      locationCity: newBarberCity.trim() || 'Jakarta',
-      segment: newBarberSegment,
+      locationCity: newBarberCity.trim() || '',
       plan: newBarberPlan,
-      specialty: newBarberSpecialty.trim() || 'Haircut Specialist',
+      specialty: '',
       bio: 'Profil resmi terverifikasi oleh Admin E-Cukur.',
       photo: '',
       bannerImage: '',
@@ -683,10 +678,10 @@ export default function AdminMasterDashboard() {
         name: newBarberObj.name,
         slug: newBarberObj.slug,
         email: `${slug}@ecukur.biz.id`,
-        specialty: newBarberObj.specialty,
+        specialty: '',
         bio: newBarberObj.bio,
         plan: newBarberPlan,
-        location_city: newBarberObj.locationCity,
+        location_city: newBarberObj.locationCity || null,
         account_status: 'ACTIVE'
       }).then(() => {}).catch(() => {});
     }
@@ -1336,7 +1331,7 @@ export default function AdminMasterDashboard() {
                             </span>
                           </div>
                           <span className="text-[11px] text-neutral-400 font-mono block">
-                            /{barber.slug || barber.id} • {barber.locationCity || 'Indonesia'}
+                            /{barber.slug || barber.id}{barber.locationCity ? ` • ${barber.locationCity}` : ''}
                           </span>
                         </div>
                       </div>
@@ -1467,18 +1462,6 @@ export default function AdminMasterDashboard() {
                   <option value="capster">Paket Capster (49K)</option>
                   <option value="barber">Paket Studio (99K)</option>
                 </select>
-
-                <select
-                  value={segmentFilter}
-                  onChange={(e) => setSegmentFilter(e.target.value)}
-                  className="px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-semibold outline-none focus:border-[#285844] cursor-pointer"
-                >
-                  <option value="ALL">Semua Segmen</option>
-                  <option value="capster">Capster Mandiri</option>
-                  <option value="barbershop">Studio Barbershop</option>
-                  <option value="asgar">Pangkas Asgar</option>
-                  <option value="freelance">Freelance</option>
-                </select>
               </div>
 
               <button
@@ -1500,7 +1483,7 @@ export default function AdminMasterDashboard() {
                       <th className="py-3 px-4">Barber / Studio</th>
                       <th className="py-3 px-4">Bio Link URL</th>
                       <th className="py-3 px-4">Paket Langganan</th>
-                      <th className="py-3 px-4">Lokasi & Segmen</th>
+                      <th className="py-3 px-4">Kota / Wilayah</th>
                       <th className="py-3 px-4">Layanan</th>
                       <th className="py-3 px-4">Booking Masuk</th>
                       <th className="py-3 px-4">Saldo Tip</th>
@@ -1537,7 +1520,6 @@ export default function AdminMasterDashboard() {
                                     {currentPlan === 'barber' && <BadgeCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
                                     {currentPlan === 'capster' && <BadgeCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
                                   </div>
-                                  <span className="text-[10px] text-neutral-400 font-mono truncate">{b.specialty || 'Capster'}</span>
                                 </div>
                               </div>
                             </td>
@@ -1565,9 +1547,8 @@ export default function AdminMasterDashboard() {
                               </select>
                             </td>
 
-                            <td className="py-3.5 px-4">
-                              <span className="font-medium text-neutral-700 block">{b.locationCity || 'Indonesia'}</span>
-                              <span className="text-[10px] text-neutral-400 capitalize">{b.segment || 'Capster'}</span>
+                            <td className="py-3.5 px-4 font-mono">
+                              <span className="font-medium text-neutral-700 block">{b.locationCity || '-'}</span>
                             </td>
 
                             <td className="py-3.5 px-4 font-mono">
@@ -2425,39 +2406,12 @@ export default function AdminMasterDashboard() {
                   </div>
 
                   <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1">Segmen Usaha</label>
-                    <select
-                      value={newBarberSegment}
-                      onChange={(e) => setNewBarberSegment(e.target.value)}
-                      className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] cursor-pointer"
-                    >
-                      <option value="capster">Capster Mandiri</option>
-                      <option value="barbershop">Barbershop Modern</option>
-                      <option value="asgar">Pangkas Asgar</option>
-                      <option value="freelance">Freelance</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1">Kota / Domisili</label>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1">Kota / Wilayah (Opsional)</label>
                     <input 
                       type="text"
                       value={newBarberCity}
                       onChange={(e) => setNewBarberCity(e.target.value)}
-                      placeholder="e.g. Jakarta Selatan"
-                      className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1">Spesialisasi Potongan</label>
-                    <input 
-                      type="text"
-                      value={newBarberSpecialty}
-                      onChange={(e) => setNewBarberSpecialty(e.target.value)}
-                      placeholder="e.g. Classic Taper & Fade"
+                      placeholder="Kosongkan jika belum diatur"
                       className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844]"
                     />
                   </div>

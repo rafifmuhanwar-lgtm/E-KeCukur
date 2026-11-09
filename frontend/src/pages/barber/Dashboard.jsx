@@ -1964,34 +1964,6 @@ export default function BarberDashboard() {
                   </div>
                 </div>
 
-                {/* Role / Specialty & Segment */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Spesialisasi / Keahlian</label>
-                    <input 
-                      type="text"
-                      value={barber.specialty || ''}
-                      onChange={(e) => handleProfileFieldChange('specialty', e.target.value)}
-                      placeholder="e.g. Classic Cut & Fade Specialist"
-                      className="w-full text-sm font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Segmen Usaha</label>
-                    <select
-                      value={barber.segment || 'capster'}
-                      onChange={(e) => handleProfileFieldChange('segment', e.target.value)}
-                      className="w-full text-sm font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844] cursor-pointer"
-                    >
-                      <option value="capster">Capster Mandiri</option>
-                      <option value="modern">Barbershop Modern</option>
-                      <option value="asgar">Pangkas Tradisional (ASGAR)</option>
-                      <option value="freelance">Barber Panggilan / Freelance</option>
-                    </select>
-                  </div>
-                </div>
-
                 {/* Bio text */}
                 <div>
                   <div className="flex justify-between items-center mb-1.5">
