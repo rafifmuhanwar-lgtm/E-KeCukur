@@ -436,6 +436,10 @@ export default async function handler(req, res) {
   const args = parts.slice(1).join(' ').trim();
   const arg1 = parts[1] || '';
 
+  if (!command.startsWith('/')) {
+    return res.status(200).json({ ok: true });
+  }
+
   // ─── /start & /help ───
   if (command === '/start' || command === '/help' || command === '/menu') {
     const helpMsg = 
