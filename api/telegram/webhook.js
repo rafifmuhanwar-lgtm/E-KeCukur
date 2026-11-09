@@ -169,6 +169,36 @@ async function getPendingPaymentsText(supabase) {
   }
 }
 
+async function getFailedPaymentsText(supabase) {
+  if (!supabase) return '❌ Database Supabase belum terhubung.';
+  try {
+    const { data, error } = await supabase
+      .from('qris_payments')
+      .select('reference_id,total_amount,status,created_at,type')
+      .in('status', ['FAILED', 'EXPIRED', 'CANCELLED'])
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    if (error) throw error;
+    if (!data || data.length === 0) {
+      return '✓ Tidak ada transaksi gagal, kedaluwarsa, atau dibatalkan.';
+    }
+
+    let msg = `❌ <b>10 TRANSAKSI GAGAL / KEDALUWARSA / DIBATALKAN:</b>\n━━━━━━━━━━━━━━━━━━━\n`;
+    data.forEach((item, idx) => {
+      const time = item.created_at
+        ? new Date(item.created_at).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })
+        : '-';
+      msg += `${idx + 1}. <code>${item.reference_id}</code>\n`;
+      msg += `   Rp ${(Number(item.total_amount) || 0).toLocaleString('id-ID')} [${item.status}] • ${time} WIB\n`;
+    });
+    return msg;
+  } catch {
+    console.error('[Telegram Webhook] Failed payment query failed.');
+    return '❌ Gagal memuat transaksi gagal/kedaluwarsa. Coba lagi nanti.';
+  }
+}
+
 async function getRecentTransactionsText(supabase) {
   if (!supabase) return '❌ Database Supabase belum terhubung.';
   try {
@@ -448,9 +478,12 @@ export default async function handler(req, res) {
       `<b>Fitur & Perintah Cepat:</b>\n` +
       `• <code>/today</code> - Ringkasan transaksi QRIS hari ini\n` +
       `• <code>/pending</code> - Daftar pembayaran pending\n` +
+      `• <code>/failed</code> - Pembayaran gagal/kedaluwarsa/dibatalkan\n` +
       `• <code>/transactions</code> - 10 riwayat transaksi terbaru\n` +
+      `• <code>/balance</code> - Informasi saldo (jika sumber resmi tersedia)\n` +
       `• <code>/withdrawals</code> - Cek riwayat penarikan saldo capster\n` +
       `• <code>/cari &lt;no hp/nama&gt;</code> - Cari riwayat booking pelanggan\n` +
+      `• <code>/alerts</code> - Status ketersediaan riwayat alert\n` +
       `• <code>/status</code> - Kondisi server & database\n` +
       `• <code>/details &lt;REF&gt;</code> - Cek detail pembayaran spesifik\n` +
       `• <code>/testgroup</code> - Kirim notifikasi uji coba ke grup alert\n\n` +
@@ -494,6 +527,33 @@ export default async function handler(req, res) {
   if (command === '/pending') {
     const pendingMsg = await getPendingPaymentsText(supabase);
     await sendTelegramMessage(chatId, pendingMsg, 'HTML', inlineKeyboardMain);
+    return res.status(200).json({ ok: true });
+  }
+
+  // ─── /failed ───
+  if (command === '/failed') {
+    const failedMsg = await getFailedPaymentsText(supabase);
+    await sendTelegramMessage(chatId, failedMsg, 'HTML', inlineKeyboardMain);
+    return res.status(200).json({ ok: true });
+  }
+
+  // ─── /balance ───
+  if (command === '/balance') {
+    await sendTelegramMessage(
+      chatId,
+      'ℹ️ Informasi saldo belum tersedia karena sumber saldo resmi belum terhubung. Bot tidak mengestimasi saldo.',
+      'HTML'
+    );
+    return res.status(200).json({ ok: true });
+  }
+
+  // ─── /alerts ───
+  if (command === '/alerts') {
+    await sendTelegramMessage(
+      chatId,
+      'ℹ️ Riwayat alert belum tersedia karena backend belum memiliki penyimpanan event alert. Bot tidak membuat atau menampilkan riwayat palsu.',
+      'HTML'
+    );
     return res.status(200).json({ ok: true });
   }
 
