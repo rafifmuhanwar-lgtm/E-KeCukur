@@ -40,7 +40,8 @@ import {
   Receipt,
   AlertCircle,
   Crown,
-  Download
+  Download,
+  Send
 } from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
@@ -335,7 +336,7 @@ export default function BarberDashboard() {
   const [isAddLookbookOpen, setIsAddLookbookOpen] = useState(false);
   const [newLookbookTitle, setNewLookbookTitle] = useState('');
   const [newLookbookImg, setNewLookbookImg] = useState('');
-  const [newLookbookTag, setNewLookbookTag] = useState('Trending');
+  const [newLookbookTag, setNewLookbookTag] = useState('Daily Vibe');
   const [lookbookFile, setLookbookFile] = useState(null);
   const [isCompressingLookbook, setIsCompressingLookbook] = useState(false);
   const [lookbookCompressionStats, setLookbookCompressionStats] = useState(null);
@@ -918,50 +919,50 @@ export default function BarberDashboard() {
     setIsAddServiceOpen(false);
   };
 
-  // Lookbook Handlers
+  // Lookbook / Feed Post Handlers
   const handleSaveLookbook = async (e) => {
     e.preventDefault();
-    if (!newLookbookTitle.trim()) {
-      showToast('Harap isi nama model potongan');
-      return;
-    }
     if (!newLookbookImg.trim()) {
-      showToast('Harap pilih foto hasil cukur atau masukkan URL gambar');
+      showToast('Harap pilih foto atau masukkan URL gambar');
       return;
     }
+
+    const postCaption = newLookbookTitle.trim() || 'Momen Baru ✨';
+    const cleanTag = (newLookbookTag.trim() || 'Feed').replace(/^#+/, '');
 
     if (lookbookFile && uploadBarberPortfolioPhoto) {
       setIsUploadingPhoto(true);
       const res = await uploadBarberPortfolioPhoto(barber.id, lookbookFile, {
-        title: newLookbookTitle.trim(),
-        tag: newLookbookTag
+        title: postCaption,
+        tag: cleanTag
       });
       setIsUploadingPhoto(false);
 
       if (res.success) {
         const stats = res.stats || lookbookCompressionStats;
         const savingsMsg = stats ? ` (${stats.originalFormatted} → ${stats.compressedFormatted}, hemat ${stats.savedPercent}%)` : '';
-        showToast(`Foto portofolio berhasil dikompres & disimpan${savingsMsg}!`);
+        showToast(`Postingan feed berhasil dibagikan${savingsMsg}!`);
       } else {
         addBarberLookbook(barber.id, {
-          title: newLookbookTitle.trim(),
+          title: postCaption,
           img: newLookbookImg.trim(),
-          tag: newLookbookTag
+          tag: cleanTag
         });
-        showToast('Foto hasil cukur berhasil ditambahkan');
+        showToast('Postingan feed berhasil dibagikan');
       }
     } else {
       addBarberLookbook(barber.id, {
-        title: newLookbookTitle.trim(),
+        title: postCaption,
         img: newLookbookImg.trim(),
-        tag: newLookbookTag
+        tag: cleanTag
       });
-      showToast('Foto hasil cukur berhasil ditambahkan');
+      showToast('Postingan feed berhasil dibagikan');
     }
 
     setIsAddLookbookOpen(false);
     setNewLookbookTitle('');
     setNewLookbookImg('');
+    setNewLookbookTag('Daily Vibe');
     setLookbookFile(null);
     setLookbookCompressionStats(null);
   };
@@ -983,10 +984,10 @@ export default function BarberDashboard() {
   };
 
   const PRESET_HAIRCUTS = [
-    { title: 'Low Taper Fade', url: 'https://images.unsplash.com/photo-1593702275687-f8b402bf1fb5?q=80&w=600', tag: 'Trending' },
-    { title: 'Clean Mid Skin Fade', url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=600', tag: 'Classic' },
-    { title: 'Two-Block Textured Perm', url: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=600', tag: 'Best Seller' },
-    { title: 'Beard Fade & Razor Lineup', url: 'https://images.unsplash.com/photo-1517832606589-715753d4be36?q=80&w=600', tag: 'Sharp' }
+    { title: 'Suasana Studio Sore Hari ☕', url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=600', tag: 'Suasana Studio' },
+    { title: 'Peralatan Grooming & Pomade ✂️', url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?q=80&w=600', tag: 'Grooming' },
+    { title: 'Fresh Haircut Style ✨', url: 'https://images.unsplash.com/photo-1593702275687-f8b402bf1fb5?q=80&w=600', tag: 'Hasil Cukur' },
+    { title: 'Santai di Ruang Tunggu 🛋️', url: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=600', tag: 'Daily Vibe' }
   ];
 
   // Formatting currency
@@ -2614,7 +2615,7 @@ export default function BarberDashboard() {
                   className="px-4 py-2.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl flex items-center gap-1.5 shadow-sm transition-transform active:scale-95 shrink-0"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Tambah Foto Feed</span>
+                  <span>Buat Postingan Baru</span>
                 </button>
               </div>
 
@@ -2628,9 +2629,9 @@ export default function BarberDashboard() {
                   {isFreePlan ? <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" /> : <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />}
                   <span>
                     {isFreePlan ? (
-                      <>Kuota Foto Portofolio: <strong className="font-bold">{lookbookCount}/10</strong> diunggah (Paket Free)</>
+                      <>Kuota Feed & Portofolio: <strong className="font-bold">{lookbookCount}/10</strong> diunggah (Paket Free)</>
                     ) : (
-                      <>Portofolio Lookbook <strong>Unlimited</strong> ({lookbookCount} foto pada Paket {isBarberPlan ? 'Barber' : 'Capster'})</>
+                      <>Feed Postingan <strong>Unlimited</strong> ({lookbookCount} foto pada Paket {isBarberPlan ? 'Barber' : 'Capster'})</>
                     )}
                   </span>
                 </div>
@@ -2649,14 +2650,14 @@ export default function BarberDashboard() {
               {(barber.lookbook || []).length === 0 ? (
                 <div className="bg-white p-10 text-center rounded-2xl border border-dashed border-neutral-300 text-neutral-500">
                   <Eye className="w-9 h-9 mx-auto mb-2 text-neutral-400" />
-                  <p className="font-semibold text-sm">Belum ada foto feed.</p>
-                  <p className="text-xs text-neutral-400 mt-0.5">Unggah foto apa saja untuk mengisi galeri feed profil Anda.</p>
+                  <p className="font-semibold text-sm">Belum ada postingan feed.</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">Unggah foto bebas (suasana, peralatan, hasil cukur, dll) seperti postingan Instagram.</p>
                   <button
                     type="button"
                     onClick={() => setIsAddLookbookOpen(true)}
-                    className="mt-3.5 px-4 py-2 bg-[#285844] text-white text-xs font-semibold rounded-xl"
+                    className="mt-3.5 px-4 py-2 bg-[#285844] text-white text-xs font-semibold rounded-xl cursor-pointer"
                   >
-                    Tambah Foto Pertama
+                    Buat Postingan Pertama
                   </button>
                 </div>
               ) : (
@@ -2672,7 +2673,7 @@ export default function BarberDashboard() {
                         <button
                           type="button"
                           onClick={() => deleteBarberLookbook(barber.id, item.id)}
-                          className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10"
+                          className="absolute top-2 right-2 p-1.5 bg-black/70 hover:bg-red-600 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-10 cursor-pointer"
                           title="Hapus foto"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
@@ -2684,7 +2685,7 @@ export default function BarberDashboard() {
                         )}
                       </div>
                       <div className="p-3">
-                        <h4 className="font-display font-bold text-xs text-[#171717] truncate">{item.title}</h4>
+                        <h4 className="font-display font-medium text-xs text-[#171717] line-clamp-2 leading-snug">{item.title}</h4>
                       </div>
                     </div>
                   ))}
@@ -3565,7 +3566,7 @@ export default function BarberDashboard() {
       </AnimatePresence>
 
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
-      {/* ━━━ MODAL: ADD LOOKBOOK PHOTO ━━━ */}
+      {/* ━━━ MODAL: BUAT POSTINGAN FEED (INSTAGRAM STYLE) ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <AnimatePresence>
         {isAddLookbookOpen && (
@@ -3582,21 +3583,24 @@ export default function BarberDashboard() {
                   setLookbookFile(null);
                   setLookbookCompressionStats(null);
                 }}
-                className="absolute top-5 right-5 p-2 text-neutral-400 hover:text-black rounded-full cursor-pointer"
+                className="absolute top-5 right-5 p-2 text-neutral-400 hover:text-black rounded-full cursor-pointer transition-colors"
+                title="Tutup"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              <div className="flex items-center gap-2 mb-1">
-                <span className="p-1.5 rounded-lg bg-[#D9E5DC] text-[#285844]">
-                  <Scissors className="w-4 h-4" />
+              <div className="flex items-center gap-2.5 mb-1.5">
+                <span className="p-2 rounded-xl bg-[#D9E5DC] text-[#285844]">
+                  <Camera className="w-4 h-4" />
                 </span>
-                <h3 className="font-display font-bold text-lg text-[#171717]">
-                  Tambah Foto Hasil Cukur
-                </h3>
+                <div>
+                  <h3 className="font-display font-bold text-lg text-[#171717]">
+                    Buat Postingan Feed
+                  </h3>
+                </div>
               </div>
               <p className="text-xs text-neutral-500 mb-4">
-                Unggah foto model potongan rambut untuk portofolio. Foto otomatis dikompres agar loading cepat tanpa memotong proporsi rambut.
+                Unggah foto bebas untuk galeri feed & portofolio — suasana studio, produk grooming, hasil cukur, atau momen harian santai.
               </p>
 
               {/* Hidden native file input */}
@@ -3623,7 +3627,7 @@ export default function BarberDashboard() {
                   }`}
                 >
                   <UploadCloud className="w-3.5 h-3.5 text-[#285844]" />
-                  <span>Unggah Foto HP (Kompres Otomatis)</span>
+                  <span>Unggah dari HP / Komputer</span>
                 </button>
                 <button
                   type="button"
@@ -3635,7 +3639,7 @@ export default function BarberDashboard() {
                   }`}
                 >
                   <Globe className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>URL / Contoh Cepat</span>
+                  <span>URL Gambar / Inspirasi</span>
                 </button>
               </div>
 
@@ -3644,12 +3648,12 @@ export default function BarberDashboard() {
                 {lookbookInputMode === 'upload' ? (
                   <div>
                     <label className="text-xs font-semibold text-neutral-700 block mb-1.5">
-                      Foto Potongan Rambut
+                      Foto Postingan
                     </label>
 
                     {newLookbookImg ? (
                       <div className="relative rounded-2xl border border-neutral-200 overflow-hidden bg-neutral-900 p-3 flex flex-col sm:flex-row items-center gap-4">
-                        <div className="w-28 h-28 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-neutral-800 relative">
+                        <div className="w-28 h-28 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-neutral-800 relative flex items-center justify-center">
                           <img 
                             src={newLookbookImg} 
                             alt="Preview" 
@@ -3660,7 +3664,7 @@ export default function BarberDashboard() {
                         <div className="flex-1 min-w-0 text-white space-y-1.5">
                           <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
                             <CheckCircle2 className="w-4 h-4 shrink-0" />
-                            <span>Foto Berhasil Dikompres</span>
+                            <span>Foto Siap Diposting</span>
                           </div>
 
                           {lookbookCompressionStats && (
@@ -3672,7 +3676,7 @@ export default function BarberDashboard() {
                                 </span>
                               </p>
                               <p className="text-[10px] text-neutral-400">
-                                Dimensi: {lookbookCompressionStats.width} × {lookbookCompressionStats.height} px (Rasio utuh terjaga)
+                                Dimensi: {lookbookCompressionStats.width} × {lookbookCompressionStats.height} px (Rasio asli terjaga)
                               </p>
                             </div>
                           )}
@@ -3706,19 +3710,19 @@ export default function BarberDashboard() {
                         {isCompressingLookbook ? (
                           <div className="py-3 flex flex-col items-center">
                             <RefreshCw className="w-7 h-7 text-[#285844] animate-spin mb-2" />
-                            <p className="text-xs font-semibold text-[#171717]">Sedang mengompres gambar...</p>
-                            <p className="text-[10px] text-neutral-400 mt-0.5">Mengoptimalkan resolusi dan ukuran file</p>
+                            <p className="text-xs font-semibold text-[#171717]">Mengoptimalkan gambar...</p>
+                            <p className="text-[10px] text-neutral-400 mt-0.5">Menyesuaikan resolusi tanpa memotong proporsi</p>
                           </div>
                         ) : (
                           <>
-                            <div className="w-11 h-11 rounded-full bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-2.5">
-                              <Camera className="w-5 h-5" />
+                            <div className="w-12 h-12 rounded-full bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-2.5">
+                              <Camera className="w-6 h-6" />
                             </div>
                             <p className="text-xs font-bold text-[#171717]">
-                              Klik untuk pilih foto cukur atau seret ke sini
+                              Pilih foto dari galeri HP / Komputer atau seret ke sini
                             </p>
                             <p className="text-[11px] text-neutral-500 mt-1 max-w-xs leading-snug">
-                              Mendukung JPG, PNG, atau WebP. Gambar otomatis dikompres hingga 95% lebih ringan tanpa pecah.
+                              Mendukung JPG, PNG, atau WebP. Gambar bebas apa saja & otomatis dioptimalkan agar loading super cepat.
                             </p>
                             <div className="mt-3 inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md font-medium border border-emerald-200">
                               <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
@@ -3731,7 +3735,7 @@ export default function BarberDashboard() {
                   </div>
                 ) : (
                   <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1">URL Gambar Hasil Cukur</label>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1">URL Gambar</label>
                     <input 
                       type="text"
                       required={!newLookbookImg}
@@ -3745,9 +3749,9 @@ export default function BarberDashboard() {
                       className="w-full text-xs font-mono p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
                     />
 
-                    {/* Preset Haircuts Quick Pick */}
+                    {/* Preset Inspirations Quick Pick */}
                     <div className="mt-3">
-                      <span className="text-[11px] text-neutral-500 font-semibold block mb-2">Atau Pilih Contoh Cepat:</span>
+                      <span className="text-[11px] text-neutral-500 font-semibold block mb-2">Atau Pilih Contoh Inspirasi Feed:</span>
                       <div className="grid grid-cols-2 gap-2">
                         {PRESET_HAIRCUTS.map((hc, idx) => (
                           <button
@@ -3760,7 +3764,7 @@ export default function BarberDashboard() {
                               setLookbookFile(null);
                               setLookbookCompressionStats(null);
                             }}
-                            className="p-2 rounded-xl border border-neutral-200 hover:border-[#285844] text-left flex items-center gap-2 bg-neutral-50 cursor-pointer"
+                            className="p-2 rounded-xl border border-neutral-200 hover:border-[#285844] text-left flex items-center gap-2 bg-neutral-50 cursor-pointer transition-colors"
                           >
                             <img src={hc.url} alt={hc.title} className="w-8 h-8 rounded-lg object-cover shrink-0" />
                             <span className="text-[10px] font-semibold text-[#171717] truncate">{hc.title}</span>
@@ -3771,40 +3775,55 @@ export default function BarberDashboard() {
                   </div>
                 )}
 
-                {/* 2. TITLE INPUT */}
+                {/* 2. CAPTION INPUT (INSTAGRAM STYLE TEXTAREA) */}
                 <div>
-                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
-                    Nama Model / Gaya Potongan
-                  </label>
-                  <input 
-                    type="text"
-                    required
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs font-semibold text-neutral-700">
+                      Caption Postingan (Bebas)
+                    </label>
+                    <span className="text-[10px] text-neutral-400 font-normal">
+                      Bebas berekspresi seperti Instagram
+                    </span>
+                  </div>
+                  <textarea 
+                    rows={3}
                     value={newLookbookTitle}
                     onChange={(e) => setNewLookbookTitle(e.target.value)}
-                    placeholder="e.g. Low Taper Fade x Textured Fringe"
-                    className="w-full text-sm font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
+                    placeholder="Tulis caption postinganmu... (misal: 'Suasana santai sore hari di studio ☕', 'Peralatan tempur baru! ✂️', atau gaya potongan favoritmu)"
+                    className="w-full text-xs font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844] resize-none leading-relaxed"
                   />
                 </div>
 
-                {/* 3. TAG CHIPS & CUSTOM INPUT */}
+                {/* 3. TAG CHIPS & CUSTOM HASHTAG */}
                 <div>
-                  <label className="text-xs font-semibold text-neutral-700 block mb-1.5">
-                    Label Kategori Potongan
-                  </label>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-xs font-semibold text-neutral-700">
+                      Topik / Hashtag (Opsional)
+                    </label>
+                    {newLookbookTag && (
+                      <button
+                        type="button"
+                        onClick={() => setNewLookbookTag('')}
+                        className="text-[10px] text-neutral-400 hover:text-red-600 cursor-pointer"
+                      >
+                        Hapus tag
+                      </button>
+                    )}
+                  </div>
                   
                   <div className="flex flex-wrap gap-1.5 mb-2">
-                    {['Trending', 'Classic', 'Fade Master', 'Two-Block', 'Mullet Modern', 'Beard & Razor'].map((tag) => (
+                    {['Daily Vibe', 'Suasana Studio', 'Hasil Cukur', 'Grooming & Tools', 'Promo', 'Behind The Scene'].map((tag) => (
                       <button
                         key={tag}
                         type="button"
-                        onClick={() => setNewLookbookTag(tag)}
+                        onClick={() => setNewLookbookTag(newLookbookTag === tag ? '' : tag)}
                         className={`px-2.5 py-1 text-[11px] rounded-lg font-medium transition-all cursor-pointer ${
                           newLookbookTag === tag 
                             ? 'bg-[#285844] text-white shadow-xs' 
                             : 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200'
                         }`}
                       >
-                        {tag}
+                        #{tag}
                       </button>
                     ))}
                   </div>
@@ -3813,7 +3832,7 @@ export default function BarberDashboard() {
                     type="text"
                     value={newLookbookTag}
                     onChange={(e) => setNewLookbookTag(e.target.value)}
-                    placeholder="e.g. Custom Tag"
+                    placeholder="e.g. #barberlife #weekend #chill (atau ketik tag sendiri)"
                     className="w-full text-xs font-medium p-2.5 bg-neutral-50 border border-neutral-200 rounded-lg outline-none focus:border-[#285844]"
                   />
                 </div>
@@ -3827,22 +3846,25 @@ export default function BarberDashboard() {
                       setLookbookFile(null);
                       setLookbookCompressionStats(null);
                     }}
-                    className="flex-1 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl cursor-pointer"
+                    className="flex-1 py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl cursor-pointer transition-colors"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={isUploadingPhoto || isCompressingLookbook || !newLookbookImg}
-                    className="flex-1 py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                    className="flex-1 py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer transition-colors"
                   >
                     {isUploadingPhoto ? (
                       <>
                         <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        <span>Menyimpan Foto...</span>
+                        <span>Memposting ke Feed...</span>
                       </>
                     ) : (
-                      <span>Simpan ke Portofolio</span>
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Bagikan ke Feed</span>
+                      </>
                     )}
                   </button>
                 </div>
