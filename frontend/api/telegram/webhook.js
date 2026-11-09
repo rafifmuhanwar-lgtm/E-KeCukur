@@ -1,11 +1,10 @@
 import { createClient } from '@supabase/supabase-js';
 
-const DEFAULT_BOT_TOKEN = '9097305625:AAErXwtUFsUDMyEtgNOWkocERssk3_kKFLw';
 const DEFAULT_ADMIN_IDS = ['8633836292', '7937839852'];
 const DEFAULT_GROUP_ID = '-1004385368403';
 
 function getBotToken() {
-  return (process.env.TELEGRAM_BOT_TOKEN || DEFAULT_BOT_TOKEN).trim();
+  return (process.env.TELEGRAM_BOT_TOKEN || '').trim();
 }
 
 function getAdminIds() {

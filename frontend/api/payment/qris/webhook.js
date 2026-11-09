@@ -60,7 +60,7 @@ function parseNotificationAmount(input) {
 
 async function sendTelegramPaymentNotification(payment, targetAmount) {
   try {
-    const token = (process.env.TELEGRAM_BOT_TOKEN || '9097305625:AAErXwtUFsUDMyEtgNOWkocERssk3_kKFLw').trim();
+    const token = (process.env.TELEGRAM_BOT_TOKEN || '').trim();
     const groupId = (process.env.TELEGRAM_GROUP_ID || '-1004385368403').trim();
     if (!token || !groupId) return;
 

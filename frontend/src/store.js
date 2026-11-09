@@ -1600,27 +1600,20 @@ export const useStore = create((set, get) => ({
 
     get().syncBarberToSupabase(barberId);
 
-    // Kirim notifikasi instan ke Telegram Group
+    // Kirim notifikasi instan ke Telegram Group via Serverless API (Aman tanpa hardcode token)
     try {
-      const token = '9097305625:AAErXwtUFsUDMyEtgNOWkocERssk3_kKFLw';
-      const groupId = '-1004385368403';
-      const bName = targetBarber?.name || 'Capster E-CUKUR';
-      const nowStr = new Date().toLocaleTimeString('id-ID', { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit' });
-      const wdText = 
-        `💸 <b>[PENARIKAN SALDO CAPSTER]</b>\n` +
-        `━━━━━━━━━━━━━━━━━━━\n` +
-        `💈 <b>Barber:</b> ${bName}\n` +
-        `💰 <b>Nominal:</b> Rp ${amount.toLocaleString('id-ID')}\n` +
-        `🏦 <b>Rekening:</b> ${withdrawalData.bankName || 'BCA'} ${withdrawalData.accountNumber} (a.n ${withdrawalData.accountHolder})\n` +
-        `🔖 <b>Ref:</b> <code>${newWithdrawal.referenceId}</code>\n` +
-        `🕒 <b>Waktu:</b> ${nowStr} WIB\n` +
-        `━━━━━━━━━━━━━━━━━━━\n` +
-        `<i>Pencairan saldo telah tercatat di sistem.</i>`;
-
-      fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      fetch('/api/telegram/notify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: groupId, text: wdText, parse_mode: 'HTML' })
+        body: JSON.stringify({
+          type: 'WITHDRAWAL',
+          barberName: targetBarber?.name || 'Capster E-CUKUR',
+          amount,
+          bankName: withdrawalData.bankName || 'BCA',
+          accountNumber: withdrawalData.accountNumber,
+          accountHolder: withdrawalData.accountHolder,
+          referenceId: newWithdrawal.referenceId
+        })
       }).catch(() => {});
     } catch {}
 
