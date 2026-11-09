@@ -341,7 +341,6 @@ export default function BarberDashboard() {
   const [isCompressingLookbook, setIsCompressingLookbook] = useState(false);
   const [lookbookCompressionStats, setLookbookCompressionStats] = useState(null);
   const [isDraggingLookbook, setIsDraggingLookbook] = useState(false);
-  const [lookbookInputMode, setLookbookInputMode] = useState('upload'); // 'upload' | 'url'
   const lookbookFileInputRef = useRef(null);
 
   const [isAddLinkOpen, setIsAddLinkOpen] = useState(false);
@@ -923,7 +922,7 @@ export default function BarberDashboard() {
   const handleSaveLookbook = async (e) => {
     e.preventDefault();
     if (!newLookbookImg.trim()) {
-      showToast('Harap pilih foto atau masukkan URL gambar');
+      showToast('Harap pilih foto terlebih dahulu');
       return;
     }
 
@@ -982,13 +981,6 @@ export default function BarberDashboard() {
     setNewLinkUrl('');
     showToast('Tautan kustom berhasil dipasang');
   };
-
-  const PRESET_HAIRCUTS = [
-    { title: 'Suasana Studio Sore Hari ☕', url: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=600', tag: 'Suasana Studio' },
-    { title: 'Peralatan Grooming & Pomade ✂️', url: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?q=80&w=600', tag: 'Grooming' },
-    { title: 'Fresh Haircut Style ✨', url: 'https://images.unsplash.com/photo-1593702275687-f8b402bf1fb5?q=80&w=600', tag: 'Hasil Cukur' },
-    { title: 'Santai di Ruang Tunggu 🛋️', url: 'https://images.unsplash.com/photo-1621605815971-fbc98d665033?q=80&w=600', tag: 'Daily Vibe' }
-  ];
 
   // Formatting currency
   const formatRupiah = (val) => {
@@ -3615,165 +3607,95 @@ export default function BarberDashboard() {
                 className="hidden"
               />
 
-              {/* Input Mode Selector */}
-              <div className="flex p-1 bg-neutral-100 rounded-xl mb-4 border border-neutral-200">
-                <button
-                  type="button"
-                  onClick={() => setLookbookInputMode('upload')}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    lookbookInputMode === 'upload' 
-                      ? 'bg-white text-[#171717] shadow-xs' 
-                      : 'text-neutral-500 hover:text-neutral-900'
-                  }`}
-                >
-                  <UploadCloud className="w-3.5 h-3.5 text-[#285844]" />
-                  <span>Unggah dari HP / Komputer</span>
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setLookbookInputMode('url')}
-                  className={`flex-1 py-1.5 text-xs font-semibold rounded-lg flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
-                    lookbookInputMode === 'url' 
-                      ? 'bg-white text-[#171717] shadow-xs' 
-                      : 'text-neutral-500 hover:text-neutral-900'
-                  }`}
-                >
-                  <Globe className="w-3.5 h-3.5 text-neutral-400" />
-                  <span>URL Gambar / Inspirasi</span>
-                </button>
-              </div>
-
               <form onSubmit={handleSaveLookbook} className="space-y-4">
                 {/* 1. PHOTO SELECTION ZONE */}
-                {lookbookInputMode === 'upload' ? (
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">
-                      Foto Postingan
-                    </label>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1.5">
+                    Foto Postingan
+                  </label>
 
-                    {newLookbookImg ? (
-                      <div className="relative rounded-2xl border border-neutral-200 overflow-hidden bg-neutral-900 p-3 flex flex-col sm:flex-row items-center gap-4">
-                        <div className="w-28 h-28 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-neutral-800 relative flex items-center justify-center">
-                          <img 
-                            src={newLookbookImg} 
-                            alt="Preview" 
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-
-                        <div className="flex-1 min-w-0 text-white space-y-1.5">
-                          <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
-                            <CheckCircle2 className="w-4 h-4 shrink-0" />
-                            <span>Foto Siap Diposting</span>
-                          </div>
-
-                          {lookbookCompressionStats && (
-                            <div className="text-[11px] text-neutral-300 space-y-0.5">
-                              <p className="font-mono">
-                                {lookbookCompressionStats.originalFormatted} → <span className="text-emerald-300 font-bold">{lookbookCompressionStats.compressedFormatted}</span>
-                                <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded font-bold text-[10px]">
-                                  Hemat {lookbookCompressionStats.savedPercent}%
-                                </span>
-                              </p>
-                              <p className="text-[10px] text-neutral-400">
-                                Dimensi: {lookbookCompressionStats.width} × {lookbookCompressionStats.height} px (Rasio asli terjaga)
-                              </p>
-                            </div>
-                          )}
-
-                          <button
-                            type="button"
-                            onClick={() => lookbookFileInputRef.current?.click()}
-                            className="mt-1 text-xs text-neutral-300 hover:text-white underline cursor-pointer inline-block"
-                          >
-                            Ganti foto lain
-                          </button>
-                        </div>
+                  {newLookbookImg ? (
+                    <div className="relative rounded-2xl border border-neutral-200 overflow-hidden bg-neutral-900 p-3 flex flex-col sm:flex-row items-center gap-4">
+                      <div className="w-28 h-28 sm:w-24 sm:h-24 rounded-xl overflow-hidden shrink-0 bg-neutral-800 relative flex items-center justify-center">
+                        <img 
+                          src={newLookbookImg} 
+                          alt="Preview" 
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                    ) : (
-                      <div
-                        onDragOver={(e) => { e.preventDefault(); setIsDraggingLookbook(true); }}
-                        onDragLeave={() => setIsDraggingLookbook(false)}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          setIsDraggingLookbook(false);
-                          const file = e.dataTransfer.files?.[0];
-                          if (file) handleLookbookFileSelect(file);
-                        }}
-                        onClick={() => lookbookFileInputRef.current?.click()}
-                        className={`p-6 rounded-2xl border-2 border-dashed text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
-                          isDraggingLookbook 
-                            ? 'border-[#285844] bg-[#D9E5DC]/30 scale-[1.01]' 
-                            : 'border-neutral-300 hover:border-[#285844] bg-neutral-50 hover:bg-neutral-50/50'
-                        }`}
-                      >
-                        {isCompressingLookbook ? (
-                          <div className="py-3 flex flex-col items-center">
-                            <RefreshCw className="w-7 h-7 text-[#285844] animate-spin mb-2" />
-                            <p className="text-xs font-semibold text-[#171717]">Mengoptimalkan gambar...</p>
-                            <p className="text-[10px] text-neutral-400 mt-0.5">Menyesuaikan resolusi tanpa memotong proporsi</p>
+
+                      <div className="flex-1 min-w-0 text-white space-y-1.5">
+                        <div className="flex items-center gap-1.5 text-emerald-400 font-semibold text-xs">
+                          <CheckCircle2 className="w-4 h-4 shrink-0" />
+                          <span>Foto Siap Diposting</span>
+                        </div>
+
+                        {lookbookCompressionStats && (
+                          <div className="text-[11px] text-neutral-300 space-y-0.5">
+                            <p className="font-mono">
+                              {lookbookCompressionStats.originalFormatted} → <span className="text-emerald-300 font-bold">{lookbookCompressionStats.compressedFormatted}</span>
+                              <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-500/20 text-emerald-300 rounded font-bold text-[10px]">
+                                Hemat {lookbookCompressionStats.savedPercent}%
+                              </span>
+                            </p>
+                            <p className="text-[10px] text-neutral-400">
+                              Dimensi: {lookbookCompressionStats.width} × {lookbookCompressionStats.height} px (Rasio asli terjaga)
+                            </p>
                           </div>
-                        ) : (
-                          <>
-                            <div className="w-12 h-12 rounded-full bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-2.5">
-                              <Camera className="w-6 h-6" />
-                            </div>
-                            <p className="text-xs font-bold text-[#171717]">
-                              Pilih foto dari galeri HP / Komputer atau seret ke sini
-                            </p>
-                            <p className="text-[11px] text-neutral-500 mt-1 max-w-xs leading-snug">
-                              Mendukung JPG, PNG, atau WebP. Gambar bebas apa saja & otomatis dioptimalkan agar loading super cepat.
-                            </p>
-                            <div className="mt-3 inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md font-medium border border-emerald-200">
-                              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                              <span>Kompresi cerdas: Rasio aspek asli tidak dipotong</span>
-                            </div>
-                          </>
                         )}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1">URL Gambar</label>
-                    <input 
-                      type="text"
-                      required={!newLookbookImg}
-                      value={newLookbookImg}
-                      onChange={(e) => {
-                        setNewLookbookImg(e.target.value);
-                        setLookbookFile(null);
-                        setLookbookCompressionStats(null);
-                      }}
-                      placeholder="https://images.unsplash.com/..."
-                      className="w-full text-xs font-mono p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
-                    />
 
-                    {/* Preset Inspirations Quick Pick */}
-                    <div className="mt-3">
-                      <span className="text-[11px] text-neutral-500 font-semibold block mb-2">Atau Pilih Contoh Inspirasi Feed:</span>
-                      <div className="grid grid-cols-2 gap-2">
-                        {PRESET_HAIRCUTS.map((hc, idx) => (
-                          <button
-                            key={idx}
-                            type="button"
-                            onClick={() => {
-                              setNewLookbookTitle(hc.title);
-                              setNewLookbookImg(hc.url);
-                              setNewLookbookTag(hc.tag);
-                              setLookbookFile(null);
-                              setLookbookCompressionStats(null);
-                            }}
-                            className="p-2 rounded-xl border border-neutral-200 hover:border-[#285844] text-left flex items-center gap-2 bg-neutral-50 cursor-pointer transition-colors"
-                          >
-                            <img src={hc.url} alt={hc.title} className="w-8 h-8 rounded-lg object-cover shrink-0" />
-                            <span className="text-[10px] font-semibold text-[#171717] truncate">{hc.title}</span>
-                          </button>
-                        ))}
+                        <button
+                          type="button"
+                          onClick={() => lookbookFileInputRef.current?.click()}
+                          className="mt-1 text-xs text-neutral-300 hover:text-white underline cursor-pointer inline-block"
+                        >
+                          Ganti foto lain
+                        </button>
                       </div>
                     </div>
-                  </div>
-                )}
+                  ) : (
+                    <div
+                      onDragOver={(e) => { e.preventDefault(); setIsDraggingLookbook(true); }}
+                      onDragLeave={() => setIsDraggingLookbook(false)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        setIsDraggingLookbook(false);
+                        const file = e.dataTransfer.files?.[0];
+                        if (file) handleLookbookFileSelect(file);
+                      }}
+                      onClick={() => lookbookFileInputRef.current?.click()}
+                      className={`p-6 rounded-2xl border-2 border-dashed text-center transition-all cursor-pointer flex flex-col items-center justify-center ${
+                        isDraggingLookbook 
+                          ? 'border-[#285844] bg-[#D9E5DC]/30 scale-[1.01]' 
+                          : 'border-neutral-300 hover:border-[#285844] bg-neutral-50 hover:bg-neutral-50/50'
+                      }`}
+                    >
+                      {isCompressingLookbook ? (
+                        <div className="py-3 flex flex-col items-center">
+                          <RefreshCw className="w-7 h-7 text-[#285844] animate-spin mb-2" />
+                          <p className="text-xs font-semibold text-[#171717]">Mengoptimalkan gambar...</p>
+                          <p className="text-[10px] text-neutral-400 mt-0.5">Menyesuaikan resolusi tanpa memotong proporsi</p>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="w-12 h-12 rounded-full bg-[#D9E5DC] text-[#285844] flex items-center justify-center mb-2.5">
+                            <Camera className="w-6 h-6" />
+                          </div>
+                          <p className="text-xs font-bold text-[#171717]">
+                            Pilih foto dari galeri HP / Komputer atau seret ke sini
+                          </p>
+                          <p className="text-[11px] text-neutral-500 mt-1 max-w-xs leading-snug">
+                            Mendukung JPG, PNG, atau WebP. Gambar bebas apa saja & otomatis dioptimalkan agar loading super cepat.
+                          </p>
+                          <div className="mt-3 inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md font-medium border border-emerald-200">
+                            <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                            <span>Kompresi cerdas: Rasio aspek asli tidak dipotong</span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* 2. CAPTION INPUT (INSTAGRAM STYLE TEXTAREA) */}
                 <div>
