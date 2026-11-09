@@ -708,7 +708,7 @@ export default function BarberDashboard() {
       } else {
         showToast(
           res.source === 'supabase_storage' 
-            ? 'Foto berhasil diupload ke Supabase Storage!' 
+            ? 'Foto berhasil diupload!' 
             : 'Foto profil berhasil diperbarui & disimpan!'
         );
       }
@@ -1003,8 +1003,8 @@ export default function BarberDashboard() {
       <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-4">
         <div className="bg-white p-8 rounded-3xl border border-neutral-200 text-center max-w-sm w-full shadow-lg">
           <Scissors className="w-10 h-10 text-[#285844] mx-auto mb-3 animate-bounce" />
-          <h2 className="font-display font-extrabold text-lg text-[#171717]">Memuat Data Studio...</h2>
-          <p className="text-xs text-neutral-500 mt-1 mb-5">Menghubungkan ke database Supabase...</p>
+          <h2 className="font-display font-extrabold text-lg text-[#171717]">Memuat Data ...</h2>
+          <p className="text-xs text-neutral-500 mt-1 mb-5">Menghubungkan ...</p>
           <button
             type="button"
             onClick={() => navigate('/login')}
@@ -1235,7 +1235,7 @@ export default function BarberDashboard() {
                     <span>Mode Penggunaan Akun</span>
                   </h2>
                   <p className="text-xs text-neutral-500 mt-1 leading-relaxed">
-                    Tidak ada batasan akun kaku. Pilih preset cepat di bawah atau aktifkan/nonaktifkan modul apa pun secara bebas sesuai kebutuhan usahamu.
+                    Tidak ada batasan akun kaku. Pilih preset cepat di bawah atau aktifkan/nonaktifkan modul apa pun secara bebas sesuai kebutuhan.
                   </p>
                 </div>
 
@@ -1718,7 +1718,7 @@ export default function BarberDashboard() {
 
                       <div className="flex flex-col gap-1.5">
                         <p className="text-[11px] text-neutral-500 leading-relaxed">
-                          Tarik & lepas foto langsung atau klik tombol di atas. Rekomendasi rasio 1:1 (persegi).
+                          Tarik & lepas foto langsung atau klik tombol di atas.
                         </p>
                         {profileStats ? (
                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200/80 text-emerald-800 text-[11px] font-medium w-fit">
@@ -1728,7 +1728,7 @@ export default function BarberDashboard() {
                         ) : (
                           <div className="inline-flex items-center gap-1.5 text-neutral-400 text-[11px]">
                             <Sparkles className="w-3 h-3 text-[#285844]" />
-                            <span>Otomatis dikompres & dipotong 1:1 persegi agar loading cepat</span>
+                            <span>Otomatis dikompres & dipotong 1:1 persegi.</span>
                           </div>
                         )}
                       </div>
@@ -2589,9 +2589,9 @@ export default function BarberDashboard() {
               
               <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                  <h2 className="font-display font-bold text-lg text-[#171717]">Feed & Galeri Foto Bebas</h2>
+                  <h2 className="font-display font-bold text-lg text-[#171717]">Feed & Galeri</h2>
                   <p className="text-xs text-neutral-500">
-                    Unggah foto apa saja untuk feed profil Anda — hasil cukur, suasana studio, alat grooming, atau momen harian.
+                    Unggah foto untuk feed profil Anda 
                   </p>
                 </div>
                 <button
@@ -2643,7 +2643,7 @@ export default function BarberDashboard() {
                 <div className="bg-white p-10 text-center rounded-2xl border border-dashed border-neutral-300 text-neutral-500">
                   <Eye className="w-9 h-9 mx-auto mb-2 text-neutral-400" />
                   <p className="font-semibold text-sm">Belum ada postingan feed.</p>
-                  <p className="text-xs text-neutral-400 mt-0.5">Unggah foto bebas (suasana, peralatan, hasil cukur, dll) seperti postingan Instagram.</p>
+                  <p className="text-xs text-neutral-400 mt-0.5">Unggah foto.</p>
                   <button
                     type="button"
                     onClick={() => setIsAddLookbookOpen(true)}
@@ -3592,7 +3592,7 @@ export default function BarberDashboard() {
                 </div>
               </div>
               <p className="text-xs text-neutral-500 mb-4">
-                Unggah foto bebas untuk galeri feed & portofolio — suasana studio, produk grooming, hasil cukur, atau momen harian santai.
+                Unggah foto untuk galeri feed & portofolio
               </p>
 
               {/* Hidden native file input */}
@@ -3685,7 +3685,7 @@ export default function BarberDashboard() {
                             Pilih foto dari galeri HP / Komputer atau seret ke sini
                           </p>
                           <p className="text-[11px] text-neutral-500 mt-1 max-w-xs leading-snug">
-                            Mendukung JPG, PNG, atau WebP. Gambar bebas apa saja & otomatis dioptimalkan agar loading super cepat.
+                            Mendukung JPG, PNG, atau WebP.
                           </p>
                           <div className="mt-3 inline-flex items-center gap-1 text-[10px] text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-md font-medium border border-emerald-200">
                             <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
@@ -3701,17 +3701,14 @@ export default function BarberDashboard() {
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs font-semibold text-neutral-700">
-                      Caption Postingan (Bebas)
+                      Caption Postingan
                     </label>
-                    <span className="text-[10px] text-neutral-400 font-normal">
-                      Bebas berekspresi seperti Instagram
-                    </span>
                   </div>
                   <textarea 
                     rows={3}
                     value={newLookbookTitle}
                     onChange={(e) => setNewLookbookTitle(e.target.value)}
-                    placeholder="Tulis caption postinganmu... (misal: 'Suasana santai sore hari di studio ☕', 'Peralatan tempur baru! ✂️', atau gaya potongan favoritmu)"
+                    placeholder="Tulis caption postinganmu..."
                     className="w-full text-xs font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844] resize-none leading-relaxed"
                   />
                 </div>
