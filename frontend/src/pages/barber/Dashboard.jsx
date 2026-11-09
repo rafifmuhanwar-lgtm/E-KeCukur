@@ -370,11 +370,6 @@ export default function BarberDashboard() {
       showToast('🔒 Fitur Lokasi Studio & Maps eksklusif untuk Paket Barber Studio (Rp 99K/bln)');
       return;
     }
-    if (featureKey === 'tipping' && isFreePlan) {
-      setIsUpgradeModalOpen(true);
-      showToast('🔒 Fitur Sawer Tip Digital eksklusif untuk Paket Capster (Rp 49K) & Barber Studio');
-      return;
-    }
 
     const currentFeatures = barber?.features || {
       booking: true,
@@ -1432,9 +1427,8 @@ export default function BarberDashboard() {
                       name: 'Sawer Tip Digital (Tip Kopi)',
                       desc: 'Beri opsi bagi pelanggan yang puas untuk mengirim tip apresiasi kopi secara digital via QRIS.',
                       icon: Coffee,
-                      active: !isFreePlan && barber.features?.tipping !== false,
-                      isLocked: isFreePlan,
-                      lockLabel: 'Paket Capster & Studio'
+                      active: barber.features?.tipping !== false,
+                      isLocked: false
                     },
                     {
                       key: 'location',
