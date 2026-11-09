@@ -65,9 +65,6 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
   const isDummyBio = !row.bio || row.bio.includes('Siap melayani potongan rambut') || row.bio.includes('Siap melayani');
   const cleanBio = isDummyBio ? '' : row.bio;
 
-  const isDummySpecialty = !row.specialty || row.specialty.includes('Classic Cut & Fade') || row.specialty.includes('Specialist') || row.specialty.includes('Grooming');
-  const cleanSpecialty = isDummySpecialty ? '' : row.specialty;
-
   const isDummyAddress = !row.address || row.address === 'Studio Barber' || row.address === 'Alamat Belum Diatur';
   const cleanAddress = isDummyAddress ? '' : row.address;
 

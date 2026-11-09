@@ -389,6 +389,15 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
+  // Security: Validasi X-Telegram-Bot-Api-Secret-Token jika TELEGRAM_WEBHOOK_SECRET dikonfigurasi
+  const expectedWebhookSecret = (process.env.TELEGRAM_WEBHOOK_SECRET || '').trim();
+  if (expectedWebhookSecret) {
+    const providedWebhookSecret = (req.headers['x-telegram-bot-api-secret-token'] || '').trim();
+    if (providedWebhookSecret !== expectedWebhookSecret) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid Telegram webhook secret token' });
+    }
+  }
+
   let update = req.body;
   if (typeof update === 'string') {
     try {

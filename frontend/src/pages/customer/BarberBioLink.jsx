@@ -1562,16 +1562,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       onClick={async () => {
                         setSimulatingBooking(true);
                         try {
-                          await fetch('/api/payment/qris/webhook', {
-                            method: 'POST',
-                            headers: { 
-                              'Content-Type': 'application/json',
-                              'x-api-key': 'ecukur_qris_secret_2026'
-                            },
-                            body: JSON.stringify({ 
-                              text: `GoBiz: Pembayaran QRIS Rp ${bookingQrisData.totalAmount.toLocaleString('id-ID')} berhasil diterima` 
-                            })
-                          });
+                          await simulateQrisPayment(bookingQrisData?.referenceId, bookingQrisData?.totalAmount);
                         } catch (err) {}
                         setTimeout(() => setSimulatingBooking(false), 2000);
                       }}
@@ -1903,16 +1894,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                         const finalTipAmt = tipQrisData?.totalAmount || tipAmount;
                         try {
                           await simulateQrisPayment(tipQrisData?.referenceId, finalTipAmt);
-                          await fetch('/api/payment/qris/webhook', {
-                            method: 'POST',
-                            headers: { 
-                              'Content-Type': 'application/json',
-                              'x-api-key': 'ecukur_qris_secret_2026'
-                            },
-                            body: JSON.stringify({ 
-                              text: `GoBiz: Pembayaran QRIS Rp ${finalTipAmt.toLocaleString('id-ID')} berhasil diterima` 
-                            })
-                          }).catch(() => {});
                         } catch (e) {}
 
                         setTimeout(() => {

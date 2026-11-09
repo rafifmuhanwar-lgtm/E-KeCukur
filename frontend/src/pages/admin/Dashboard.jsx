@@ -1888,24 +1888,24 @@ export default function AdminMasterDashboard() {
               <div className="p-3.5 bg-neutral-50 rounded-xl border border-neutral-200 space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-semibold text-neutral-700">
-                    Alternatif URL Sekaligus Kunci Rahasia (Jika Payhook tidak ada kolom header):
+                    Format Header Autentikasi Payhook / Forwarder:
                   </span>
                   <button
                     type="button"
                     onClick={() => {
-                      navigator.clipboard.writeText('https://ecukur.biz.id/api/payment/qris/webhook?secret=ecukur_qris_secret_2026');
+                      navigator.clipboard.writeText('X-API-KEY');
                       setCopiedQueryUrl(true);
                       setTimeout(() => setCopiedQueryUrl(false), 2000);
-                      showToast('URL Query Param berhasil disalin!');
+                      showToast('Header key berhasil disalin!');
                     }}
                     className="text-xs text-[#285844] font-bold hover:underline flex items-center gap-1 cursor-pointer"
                   >
                     {copiedQueryUrl ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedQueryUrl ? 'Tersalin' : 'Salin URL Lengkap'}</span>
+                    <span>{copiedQueryUrl ? 'Tersalin' : 'Salin Header Key'}</span>
                   </button>
                 </div>
                 <code className="block p-2 bg-white rounded-lg border border-neutral-200 text-xs font-mono text-neutral-800 break-all select-all">
-                  https://ecukur.biz.id/api/payment/qris/webhook?secret=ecukur_qris_secret_2026
+                  Header Name: X-API-KEY | Header Value: [Nilai QRIS_WEBHOOK_SECRET di Vercel]
                 </code>
               </div>
 

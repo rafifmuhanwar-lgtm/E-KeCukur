@@ -17,10 +17,10 @@ function sha256(str) {
   return crypto.createHash('sha256').update(String(str)).digest('hex');
 }
 
-// Known SHA-256 hashes of authorized passkeys (server-side only)
+// Authorized SHA-256 hashes of master passkeys (server-side only)
 const KNOWN_HASHES = new Set([
-  'f8c9db92aeb781e944c2ebd5707a568cbabb6bd683c61f369fb4967423915d22', // ecukur_admin_2026
-  '4cc3e12daae8b68d83dfe17c16c3c533c5d56fd9974b123cf589f019eeceffd3', // 882026
+  'f8c9db92aeb781e944c2ebd5707a568cbabb6bd683c61f369fb4967423915d22',
+  '4cc3e12daae8b68d83dfe17c16c3c533c5d56fd9974b123cf589f019eeceffd3',
 ]);
 
 export default async function handler(req, res) {

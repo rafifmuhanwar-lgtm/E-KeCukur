@@ -9,15 +9,10 @@ import {
   Download, 
   Check, 
   Copy, 
-  X, 
   AlertCircle, 
   CheckCircle2, 
   Table, 
-  Eye,
-  Sliders,
-  ArrowUpDown,
-  Sparkles,
-  Layers
+  Eye
 } from 'lucide-react';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 

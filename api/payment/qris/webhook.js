@@ -5,23 +5,21 @@ const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL |
 const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hdGdxYWtzdW91c2xkZnh5ZG5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MjUxMjAsImV4cCI6MjEwNzMwMTEyMH0.09noBpwZ6jHYeJJV-3rprhUtqPk8XvBRTLTJKCEJHA8';
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
-const EXPECTED_SECRET = process.env.QRIS_WEBHOOK_SECRET || 'ecukur_qris_secret_2026';
+const CONFIGURED_SECRET = (process.env.QRIS_WEBHOOK_SECRET || '').trim();
+const EXPECTED_SECRET = CONFIGURED_SECRET || 'ecukur_qris_secret_2026';
 
 function isValidWebhookSecret(providedSecret, expectedSecret) {
   if (typeof providedSecret !== 'string' || providedSecret.length === 0) {
     return false;
   }
-
-  const validSecrets = [expectedSecret, 'ecukur_qris_secret_2026'].filter(
-    (s) => typeof s === 'string' && s.length > 0
-  );
+  if (!expectedSecret || typeof expectedSecret !== 'string') {
+    return false;
+  }
 
   const provided = Buffer.from(providedSecret, 'utf8');
-  for (const secret of validSecrets) {
-    const expected = Buffer.from(secret, 'utf8');
-    if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
-      return true;
-    }
+  const expected = Buffer.from(expectedSecret, 'utf8');
+  if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
+    return true;
   }
   return false;
 }
@@ -153,21 +151,17 @@ export default async function handler(req, res) {
       ? authorization.match(/^Bearer\s+(.+)$/i)?.[1]
       : undefined;
 
+    // Keamanan: Hanya izinkan autentikasi webhook melalui HTTP Header (X-API-KEY / Bearer / X-Webhook-Secret)
+    // Jangan izinkan secret melalui query string atau payload body karena rentan terekspos log/browser history
     const providedSecret = (
       req.headers['x-api-key'] ||
+      req.headers['x-webhook-secret'] ||
       bearerSecret ||
-      req.query?.secret ||
-      req.query?.key ||
-      req.query?.['x-api-key'] ||
-      payload.secret ||
-      payload.api_key ||
-      payload.apiKey ||
-      payload.key ||
       ''
     ).trim();
 
-    if (!isValidWebhookSecret(providedSecret, EXPECTED_SECRET)) {
-      return res.status(401).json({ success: false, message: 'Unauthorized: Secret key tidak valid' });
+    if (!providedSecret || !isValidWebhookSecret(providedSecret, EXPECTED_SECRET)) {
+      return res.status(401).json({ success: false, message: 'Unauthorized: Secret key header tidak valid atau tidak disertakan' });
     }
 
     // Tangani Test Connection / Ping dari aplikasi seperti Payhook

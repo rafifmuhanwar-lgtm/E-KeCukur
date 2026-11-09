@@ -148,8 +148,7 @@ export async function simulateQrisPayment(referenceId, amount) {
     const res = await fetch(`${API_BASE}/simulate`, {
       method: 'POST',
       headers: { 
-        'Content-Type': 'application/json',
-        'x-api-key': 'ecukur_qris_secret_2026'
+        'Content-Type': 'application/json'
       },
       body: JSON.stringify({ referenceId, amount: Number(amount) || 0 })
     });
