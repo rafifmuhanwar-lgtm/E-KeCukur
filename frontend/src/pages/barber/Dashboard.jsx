@@ -50,7 +50,7 @@ import BarberBioLink from '../customer/BarberBioLink';
 import { compressImage } from '../../lib/imageUploader';
 import { getAppDomain } from '../../lib/domain';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
-import { createQrisPayment, checkQrisPaymentStatus, simulateQrisPayment } from '../../lib/qrisPayment';
+import { getDynamicQrisImageUrl, simulateQrisPayment } from '../../lib/qrisPayment';
 
 const computeWeeklyChartData = (bookingsList) => {
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -600,29 +600,36 @@ export default function BarberDashboard() {
   const lookbookCount = (barber?.lookbook || []).length;
   const isLookbookLimitReached = isFreePlan && lookbookCount >= 10;
 
-  // Realtime Polling Status Pembayaran QRIS Upgrade Paket
+  // Realtime Polling Status Pembayaran QRIS Upgrade Paket (Via Supabase)
   useEffect(() => {
     if (!upgradeQrisData?.referenceId || !upgradeTargetPlan) return;
     let isCancelled = false;
 
     const interval = setInterval(async () => {
       try {
-        const res = await checkQrisPaymentStatus(upgradeQrisData.referenceId);
-        if (res?.status === 'PAID' && !isCancelled) {
-          clearInterval(interval);
-          setUpgradeSuccess(true);
-          const planNames = { capster: 'Paket Capster Pro (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
-          await updateBarber(barber.id, { plan: upgradeTargetPlan });
-          showToast(`🎉 Pembayaran QRIS Dikonfirmasi! Paket ${planNames[upgradeTargetPlan] || upgradeTargetPlan} kini AKTIF!`);
+        if (isSupabaseConfigured && supabase) {
+          const { data } = await supabase
+            .from('qris_payments')
+            .select('status')
+            .eq('reference_id', upgradeQrisData.referenceId)
+            .maybeSingle();
 
-          setTimeout(() => {
-            if (!isCancelled) {
-              setUpgradeQrisData(null);
-              setUpgradeTargetPlan(null);
-              setUpgradeSuccess(false);
-              setIsUpgradeModalOpen(false);
-            }
-          }, 2000);
+          if (data?.status === 'PAID' && !isCancelled) {
+            clearInterval(interval);
+            setUpgradeSuccess(true);
+            const planNames = { capster: 'Paket Capster Pro (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
+            await updateBarber(barber.id, { plan: upgradeTargetPlan });
+            showToast(`🎉 Pembayaran QRIS Dikonfirmasi! Paket ${planNames[upgradeTargetPlan] || upgradeTargetPlan} kini AKTIF!`);
+
+            setTimeout(() => {
+              if (!isCancelled) {
+                setUpgradeQrisData(null);
+                setUpgradeTargetPlan(null);
+                setUpgradeSuccess(false);
+                setIsUpgradeModalOpen(false);
+              }
+            }, 2000);
+          }
         }
       } catch (e) {}
     }, 2500);
@@ -633,10 +640,10 @@ export default function BarberDashboard() {
     };
   }, [upgradeQrisData?.referenceId, upgradeTargetPlan, barber?.id, updateBarber]);
 
-  const handleSwitchPlan = async (targetPlan) => {
+  const handleSwitchPlan = (targetPlan) => {
     if (targetPlan === 'free') {
       try {
-        await updateBarber(barber.id, { plan: 'free' });
+        updateBarber(barber.id, { plan: 'free' });
         showToast('✓ Akun Anda telah beralih ke Paket Free');
         setIsUpgradeModalOpen(false);
         setUpgradeQrisData(null);
@@ -648,58 +655,78 @@ export default function BarberDashboard() {
     }
 
     // Paket Berbayar (Capster: Rp 49.000 / Barber Studio: Rp 99.000)
-    // WAJIB bayar via QRIS otomatis
+    // Langsung generate QRIS dinamis di browser secara instan seperti Booking Flow
     const planPrices = { capster: 49000, barber: 99000 };
-    const price = planPrices[targetPlan] || 49000;
+    const basePrice = planPrices[targetPlan] || 49000;
     const planType = targetPlan === 'barber' ? 'PLAN_BARBER' : 'PLAN_CAPSTER';
+    const uniqueCode = Math.floor(100 + Math.random() * 899);
+    const finalAmount = basePrice + uniqueCode;
+    const refId = `PLAN-${Date.now().toString(36).toUpperCase()}-${uniqueCode}`;
+    const qrImg = getDynamicQrisImageUrl(finalAmount);
 
-    setIsUpgradeQrisLoading(true);
+    const paymentData = {
+      referenceId: refId,
+      type: planType,
+      barberId: barber.id,
+      customerName: barber.name || 'Owner Barber',
+      baseAmount: basePrice,
+      uniqueCode,
+      totalAmount: finalAmount,
+      formattedTotal: `Rp ${finalAmount.toLocaleString('id-ID')}`,
+      qrisImageUrl: qrImg,
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+    };
+
     setUpgradeTargetPlan(targetPlan);
+    setUpgradeQrisData(paymentData);
     setUpgradeSuccess(false);
 
+    // Simpan ke Supabase qris_payments jika terhubung agar notifikasi MacroDroid / Telegram dapat mencocokkan
     try {
-      const res = await createQrisPayment({
-        type: planType,
-        amount: price,
-        barberId: barber.id,
-        customerName: barber.name || 'Owner Barber'
-      });
-
-      if (res?.success && res.payment) {
-        setUpgradeQrisData(res.payment);
-      } else {
-        showToast('Gagal membuat tagihan QRIS. Coba lagi.');
-        setUpgradeTargetPlan(null);
+      if (isSupabaseConfigured && supabase) {
+        supabase.from('qris_payments').insert({
+          reference_id: refId,
+          type: planType,
+          barber_id: barber.id,
+          customer_name: barber.name || 'Owner Barber',
+          base_amount: basePrice,
+          unique_code: uniqueCode,
+          total_amount: finalAmount,
+          qris_image_url: qrImg,
+          status: 'PENDING',
+          expires_at: paymentData.expiresAt
+        }).then(() => {}).catch(() => {});
       }
-    } catch (err) {
-      showToast('Error koneksi QRIS: ' + err.message);
-      setUpgradeTargetPlan(null);
-    } finally {
-      setIsUpgradeQrisLoading(false);
-    }
+    } catch {}
   };
 
   const handleSimulateUpgradePayment = async () => {
     if (!upgradeQrisData?.referenceId) return;
     setIsSimulatingUpgradePayment(true);
+
     try {
-      await simulateQrisPayment(upgradeQrisData.referenceId, upgradeQrisData.totalAmount);
-      setTimeout(async () => {
-        setUpgradeSuccess(true);
-        const planNames = { capster: 'Paket Capster Pro (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
-        await updateBarber(barber.id, { plan: upgradeTargetPlan });
-        showToast(`🎉 Pembayaran QRIS Dikonfirmasi! Paket ${planNames[upgradeTargetPlan] || upgradeTargetPlan} kini AKTIF!`);
-        setTimeout(() => {
-          setUpgradeQrisData(null);
-          setUpgradeTargetPlan(null);
-          setUpgradeSuccess(false);
-          setIsUpgradeModalOpen(false);
-          setIsSimulatingUpgradePayment(false);
-        }, 1800);
-      }, 1000);
-    } catch (e) {
-      setIsSimulatingUpgradePayment(false);
-    }
+      if (isSupabaseConfigured && supabase) {
+        await supabase
+          .from('qris_payments')
+          .update({ status: 'PAID', paid_at: new Date().toISOString() })
+          .eq('reference_id', upgradeQrisData.referenceId);
+      }
+    } catch (e) {}
+
+    setTimeout(async () => {
+      setUpgradeSuccess(true);
+      const planNames = { capster: 'Paket Capster Pro (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
+      await updateBarber(barber.id, { plan: upgradeTargetPlan });
+      showToast(`🎉 Pembayaran QRIS Dikonfirmasi! Paket ${planNames[upgradeTargetPlan] || upgradeTargetPlan} kini AKTIF!`);
+      setTimeout(() => {
+        setUpgradeQrisData(null);
+        setUpgradeTargetPlan(null);
+        setUpgradeSuccess(false);
+        setIsUpgradeModalOpen(false);
+        setIsSimulatingUpgradePayment(false);
+      }, 1800);
+    }, 800);
   };
 
   const handleExportCSV = () => {
@@ -4412,7 +4439,7 @@ export default function BarberDashboard() {
 
                       <button
                         type="button"
-                        disabled={isCapsterPlan || isUpgradeQrisLoading}
+                        disabled={isCapsterPlan}
                         onClick={() => handleSwitchPlan('capster')}
                         className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                           isCapsterPlan 
@@ -4420,12 +4447,7 @@ export default function BarberDashboard() {
                             : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-sm'
                         }`}
                       >
-                        {isUpgradeQrisLoading && upgradeTargetPlan === 'capster' ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Menyiapkan QRIS...</span>
-                          </>
-                        ) : isCapsterPlan ? (
+                        {isCapsterPlan ? (
                           'Paket Aktif'
                         ) : (
                           <>
@@ -4477,7 +4499,7 @@ export default function BarberDashboard() {
 
                       <button
                         type="button"
-                        disabled={isBarberPlan || isUpgradeQrisLoading}
+                        disabled={isBarberPlan}
                         onClick={() => handleSwitchPlan('barber')}
                         className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                           isBarberPlan 
@@ -4485,12 +4507,7 @@ export default function BarberDashboard() {
                             : 'border-2 border-[#285844] text-[#285844] hover:bg-[#285844] hover:text-white'
                         }`}
                       >
-                        {isUpgradeQrisLoading && upgradeTargetPlan === 'barber' ? (
-                          <>
-                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                            <span>Menyiapkan QRIS...</span>
-                          </>
-                        ) : isBarberPlan ? (
+                        {isBarberPlan ? (
                           'Paket Aktif'
                         ) : (
                           <>
