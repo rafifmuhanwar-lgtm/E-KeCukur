@@ -674,6 +674,7 @@ export default function BarberDashboard() {
       totalAmount: finalAmount,
       formattedTotal: `Rp ${finalAmount.toLocaleString('id-ID')}`,
       qrisImageUrl: qrImg,
+      qrImageUrl: qrImg,
       status: 'PENDING',
       expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
     };
@@ -4265,27 +4266,20 @@ export default function BarberDashboard() {
                   </div>
 
                   {/* QR Image Box */}
-                  <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-200 flex flex-col items-center shadow-inner">
-                    <div className="bg-white p-3 rounded-2xl shadow-sm border border-neutral-200">
-                      {upgradeQrisData.qrImageUrl ? (
-                        <img 
-                          src={upgradeQrisData.qrImageUrl} 
-                          alt="QRIS Code" 
-                          className="w-56 h-56 object-contain"
-                        />
-                      ) : (
-                        <div className="w-56 h-56 flex flex-col items-center justify-center bg-neutral-100 rounded-xl p-4 text-center">
-                          <QrCode className="w-16 h-16 text-neutral-400 mb-2" />
-                          <span className="text-[11px] text-neutral-500">Scan QRIS Nasional</span>
-                        </div>
-                      )}
+                  <div className="bg-neutral-50 p-4 rounded-2xl border border-neutral-200 flex flex-col items-center shadow-inner">
+                    <div className="bg-white p-2.5 rounded-2xl shadow-sm border border-neutral-200">
+                      <img 
+                        src={upgradeQrisData.qrisImageUrl || upgradeQrisData.qrImageUrl || getDynamicQrisImageUrl(upgradeQrisData.totalAmount || 49000)} 
+                        alt="QRIS Code Dinamis" 
+                        className="w-44 h-44 sm:w-48 sm:h-48 object-contain"
+                      />
                     </div>
 
                     {/* Total Transfer & Copy Amount */}
-                    <div className="w-full mt-4 bg-white p-3.5 rounded-xl border border-neutral-200 flex items-center justify-between">
+                    <div className="w-full mt-3 bg-white p-3 rounded-xl border border-neutral-200 flex items-center justify-between">
                       <div>
                         <span className="text-[10px] text-neutral-400 font-mono block">TOTAL PEMBAYARAN TEPAT</span>
-                        <span className="font-display font-black text-xl text-[#285844]">
+                        <span className="font-display font-black text-lg sm:text-xl text-[#285844]">
                           Rp {(upgradeQrisData.totalAmount || upgradeQrisData.amount || 0).toLocaleString('id-ID')}
                         </span>
                       </div>
@@ -4296,25 +4290,25 @@ export default function BarberDashboard() {
                           setCopiedUpgradeAmount(true);
                           setTimeout(() => setCopiedUpgradeAmount(false), 2000);
                         }}
-                        className="px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                        className="px-3 py-1.5 bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                       >
-                        {copiedUpgradeAmount ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedUpgradeAmount ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                         <span>{copiedUpgradeAmount ? 'Tersalin' : 'Salin'}</span>
                       </button>
                     </div>
 
                     {/* Important 3 Digit Note */}
-                    <div className="mt-2 text-center text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200/80 p-2.5 rounded-xl w-full">
-                      ⚠️ <strong>PENTING:</strong> Pastikan nominal transfer <strong>persis sampai digit terakhir</strong> agar pembayaran terverifikasi otomatis dalam detik.
+                    <div className="mt-2 text-center text-[10.5px] text-amber-800 bg-amber-50/90 border border-amber-200 p-2 rounded-xl w-full">
+                      ⚠️ <strong>PENTING:</strong> Transfer <strong>persis sampai 3 digit terakhir</strong> (+Rp {upgradeQrisData.uniqueCode || '...'}) agar terverifikasi otomatis.
                     </div>
 
                     {/* Polling Live Status Indicator */}
-                    <div className="flex items-center justify-center gap-2 mt-4 text-xs font-medium text-neutral-600">
+                    <div className="flex items-center justify-center gap-2 mt-3 text-xs font-medium text-neutral-600">
                       <span className="relative flex h-2.5 w-2.5">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                       </span>
-                      <span>Menunggu pembayaran otomatis...</span>
+                      <span>Menunggu konfirmasi pembayaran...</span>
                     </div>
 
                     {/* Dev/Testing simulation button */}
@@ -4322,9 +4316,9 @@ export default function BarberDashboard() {
                       type="button"
                       disabled={isSimulatingUpgradePayment}
                       onClick={handleSimulateUpgradePayment}
-                      className="mt-4 w-full py-2 bg-neutral-100 hover:bg-neutral-200 border border-dashed border-neutral-300 text-neutral-600 text-[11px] font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                      className="mt-3 w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-xs active:scale-98"
                     >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <Sparkles className="w-4 h-4 text-emerald-600" />
                       <span>{isSimulatingUpgradePayment ? 'Memproses Simulasi...' : '⚡ Uji Pembayaran Berhasil (Testing/Simulasi)'}</span>
                     </button>
                   </div>
