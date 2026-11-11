@@ -365,6 +365,19 @@ router.post('/webhook', async (req, res) => {
         }
       }
 
+      // Jika ini adalah pembayaran upgrade paket berlangganan barber
+      if (matchedPayment.type?.startsWith('PLAN_') && matchedPayment.barberId) {
+        try {
+          const targetPlan = matchedPayment.type === 'PLAN_BARBER' ? 'barber' : 'capster';
+          await supabase.from('barbers').update({
+            plan: targetPlan
+          }).eq('id', matchedPayment.barberId);
+          console.log(`[QRIS] Barber ${matchedPayment.barberId} berhasil di-upgrade ke paket ${targetPlan}!`);
+        } catch (err) {
+          console.warn('[QRIS Barber Plan Update Warning]:', err.message);
+        }
+      }
+
       return res.json({
         success: true,
         matched: true,

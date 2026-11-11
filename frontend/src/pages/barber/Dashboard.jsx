@@ -41,7 +41,8 @@ import {
   AlertCircle,
   Crown,
   Download,
-  Send
+  Send,
+  ArrowLeft
 } from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
@@ -49,6 +50,7 @@ import BarberBioLink from '../customer/BarberBioLink';
 import { compressImage } from '../../lib/imageUploader';
 import { getAppDomain } from '../../lib/domain';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
+import { createQrisPayment, checkQrisPaymentStatus, simulateQrisPayment } from '../../lib/qrisPayment';
 
 const computeWeeklyChartData = (bookingsList) => {
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -579,6 +581,12 @@ export default function BarberDashboard() {
   // ─── WITHDRAWAL / PENCAIRAN SALDO STATE (MIN. RP 15.000) ───
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [upgradeQrisData, setUpgradeQrisData] = useState(null);
+  const [upgradeTargetPlan, setUpgradeTargetPlan] = useState(null);
+  const [isUpgradeQrisLoading, setIsUpgradeQrisLoading] = useState(false);
+  const [isSimulatingUpgradePayment, setIsSimulatingUpgradePayment] = useState(false);
+  const [copiedUpgradeAmount, setCopiedUpgradeAmount] = useState(false);
+  const [upgradeSuccess, setUpgradeSuccess] = useState(false);
 
   // ─── SUBSCRIPTION PLAN & QUOTA HELPERS ───
   const currentPlan = barber?.plan || 'free';
@@ -592,14 +600,105 @@ export default function BarberDashboard() {
   const lookbookCount = (barber?.lookbook || []).length;
   const isLookbookLimitReached = isFreePlan && lookbookCount >= 10;
 
+  // Realtime Polling Status Pembayaran QRIS Upgrade Paket
+  useEffect(() => {
+    if (!upgradeQrisData?.referenceId || !upgradeTargetPlan) return;
+    let isCancelled = false;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await checkQrisPaymentStatus(upgradeQrisData.referenceId);
+        if (res?.status === 'PAID' && !isCancelled) {
+          clearInterval(interval);
+          setUpgradeSuccess(true);
+          const planNames = { capster: 'Paket Capster Pro (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
+          await updateBarber(barber.id, { plan: upgradeTargetPlan });
+          showToast(`🎉 Pembayaran QRIS Dikonfirmasi! Paket ${planNames[upgradeTargetPlan] || upgradeTargetPlan} kini AKTIF!`);
+
+          setTimeout(() => {
+            if (!isCancelled) {
+              setUpgradeQrisData(null);
+              setUpgradeTargetPlan(null);
+              setUpgradeSuccess(false);
+              setIsUpgradeModalOpen(false);
+            }
+          }, 2000);
+        }
+      } catch (e) {}
+    }, 2500);
+
+    return () => {
+      isCancelled = true;
+      clearInterval(interval);
+    };
+  }, [upgradeQrisData?.referenceId, upgradeTargetPlan, barber?.id, updateBarber]);
+
   const handleSwitchPlan = async (targetPlan) => {
+    if (targetPlan === 'free') {
+      try {
+        await updateBarber(barber.id, { plan: 'free' });
+        showToast('✓ Akun Anda telah beralih ke Paket Free');
+        setIsUpgradeModalOpen(false);
+        setUpgradeQrisData(null);
+        setUpgradeTargetPlan(null);
+      } catch {
+        showToast('Gagal mengubah paket berlangganan');
+      }
+      return;
+    }
+
+    // Paket Berbayar (Capster: Rp 49.000 / Barber Studio: Rp 99.000)
+    // WAJIB bayar via QRIS otomatis
+    const planPrices = { capster: 49000, barber: 99000 };
+    const price = planPrices[targetPlan] || 49000;
+    const planType = targetPlan === 'barber' ? 'PLAN_BARBER' : 'PLAN_CAPSTER';
+
+    setIsUpgradeQrisLoading(true);
+    setUpgradeTargetPlan(targetPlan);
+    setUpgradeSuccess(false);
+
     try {
-      await updateBarber(barber.id, { plan: targetPlan });
-      const planNames = { free: 'Paket Free', capster: 'Paket Capster (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
-      showToast(`✓ Berhasil beralih ke ${planNames[targetPlan] || targetPlan}`);
-      setIsUpgradeModalOpen(false);
-    } catch {
-      showToast('Gagal mengubah paket berlangganan');
+      const res = await createQrisPayment({
+        type: planType,
+        amount: price,
+        barberId: barber.id,
+        customerName: barber.name || 'Owner Barber'
+      });
+
+      if (res?.success && res.payment) {
+        setUpgradeQrisData(res.payment);
+      } else {
+        showToast('Gagal membuat tagihan QRIS. Coba lagi.');
+        setUpgradeTargetPlan(null);
+      }
+    } catch (err) {
+      showToast('Error koneksi QRIS: ' + err.message);
+      setUpgradeTargetPlan(null);
+    } finally {
+      setIsUpgradeQrisLoading(false);
+    }
+  };
+
+  const handleSimulateUpgradePayment = async () => {
+    if (!upgradeQrisData?.referenceId) return;
+    setIsSimulatingUpgradePayment(true);
+    try {
+      await simulateQrisPayment(upgradeQrisData.referenceId, upgradeQrisData.totalAmount);
+      setTimeout(async () => {
+        setUpgradeSuccess(true);
+        const planNames = { capster: 'Paket Capster Pro (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
+        await updateBarber(barber.id, { plan: upgradeTargetPlan });
+        showToast(`🎉 Pembayaran QRIS Dikonfirmasi! Paket ${planNames[upgradeTargetPlan] || upgradeTargetPlan} kini AKTIF!`);
+        setTimeout(() => {
+          setUpgradeQrisData(null);
+          setUpgradeTargetPlan(null);
+          setUpgradeSuccess(false);
+          setIsUpgradeModalOpen(false);
+          setIsSimulatingUpgradePayment(false);
+        }, 1800);
+      }, 1000);
+    } catch (e) {
+      setIsSimulatingUpgradePayment(false);
     }
   };
 
@@ -4080,189 +4179,335 @@ export default function BarberDashboard() {
               className="bg-white rounded-3xl p-6 sm:p-7 max-w-2xl w-full border border-neutral-200 shadow-2xl relative max-h-[90vh] overflow-y-auto"
             >
               <button 
-                onClick={() => setIsUpgradeModalOpen(false)}
+                onClick={() => {
+                  setIsUpgradeModalOpen(false);
+                  setUpgradeQrisData(null);
+                  setUpgradeTargetPlan(null);
+                  setUpgradeSuccess(false);
+                }}
                 className="absolute top-5 right-5 p-1.5 text-neutral-400 hover:text-black rounded-lg cursor-pointer transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              <div className="text-center max-w-md mx-auto mb-6">
-                <span className="text-[11px] font-mono uppercase tracking-wider text-[#285844] font-bold">
-                  Paket & Kuota Akun
-                </span>
-                <h3 className="font-display font-extrabold text-2xl text-[#171717] mt-1">
-                  Pilih Paket Sesuai Kebutuhan
-                </h3>
-                <p className="text-xs text-neutral-500 mt-1">
-                  Tingkatkan paket untuk menambah kuota layanan, portofolio tanpa batas, dan fitur tim barbershop.
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                
-                {/* 1. Paket Free */}
-                <div className={`p-4 rounded-2xl border flex flex-col justify-between transition-all ${
-                  isFreePlan ? 'border-2 border-neutral-900 bg-neutral-50/60 shadow-xs' : 'border-neutral-200 bg-white'
-                }`}>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-neutral-800">Free</span>
-                      {isFreePlan && (
-                        <span className="px-2 py-0.5 rounded-full bg-neutral-900 text-white text-[9.5px] font-bold">
-                          Aktif
-                        </span>
-                      )}
-                    </div>
-                    <div className="font-display font-black text-xl text-[#171717] mb-2">
-                      Rp 0 <span className="text-[10px] text-neutral-400 font-mono font-normal">/selamanya</span>
-                    </div>
-                    <ul className="space-y-2 text-[11px] text-neutral-600 mb-4">
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Maks. <strong>5 layanan</strong></span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Maks. <strong>10 portofolio</strong></span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Booking & QRIS</span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Sawer Tip Kopi</span>
-                      </li>
-                    </ul>
+              {upgradeSuccess ? (
+                /* SCREEN 1: UPGRADE BERHASIL */
+                <div className="py-10 text-center max-w-md mx-auto">
+                  <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 animate-bounce">
+                    <CheckCircle2 className="w-9 h-9" />
                   </div>
-
-                  <button
-                    type="button"
-                    disabled={isFreePlan}
-                    onClick={() => handleSwitchPlan('free')}
-                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      isFreePlan 
-                        ? 'bg-neutral-200 text-neutral-500 cursor-default' 
-                        : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
-                    }`}
-                  >
-                    {isFreePlan ? 'Paket Aktif' : 'Pilih Free'}
-                  </button>
-                </div>
-
-                {/* 2. Paket Capster */}
-                <div className={`p-4 rounded-2xl border-2 flex flex-col justify-between relative transition-all ${
-                  isCapsterPlan ? 'border-[#285844] bg-[#D9E5DC]/25 shadow-xs' : 'border-[#285844]/60 bg-white'
-                }`}>
-                  <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-[#285844] text-white text-[9px] font-bold">
-                      🔥 Populer
+                  <h3 className="font-display font-extrabold text-2xl text-[#171717]">
+                    Pembayaran QRIS Berhasil!
+                  </h3>
+                  <p className="text-sm text-neutral-600 mt-2">
+                    Paket langganan <strong>{upgradeTargetPlan === 'barber' ? 'Barber Studio' : 'Capster Pro'}</strong> telah aktif! Semua batasan kuota layanan dan portofolio telah dibuka.
+                  </p>
+                  <div className="mt-6">
+                    <span className="inline-block px-4 py-2 bg-emerald-50 text-emerald-700 text-xs font-semibold rounded-xl border border-emerald-200">
+                      ✓ Status Akun Diperbarui Secara Otomatis
                     </span>
                   </div>
-                  <div>
-                    <div className="flex items-center justify-between mb-2 mt-1">
-                      <span className="text-xs font-bold text-[#285844]">Capster Pro</span>
-                      {isCapsterPlan && (
-                        <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[9.5px] font-bold">
-                          Aktif
-                        </span>
-                      )}
-                    </div>
-                    <div className="font-display font-black text-xl text-[#171717] mb-2">
-                      Rp 49.000 <span className="text-[10px] text-neutral-400 font-mono font-normal">/bln</span>
-                    </div>
-                    <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
-                      <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Layanan <strong>Unlimited</strong></span>
-                      </li>
-                      <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Foto <strong>Unlimited</strong></span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Mode Home Service</span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Centang Emas Pro</span>
-                      </li>
-                    </ul>
+                </div>
+              ) : upgradeQrisData ? (
+                /* SCREEN 2: CHECKOUT QRIS UPGRADE PAKET */
+                <div className="max-w-md mx-auto">
+                  <div className="flex items-center gap-2 mb-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUpgradeQrisData(null);
+                        setUpgradeTargetPlan(null);
+                      }}
+                      className="p-1.5 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors cursor-pointer flex items-center gap-1 text-xs font-medium"
+                    >
+                      <ArrowLeft className="w-4 h-4" />
+                      <span>Ganti Paket</span>
+                    </button>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={isCapsterPlan}
-                    onClick={() => handleSwitchPlan('capster')}
-                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      isCapsterPlan 
-                        ? 'bg-emerald-200 text-emerald-900 cursor-default' 
-                        : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-sm'
-                    }`}
-                  >
-                    {isCapsterPlan ? 'Paket Aktif' : 'Pilih Capster'}
-                  </button>
-                </div>
+                  <div className="text-center mb-5">
+                    <span className="px-3 py-1 rounded-full bg-emerald-100 text-[#285844] font-bold text-[11px] uppercase tracking-wider">
+                      Pembayaran QRIS Otomatis
+                    </span>
+                    <h3 className="font-display font-black text-xl text-[#171717] mt-2">
+                      Upgrade ke {upgradeTargetPlan === 'barber' ? 'Barber Studio' : 'Capster Pro'}
+                    </h3>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Scan kode QRIS di bawah ini dengan BCA, Mandiri, BRI, GoPay, OVO, Dana, atau ShopeePay
+                    </p>
+                  </div>
 
-                {/* 3. Paket Barber */}
-                <div className={`p-4 rounded-2xl border flex flex-col justify-between transition-all ${
-                  isBarberPlan ? 'border-2 border-amber-500 bg-amber-50/40 shadow-xs' : 'border-neutral-200 bg-white'
-                }`}>
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-amber-900 flex items-center gap-1">
-                        <Crown className="w-3 h-3 text-amber-600" />
-                        <span>Barber Studio</span>
+                  {/* QR Image Box */}
+                  <div className="bg-neutral-50 p-5 rounded-2xl border border-neutral-200 flex flex-col items-center shadow-inner">
+                    <div className="bg-white p-3 rounded-2xl shadow-sm border border-neutral-200">
+                      {upgradeQrisData.qrImageUrl ? (
+                        <img 
+                          src={upgradeQrisData.qrImageUrl} 
+                          alt="QRIS Code" 
+                          className="w-56 h-56 object-contain"
+                        />
+                      ) : (
+                        <div className="w-56 h-56 flex flex-col items-center justify-center bg-neutral-100 rounded-xl p-4 text-center">
+                          <QrCode className="w-16 h-16 text-neutral-400 mb-2" />
+                          <span className="text-[11px] text-neutral-500">Scan QRIS Nasional</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Total Transfer & Copy Amount */}
+                    <div className="w-full mt-4 bg-white p-3.5 rounded-xl border border-neutral-200 flex items-center justify-between">
+                      <div>
+                        <span className="text-[10px] text-neutral-400 font-mono block">TOTAL PEMBAYARAN TEPAT</span>
+                        <span className="font-display font-black text-xl text-[#285844]">
+                          Rp {(upgradeQrisData.totalAmount || upgradeQrisData.amount || 0).toLocaleString('id-ID')}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigator.clipboard.writeText(String(upgradeQrisData.totalAmount || upgradeQrisData.amount || ''));
+                          setCopiedUpgradeAmount(true);
+                          setTimeout(() => setCopiedUpgradeAmount(false), 2000);
+                        }}
+                        className="px-3 py-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 text-xs font-bold rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        {copiedUpgradeAmount ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
+                        <span>{copiedUpgradeAmount ? 'Tersalin' : 'Salin'}</span>
+                      </button>
+                    </div>
+
+                    {/* Important 3 Digit Note */}
+                    <div className="mt-2 text-center text-[11px] text-amber-700 bg-amber-50/80 border border-amber-200/80 p-2.5 rounded-xl w-full">
+                      ⚠️ <strong>PENTING:</strong> Pastikan nominal transfer <strong>persis sampai digit terakhir</strong> agar pembayaran terverifikasi otomatis dalam detik.
+                    </div>
+
+                    {/* Polling Live Status Indicator */}
+                    <div className="flex items-center justify-center gap-2 mt-4 text-xs font-medium text-neutral-600">
+                      <span className="relative flex h-2.5 w-2.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
                       </span>
-                      {isBarberPlan && (
-                        <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-bold">
-                          Aktif
-                        </span>
-                      )}
+                      <span>Menunggu pembayaran otomatis...</span>
                     </div>
-                    <div className="font-display font-black text-xl text-[#171717] mb-2">
-                      Rp 99.000 <span className="text-[10px] text-neutral-400 font-mono font-normal">/bln</span>
-                    </div>
-                    <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Semua fitur Capster</span>
-                      </li>
-                      <li className="flex items-center gap-1.5 font-semibold text-amber-900">
-                        <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span><strong>Tim Multi-Capster</strong></span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span>Pilih Capster saat booking</span>
-                      </li>
-                      <li className="flex items-center gap-1.5">
-                        <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                        <span>Ekspor CSV & Official Studio</span>
-                      </li>
-                    </ul>
+
+                    {/* Dev/Testing simulation button */}
+                    <button
+                      type="button"
+                      disabled={isSimulatingUpgradePayment}
+                      onClick={handleSimulateUpgradePayment}
+                      className="mt-4 w-full py-2 bg-neutral-100 hover:bg-neutral-200 border border-dashed border-neutral-300 text-neutral-600 text-[11px] font-semibold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                      <span>{isSimulatingUpgradePayment ? 'Memproses Simulasi...' : '⚡ Uji Pembayaran Berhasil (Testing/Simulasi)'}</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                /* SCREEN 3: PILIH PAKET */
+                <>
+                  <div className="text-center max-w-md mx-auto mb-6">
+                    <span className="text-[11px] font-mono uppercase tracking-wider text-[#285844] font-bold">
+                      Paket & Kuota Akun
+                    </span>
+                    <h3 className="font-display font-extrabold text-2xl text-[#171717] mt-1">
+                      Pilih Paket Sesuai Kebutuhan
+                    </h3>
+                    <p className="text-xs text-neutral-500 mt-1">
+                      Tingkatkan paket untuk menambah kuota layanan, portofolio tanpa batas, dan fitur tim barbershop.
+                    </p>
                   </div>
 
-                  <button
-                    type="button"
-                    disabled={isBarberPlan}
-                    onClick={() => handleSwitchPlan('barber')}
-                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
-                      isBarberPlan 
-                        ? 'bg-amber-200 text-amber-900 cursor-default' 
-                        : 'border-2 border-[#285844] text-[#285844] hover:bg-[#285844] hover:text-white'
-                    }`}
-                  >
-                    {isBarberPlan ? 'Paket Aktif' : 'Pilih Barber'}
-                  </button>
-                </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    
+                    {/* 1. Paket Free */}
+                    <div className={`p-4 rounded-2xl border flex flex-col justify-between transition-all ${
+                      isFreePlan ? 'border-2 border-neutral-900 bg-neutral-50/60 shadow-xs' : 'border-neutral-200 bg-white'
+                    }`}>
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-neutral-800">Free</span>
+                          {isFreePlan && (
+                            <span className="px-2 py-0.5 rounded-full bg-neutral-900 text-white text-[9.5px] font-bold">
+                              Aktif
+                            </span>
+                          )}
+                        </div>
+                        <div className="font-display font-black text-xl text-[#171717] mb-2">
+                          Rp 0 <span className="text-[10px] text-neutral-400 font-mono font-normal">/selamanya</span>
+                        </div>
+                        <ul className="space-y-2 text-[11px] text-neutral-600 mb-4">
+                          <li className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Maks. <strong>5 layanan</strong></span>
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Maks. <strong>10 portofolio</strong></span>
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Booking & QRIS</span>
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Sawer Tip Kopi</span>
+                          </li>
+                        </ul>
+                      </div>
 
-              </div>
+                      <button
+                        type="button"
+                        disabled={isFreePlan || isUpgradeQrisLoading}
+                        onClick={() => handleSwitchPlan('free')}
+                        className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                          isFreePlan 
+                            ? 'bg-neutral-200 text-neutral-500 cursor-default' 
+                            : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
+                        }`}
+                      >
+                        {isFreePlan ? 'Paket Aktif' : 'Pilih Free'}
+                      </button>
+                    </div>
 
-              <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-center text-[11px] text-neutral-500">
-                💡 Kamu dapat berganti paket kapan saja. Perubahan paket dan batasan kuota berlaku seketika pada akun bio link kamu.
-              </div>
+                    {/* 2. Paket Capster */}
+                    <div className={`p-4 rounded-2xl border-2 flex flex-col justify-between relative transition-all ${
+                      isCapsterPlan ? 'border-[#285844] bg-[#D9E5DC]/25 shadow-xs' : 'border-[#285844]/60 bg-white'
+                    }`}>
+                      <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
+                        <span className="px-2.5 py-0.5 rounded-full bg-[#285844] text-white text-[9px] font-bold">
+                          🔥 Populer
+                        </span>
+                      </div>
+                      <div>
+                        <div className="flex items-center justify-between mb-2 mt-1">
+                          <span className="text-xs font-bold text-[#285844]">Capster Pro</span>
+                          {isCapsterPlan && (
+                            <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[9.5px] font-bold">
+                              Aktif
+                            </span>
+                          )}
+                        </div>
+                        <div className="font-display font-black text-xl text-[#171717] mb-2">
+                          Rp 49.000 <span className="text-[10px] text-neutral-400 font-mono font-normal">/bln</span>
+                        </div>
+                        <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
+                          <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Layanan <strong>Unlimited</strong></span>
+                          </li>
+                          <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Foto <strong>Unlimited</strong></span>
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Mode Home Service</span>
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Centang Emas Pro</span>
+                          </li>
+                        </ul>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isCapsterPlan || isUpgradeQrisLoading}
+                        onClick={() => handleSwitchPlan('capster')}
+                        className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          isCapsterPlan 
+                            ? 'bg-emerald-200 text-emerald-900 cursor-default' 
+                            : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-sm'
+                        }`}
+                      >
+                        {isUpgradeQrisLoading && upgradeTargetPlan === 'capster' ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Menyiapkan QRIS...</span>
+                          </>
+                        ) : isCapsterPlan ? (
+                          'Paket Aktif'
+                        ) : (
+                          <>
+                            <QrCode className="w-3.5 h-3.5" />
+                            <span>Bayar QRIS (Rp 49K)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* 3. Paket Barber */}
+                    <div className={`p-4 rounded-2xl border flex flex-col justify-between transition-all ${
+                      isBarberPlan ? 'border-2 border-amber-500 bg-amber-50/40 shadow-xs' : 'border-neutral-200 bg-white'
+                    }`}>
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-xs font-bold text-amber-900 flex items-center gap-1">
+                            <Crown className="w-3 h-3 text-amber-600" />
+                            <span>Barber Studio</span>
+                          </span>
+                          {isBarberPlan && (
+                            <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-bold">
+                              Aktif
+                            </span>
+                          )}
+                        </div>
+                        <div className="font-display font-black text-xl text-[#171717] mb-2">
+                          Rp 99.000 <span className="text-[10px] text-neutral-400 font-mono font-normal">/bln</span>
+                        </div>
+                        <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
+                          <li className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                            <span>Semua fitur Capster</span>
+                          </li>
+                          <li className="flex items-center gap-1.5 font-semibold text-amber-900">
+                            <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span><strong>Tim Multi-Capster</strong></span>
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Pilih Capster saat booking</span>
+                          </li>
+                          <li className="flex items-center gap-1.5">
+                            <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                            <span>Ekspor CSV & Official Studio</span>
+                          </li>
+                        </ul>
+                      </div>
+
+                      <button
+                        type="button"
+                        disabled={isBarberPlan || isUpgradeQrisLoading}
+                        onClick={() => handleSwitchPlan('barber')}
+                        className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                          isBarberPlan 
+                            ? 'bg-amber-200 text-amber-900 cursor-default' 
+                            : 'border-2 border-[#285844] text-[#285844] hover:bg-[#285844] hover:text-white'
+                        }`}
+                      >
+                        {isUpgradeQrisLoading && upgradeTargetPlan === 'barber' ? (
+                          <>
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                            <span>Menyiapkan QRIS...</span>
+                          </>
+                        ) : isBarberPlan ? (
+                          'Paket Aktif'
+                        ) : (
+                          <>
+                            <QrCode className="w-3.5 h-3.5" />
+                            <span>Bayar QRIS (Rp 99K)</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                  </div>
+
+                  <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 text-center text-[11px] text-neutral-500">
+                    💡 Pembayaran diverifikasi otomatis melalui QRIS Realtime. Paket langsung aktif seketika setelah pembayaran terdeteksi.
+                  </div>
+                </>
+              )}
             </motion.div>
           </div>
         )}

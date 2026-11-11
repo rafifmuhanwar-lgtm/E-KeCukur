@@ -45,6 +45,13 @@ export default async function handler(req, res) {
               payment_method: 'QRIS'
             }).eq('id', qrisRow.booking_id);
           }
+
+          if (qrisRow.type?.startsWith('PLAN_') && qrisRow.barber_id) {
+            const targetPlan = qrisRow.type.replace('PLAN_', '').toLowerCase();
+            await supabase.from('barbers').update({
+              plan: targetPlan
+            }).eq('id', qrisRow.barber_id);
+          }
         }
       } catch (e) {}
     }

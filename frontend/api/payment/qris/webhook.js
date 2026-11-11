@@ -62,8 +62,15 @@ async function sendTelegramPaymentNotification(payment, targetAmount) {
     const groupId = (process.env.TELEGRAM_GROUP_ID || '-1004385368403').trim();
     if (!token || !groupId) return;
 
+    const isPlan = payment?.type?.startsWith('PLAN_');
     const isTip = payment?.type === 'TIP' || payment?.coffeeLabel;
-    const typeLabel = isTip ? '☕ TIP KOPI CAPSTER' : '💈 BOOKING CUKUR';
+    let typeLabel = '💈 BOOKING CUKUR';
+    if (isPlan) {
+      const planName = payment.type === 'PLAN_BARBER' ? 'PAKET BARBER STUDIO (Rp 99K)' : 'PAKET CAPSTER PRO (Rp 49K)';
+      typeLabel = `💎 UPGRADE ${planName}`;
+    } else if (isTip) {
+      typeLabel = '☕ TIP KOPI CAPSTER';
+    }
     const customer = payment?.customer_name || payment?.customerName || 'Pelanggan E-CUKUR';
     const amountVal = targetAmount || payment?.total_amount || payment?.total_price || 0;
     const formattedAmount = Number(amountVal).toLocaleString('id-ID');
@@ -280,6 +287,18 @@ export default async function handler(req, res) {
             }
           } catch (tipErr) {
             console.warn('Tip balance update notice:', tipErr.message);
+          }
+        }
+
+        // Jika tipe PLAN upgrade dan ada barber_id, update plan barber otomatis
+        if (qrisRow.type?.startsWith('PLAN_') && qrisRow.barber_id) {
+          try {
+            const targetPlan = qrisRow.type.replace('PLAN_', '').toLowerCase();
+            await supabase.from('barbers').update({
+              plan: targetPlan
+            }).eq('id', qrisRow.barber_id);
+          } catch (planErr) {
+            console.warn('Plan upgrade update notice:', planErr.message);
           }
         }
       }

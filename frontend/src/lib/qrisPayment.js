@@ -6,6 +6,31 @@ export const MASTER_QRIS_STATIC = '00020101021126610014COM.GO-JEK.WWW01189360091
 
 const API_BASE = '/api/payment/qris';
 
+// Memory & session store untuk fallback offline / local testing
+const localPayments = new Map();
+
+function saveLocalPayment(payment) {
+  if (!payment?.referenceId) return;
+  localPayments.set(payment.referenceId, payment);
+  try {
+    sessionStorage.setItem(`qris_${payment.referenceId}`, JSON.stringify(payment));
+  } catch {}
+}
+
+function getLocalPayment(referenceId) {
+  if (!referenceId) return null;
+  if (localPayments.has(referenceId)) return localPayments.get(referenceId);
+  try {
+    const raw = sessionStorage.getItem(`qris_${referenceId}`);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      localPayments.set(referenceId, parsed);
+      return parsed;
+    }
+  } catch {}
+  return null;
+}
+
 /**
  * Standard CRC16-CCITT calculation for EMVCo / ASPI QRIS
  */
@@ -108,19 +133,28 @@ export async function createQrisPayment({
     const dynamicQrisStr = generateDynamicQris(totalAmount);
     const dynamicQrImg = getDynamicQrisImageUrl(totalAmount);
 
+    const localPayment = {
+      referenceId: `LOCAL-${Date.now().toString(36).toUpperCase()}-${uniqueCode}`,
+      type,
+      bookingId,
+      barberId,
+      customerName,
+      customerPhone,
+      baseAmount: Number(amount),
+      uniqueCode,
+      totalAmount,
+      formattedTotal: `Rp ${totalAmount.toLocaleString('id-ID')}`,
+      qrisString: dynamicQrisStr,
+      qrisImageUrl: dynamicQrImg,
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+    };
+    saveLocalPayment(localPayment);
+
     return {
       success: true,
-      payment: {
-        referenceId: `LOCAL-${Date.now().toString(36).toUpperCase()}-${uniqueCode}`,
-        baseAmount: Number(amount),
-        uniqueCode,
-        totalAmount,
-        formattedTotal: `Rp ${totalAmount.toLocaleString('id-ID')}`,
-        qrisString: dynamicQrisStr,
-        qrisImageUrl: dynamicQrImg,
-        status: 'PENDING',
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
-      }
+      payment: localPayment
     };
   }
 }
@@ -132,6 +166,20 @@ export async function checkQrisPaymentStatus(referenceId) {
   if (!referenceId) {
     return { success: false, error: 'Reference ID diperlukan' };
   }
+
+  // Jika tagihan dibuat dalam mode lokal/offline (dimulai dengan 'LOCAL-')
+  // JANGAN kirim ke proxy network agar tidak memicu AggregateError [ECONNREFUSED]
+  if (referenceId.startsWith('LOCAL-')) {
+    const local = getLocalPayment(referenceId);
+    return {
+      success: true,
+      status: local?.status || 'PENDING',
+      paidAt: local?.paidAt || null,
+      totalAmount: local?.totalAmount || null,
+      type: local?.type || null
+    };
+  }
+
   try {
     const res = await fetch(`${API_BASE}/status/${encodeURIComponent(referenceId)}`);
     return await res.json();
@@ -144,6 +192,19 @@ export async function checkQrisPaymentStatus(referenceId) {
  * Simulasi webhook pembayaran (untuk testing dev tanpa uang asli)
  */
 export async function simulateQrisPayment(referenceId, amount) {
+  // Jika tagihan lokal, update status secara lokal langsung tanpa memicu proxy error
+  if (referenceId?.startsWith('LOCAL-')) {
+    const local = getLocalPayment(referenceId) || {};
+    local.status = 'PAID';
+    local.paidAt = new Date().toISOString();
+    saveLocalPayment(local);
+    return {
+      success: true,
+      status: 'PAID',
+      message: 'Simulasi pembayaran lokal berhasil'
+    };
+  }
+
   try {
     const res = await fetch(`${API_BASE}/simulate`, {
       method: 'POST',
