@@ -18,6 +18,8 @@ export default async function handler(req, res) {
   }
 
   if (
+    process.env.VERCEL === '1' ||
+    Boolean(process.env.VERCEL_ENV) ||
     process.env.NODE_ENV === 'production' ||
     process.env.QRIS_SIMULATION_ENABLED !== 'true'
   ) {

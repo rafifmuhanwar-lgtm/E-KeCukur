@@ -394,6 +394,8 @@ router.post('/webhook', async (req, res) => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.post('/simulate', async (req, res) => {
   if (
+    process.env.VERCEL === '1' ||
+    Boolean(process.env.VERCEL_ENV) ||
     process.env.NODE_ENV === 'production' ||
     process.env.QRIS_SIMULATION_ENABLED !== 'true'
   ) {
