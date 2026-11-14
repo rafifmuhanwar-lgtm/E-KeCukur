@@ -35,7 +35,6 @@ import {
   BadgeCheck,
   Zap,
   Sparkles,
-  Send,
   X,
   Lock,
   Key,
@@ -51,7 +50,7 @@ import { useStore } from '../../store';
 import Logo from '../../components/Logo';
 import { getAppDomain } from '../../lib/domain';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
-import { simulateQrisPayment, getDynamicQrisImageUrl, MASTER_QRIS_STATIC } from '../../lib/qrisPayment';
+import { getDynamicQrisImageUrl, MASTER_QRIS_STATIC } from '../../lib/qrisPayment';
 
 async function computeSha256(str) {
   try {
@@ -359,7 +358,6 @@ export default function AdminMasterDashboard() {
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [copiedQueryUrl, setCopiedQueryUrl] = useState(false);
   const [copiedApiKey, setCopiedApiKey] = useState(false);
-  const [simulatingWebhook, setSimulatingWebhook] = useState(false);
   const [testingPing, setTestingPing] = useState(false);
   const [lastTestResult, setLastTestResult] = useState(null);
   const [webhookLogs, setWebhookLogs] = useState([]);
@@ -724,48 +722,6 @@ export default function AdminMasterDashboard() {
       showToast('Tes koneksi gagal: ' + err.message);
     } finally {
       setTestingPing(false);
-    }
-  };
-
-  // Test Webhook Simulation from Master Admin
-  const handleTestMasterWebhook = async () => {
-    setSimulatingWebhook(true);
-    try {
-      const res = await fetch('/api/payment/qris/webhook', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': 'ecukur_qris_secret_2026'
-        },
-        body: JSON.stringify({
-          title: 'BCA QRIS Masuk',
-          text: `BCA: Pembayaran QRIS Rp 50.123 dari GO-PAY berhasil diterima pada ${new Date().toLocaleTimeString('id-ID')}`
-        })
-      });
-      const data = await res.json();
-      setWebhookLogs(prev => [
-        {
-          id: `log-${Date.now()}`,
-          timestamp: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }),
-          date: 'Hari ini',
-          amount: 50123,
-          sender: 'Payhook Test Simulator',
-          status: data.matched ? 'MATCHED' : 'RECEIVED',
-          note: data.message || 'Simulasi notifikasi uang masuk sukses'
-        },
-        ...prev
-      ]);
-      setLastTestResult({
-        success: true,
-        time: new Date().toLocaleTimeString('id-ID'),
-        status: 200,
-        message: data.message || 'Notifikasi simulasi sukses diproses'
-      });
-      showToast('Simulasi notifikasi Payhook sukses!');
-    } catch (err) {
-      showToast('Gagal memanggil webhook: ' + err.message);
-    } finally {
-      setSimulatingWebhook(false);
     }
   };
 
@@ -1634,7 +1590,7 @@ export default function AdminMasterDashboard() {
                     type="text"
                     value={bookingSearchQuery}
                     onChange={(e) => setBookingSearchQuery(e.target.value)}
-                    placeholder="Cari nama pelanggan, nomor WA, atau layanan..."
+                    placeholder="Cari nama / nomor booking untuk check-in..."
                     className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white"
                   />
                 </div>
@@ -1646,9 +1602,14 @@ export default function AdminMasterDashboard() {
                 >
                   <option value="ALL">Semua Status</option>
                   <option value="Menunggu">Menunggu</option>
+                  <option value="Menunggu pembayaran">Menunggu pembayaran</option>
+                  <option value="Menunggu konfirmasi">Menunggu konfirmasi</option>
                   <option value="Terkonfirmasi">Terkonfirmasi</option>
+                  <option value="Menunggu antrean">Menunggu antrean</option>
+                  <option value="Sedang dilayani">Sedang dilayani</option>
                   <option value="Selesai">Selesai</option>
                   <option value="Dibatalkan">Dibatalkan</option>
+                  <option value="Kedaluwarsa">Kedaluwarsa</option>
                 </select>
 
                 <select
@@ -1682,6 +1643,10 @@ export default function AdminMasterDashboard() {
                 <span>Ekspor CSV</span>
               </button>
             </div>
+
+            <p className="px-1 text-[11px] text-neutral-500">
+              Check-in manual: pelanggan cukup menyebutkan nama atau nomor booking. Cari booking, lalu klik “Catat kedatangan”; QR tidak diperlukan.
+            </p>
 
             {/* Bookings Table */}
             <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xs overflow-hidden">
@@ -1737,7 +1702,9 @@ export default function AdminMasterDashboard() {
 
                           <td className="py-3.5 px-4">
                             <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                              b.status === 'Terkonfirmasi' 
+                              b.status === 'Terkonfirmasi'
+                                ? 'bg-emerald-50 text-emerald-800'
+                                : b.status === 'Menunggu antrean'
                                 ? 'bg-emerald-50 text-emerald-800' 
                                 : b.status === 'Menunggu' 
                                   ? 'bg-amber-50 text-amber-800' 
@@ -1749,12 +1716,19 @@ export default function AdminMasterDashboard() {
 
                           <td className="py-3.5 px-4 text-right">
                             <div className="flex items-center justify-end gap-1.5">
-                              {b.status === 'Menunggu' && (
+                              {(b.status === 'Menunggu' || (
+                                b.status === 'Menunggu pembayaran' &&
+                                (b.paymentMethod !== 'QRIS' || b.paymentStatus === 'PAID')
+                              )) && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    updateBookingStatus(b.id, 'Terkonfirmasi');
-                                    showToast(`Booking ${b.id} dikonfirmasi!`);
+                                  onClick={async () => {
+                                    try {
+                                      await updateBookingStatus(b.id, 'Terkonfirmasi');
+                                      showToast(`Booking ${b.id} dikonfirmasi!`);
+                                    } catch (error) {
+                                      showToast(`Gagal memperbarui booking: ${error.message}`);
+                                    }
                                   }}
                                   className="px-2.5 py-1 bg-[#285844] hover:bg-[#1E4334] text-white rounded-lg text-[10.5px] font-semibold cursor-pointer"
                                 >
@@ -1765,9 +1739,47 @@ export default function AdminMasterDashboard() {
                               {b.status === 'Terkonfirmasi' && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    updateBookingStatus(b.id, 'Selesai');
-                                    showToast(`Booking ${b.id} selesai!`);
+                                  onClick={async () => {
+                                    try {
+                                      await updateBookingStatus(b.id, 'Menunggu antrean');
+                                      showToast(`Kedatangan ${b.customerName} dicatat; masuk antrean.`);
+                                    } catch (error) {
+                                      showToast(`Gagal memperbarui booking: ${error.message}`);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg text-[10.5px] font-semibold cursor-pointer"
+                                >
+                                  Catat kedatangan
+                                </button>
+                              )}
+
+                              {(b.status === 'Menunggu antrean' || b.status === 'Tiba di Lokasi') && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      await updateBookingStatus(b.id, 'Sedang dilayani');
+                                      showToast(`Layanan booking ${b.id} dimulai.`);
+                                    } catch (error) {
+                                      showToast(`Gagal memperbarui booking: ${error.message}`);
+                                    }
+                                  }}
+                                  className="px-2.5 py-1 bg-[#285844] hover:bg-[#1E4334] text-white rounded-lg text-[10.5px] font-semibold cursor-pointer"
+                                >
+                                  Mulai layanan
+                                </button>
+                              )}
+
+                              {b.status === 'Sedang dilayani' && (
+                                <button
+                                  type="button"
+                                  onClick={async () => {
+                                    try {
+                                      await updateBookingStatus(b.id, 'Selesai');
+                                      showToast(`Booking ${b.id} selesai!`);
+                                    } catch (error) {
+                                      showToast(`Gagal memperbarui booking: ${error.message}`);
+                                    }
                                   }}
                                   className="px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg text-[10.5px] font-semibold cursor-pointer"
                                 >
@@ -1926,15 +1938,6 @@ export default function AdminMasterDashboard() {
                     <span>{testingPing ? 'Menguji...' : 'Uji Ping Koneksi'}</span>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={handleTestMasterWebhook}
-                    disabled={simulatingWebhook}
-                    className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                    <span>{simulatingWebhook ? 'Mengirim...' : 'Simulasi Notifikasi Masuk (Rp 50.123)'}</span>
-                  </button>
                 </div>
               </div>
 

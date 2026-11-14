@@ -393,6 +393,13 @@ router.post('/webhook', async (req, res) => {
 // 4. POST /api/payment/qris/simulate - Simulasi Pembayaran (Untuk Testing)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.post('/simulate', async (req, res) => {
+  if (
+    process.env.NODE_ENV === 'production' ||
+    process.env.QRIS_SIMULATION_ENABLED !== 'true'
+  ) {
+    return res.status(404).json({ success: false, message: 'Not Found' });
+  }
+
   const { amount, referenceId } = req.body;
   let targetAmount = amount;
 

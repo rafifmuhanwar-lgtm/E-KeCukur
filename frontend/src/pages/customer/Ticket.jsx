@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useParams, Link, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Scissors, 
@@ -15,25 +15,42 @@ import {
   Sparkles,
   Phone
 } from 'lucide-react';
-import { useStore } from '../../store';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { dbToUiStatus, useStore } from '../../store';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { fetchBookingTracking } from '../../lib/bookingTracking';
+import { getDynamicQrisImageUrl } from '../../lib/qrisPayment';
 
 export default function CustomerTicket() {
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const bookings = useStore((state) => state.bookings || []);
   const barbers = useStore((state) => state.barbers || []);
-  const fetchBookings = useStore((state) => state.fetchBookings);
 
   const [booking, setBooking] = useState(null);
+  const [trackingError, setTrackingError] = useState('');
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const queryTicketToken = searchParams.get('token');
+  const ticketToken = useMemo(() => queryTicketToken || (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('ecukur_active_ticket') || 'null');
+      return saved?.id === id ? saved.ticketToken || null : null;
+    } catch {
+      return null;
+    }
+  })(), [id, queryTicketToken]);
 
   const formatRupiah = (val) => `Rp ${Number(val || 0).toLocaleString('id-ID')}`;
+  const statusLabel = (status) => (
+    typeof status === 'string' && status === status.toUpperCase()
+      ? dbToUiStatus(status)
+      : status || 'Status tidak diketahui'
+  );
 
-  // 1. Cari booking di store atau fetch dari Supabase
   useEffect(() => {
     let isMounted = true;
+    let interval;
 
     async function loadBooking() {
       if (!id) {
@@ -41,72 +58,68 @@ export default function CustomerTicket() {
         return;
       }
 
-      // Cek di store dulu
-      const foundInStore = bookings.find((b) => 
-        String(b.id).toLowerCase() === String(id).toLowerCase()
-      );
-
-      if (foundInStore) {
+      if (!isSupabaseConfigured) {
+        const foundInStore = bookings.find((item) =>
+          String(item.id).toLowerCase() === String(id).toLowerCase()
+        );
         if (isMounted) {
-          setBooking(foundInStore);
-          setLoading(false);
+          setBooking(foundInStore || null);
+          setTrackingError('');
         }
+        setLoading(false);
         return;
       }
 
-      // Jika belum ada di store, query langsung ke Supabase
-      if (isSupabaseConfigured) {
-        try {
-          const { data, error } = await supabase
-            .from('bookings')
-            .select('*')
-            .eq('id', id)
-            .maybeSingle();
-
-          if (!error && data && isMounted) {
-            setBooking({
-              id: data.id,
-              customerName: data.customer_name || 'Pelanggan',
-              customerPhone: data.customer_phone || '-',
-              barberId: data.barber_id || '',
-              barberName: data.barber_name || 'Barber E-CUKUR',
-              serviceName: data.service_name || 'Layanan Cukur',
-              date: data.booking_date || 'Hari Ini',
-              time: data.start_time ? data.start_time.substring(0, 5) : '10:00',
-              status: data.booking_status === 'CONFIRMED' ? 'Terkonfirmasi' : data.booking_status,
-              paymentMethod: data.payment_method || 'QRIS',
-              paymentStatus: data.payment_status || 'PAID',
-              price: Number(data.total_price) || 0,
-              createdAt: data.created_at
-            });
-            setLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.warn('Direct ticket fetch error:', e);
+      try {
+        const result = await fetchBookingTracking(id, ticketToken);
+        const data = result.booking;
+        if (isMounted) {
+          setTrackingError('');
+          setBooking({
+            id: data.id,
+            customerName: data.customerName || 'Pelanggan',
+            customerPhone: data.customerPhone || '-',
+            barberId: data.barberId || '',
+            barberName: data.barberName || 'Barber E-CUKUR',
+            serviceName: data.serviceName || 'Layanan Cukur',
+            date: data.date || 'Tanggal belum tersedia',
+            time: data.startTime ? String(data.startTime).substring(0, 5) : '-',
+            status: dbToUiStatus(data.status),
+            paymentMethod: data.paymentMethod || 'QRIS',
+            paymentStatus: data.paymentStatus || 'UNPAID',
+            price: Number(data.price) || 0,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            history: Array.isArray(result.history) ? result.history : []
+          });
         }
+      } catch (error) {
+        if (isMounted) {
+          setTrackingError(error.message || 'Tracking booking gagal dimuat.');
+        }
+      } finally {
+        if (isMounted) setLoading(false);
       }
-
-      // Fetch semua booking bila belum sempat termuat
-      if (typeof fetchBookings === 'function') {
-        await fetchBookings();
-      }
-      if (isMounted) setLoading(false);
     }
 
     loadBooking();
+    if (isSupabaseConfigured) {
+      interval = setInterval(loadBooking, 5000);
+    }
 
     return () => {
       isMounted = false;
+      if (interval) clearInterval(interval);
     };
-  }, [id, bookings, fetchBookings]);
+  }, [id, ticketToken, bookings]);
 
-  // Simpan ke localStorage agar browser HP mengingat tiket ini
+  // Simpan akses tiket di perangkat agar tiket dapat dibuka kembali.
   useEffect(() => {
     if (booking && typeof localStorage !== 'undefined') {
       try {
         const ticketData = {
           id: booking.id,
+          ticketToken,
           barberName: booking.barberName,
           barberId: booking.barberId,
           serviceName: booking.serviceName,
@@ -116,9 +129,11 @@ export default function CustomerTicket() {
           savedAt: Date.now()
         };
         localStorage.setItem('ecukur_active_ticket', JSON.stringify(ticketData));
-      } catch {}
+      } catch (error) {
+        console.warn('Akses tiket tidak dapat disimpan di perangkat:', error);
+      }
     }
-  }, [booking]);
+  }, [booking, ticketToken]);
 
   // Cocokkan data barber terkait (untuk foto, alamat, maps)
   const matchedBarber = React.useMemo(() => {
@@ -131,7 +146,12 @@ export default function CustomerTicket() {
   }, [booking, barbers]);
 
   const shortCode = booking?.id ? `#${String(booking.id).slice(-6).toUpperCase()}` : '#BK-001';
-  const currentUrl = typeof window !== 'undefined' ? window.location.href : `https://ecukur.biz.id/tiket/${id}`;
+  const currentUrl = (() => {
+    if (typeof window === 'undefined') return `https://ecukur.biz.id/tiket/${id}`;
+    const url = new URL(window.location.href);
+    if (ticketToken) url.searchParams.set('token', ticketToken);
+    return url.toString();
+  })();
 
   const copyCode = () => {
     if (!booking) return;
@@ -156,7 +176,7 @@ export default function CustomerTicket() {
       `✂️ *Layanan:* ${booking.serviceName}\n` +
       `💈 *Barber:* ${booking.barberName}\n` +
       `📅 *Jadwal:* ${booking.date} pukul ${booking.time} WIB\n` +
-      `💰 *Total:* ${formatRupiah(booking.price)} (LUNAS - QRIS)\n\n` +
+      `💰 *Total:* ${formatRupiah(booking.price)} (${booking.paymentStatus === 'PAID' ? 'LUNAS' : 'BELUM LUNAS'} - ${booking.paymentMethod})\n\n` +
       `🔗 *Buka Tiket Digital:* ${currentUrl}`;
     
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
@@ -184,7 +204,7 @@ export default function CustomerTicket() {
           </div>
           <h2 className="font-display font-extrabold text-xl">Tiket Tidak Ditemukan</h2>
           <p className="text-xs text-neutral-500 leading-relaxed">
-            Tiket dengan ID <code>{id}</code> tidak ditemukan atau telah kedaluwarsa. Pastikan tautan tiket yang Anda buka sudah benar.
+            {trackingError || `Tiket dengan ID ${id} tidak ditemukan atau tautan aksesnya tidak valid.`}
           </p>
           <div className="pt-2 flex flex-col gap-2">
             <Link
@@ -198,8 +218,6 @@ export default function CustomerTicket() {
       </div>
     );
   }
-
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(currentUrl)}&color=28-88-68`;
 
   return (
     <div className="min-h-screen bg-[#F7F6F2] text-[#171717] font-sans antialiased flex flex-col selection:bg-[#285844] selection:text-white pb-16">
@@ -239,16 +257,49 @@ export default function CustomerTicket() {
       {/* Main Container */}
       <main className="max-w-md mx-auto px-4 pt-6 sm:pt-8 w-full space-y-4">
         
-        {/* Banner Alert Sukses */}
         <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-3.5 flex items-center gap-3">
           <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="font-bold text-xs text-emerald-900">Reservasi Terkonfirmasi & Lunas</h4>
-            <p className="text-[11px] text-emerald-700">Tunjukkan tiket digital ini kepada capster saat Anda tiba di lokasi.</p>
+            <h4 className="font-bold text-xs text-emerald-900">Status booking: {booking.status}</h4>
+            <p className="text-[11px] text-emerald-700">
+              Pembayaran: {booking.paymentStatus === 'PAID' ? 'Lunas' : booking.paymentStatus || 'Belum lunas'}.
+              {' '}Tiket diperbarui otomatis saat status berubah.
+            </p>
           </div>
         </div>
+
+        <section className="bg-white rounded-2xl border border-neutral-200 p-4 shadow-sm" aria-label="Riwayat status booking">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-bold text-sm text-neutral-900">Perjalanan Booking</h2>
+            <span className="text-[10px] text-neutral-500">Pembaruan otomatis</span>
+          </div>
+          <ol className="mt-4 space-y-3">
+            {(booking.history?.length
+              ? booking.history
+              : [{ newStatus: booking.status, changedAt: booking.createdAt, notes: 'Status booking' }]
+            ).map((item, index) => (
+              <li key={`${item.changedAt || 'status'}-${index}`} className="flex gap-3">
+                <span className="mt-1.5 w-2 h-2 rounded-full bg-[#285844] shrink-0" />
+                <div className="min-w-0">
+                  <p className="text-xs font-semibold text-neutral-800">
+                    {statusLabel(item.newStatus)}
+                  </p>
+                  {item.notes && <p className="text-[11px] text-neutral-500">{item.notes}</p>}
+                  {item.changedAt && (
+                    <time className="text-[10px] text-neutral-400">
+                      {new Date(item.changedAt).toLocaleString('id-ID', { timeZone: 'Asia/Jakarta' })} WIB
+                    </time>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ol>
+          <p className="mt-4 border-t border-neutral-100 pt-3 text-[11px] text-neutral-500">
+            Status layanan berbeda dari status pembayaran. Informasi antrean akan muncul setelah booking masuk antrean.
+          </p>
+        </section>
 
         {/* ─── DIGITAL BOARDING PASS CARD ─── */}
         <motion.div
@@ -270,8 +321,8 @@ export default function CustomerTicket() {
               </span>
 
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>LUNAS (QRIS)</span>
+                <span className={`w-1.5 h-1.5 rounded-full ${booking.paymentStatus === 'PAID' ? 'bg-emerald-400' : 'bg-amber-300'}`} />
+                <span>{booking.paymentStatus === 'PAID' ? 'LUNAS' : 'BELUM LUNAS'} ({booking.paymentMethod})</span>
               </span>
             </div>
 
@@ -361,6 +412,27 @@ export default function CustomerTicket() {
               </div>
             </div>
 
+            {booking.paymentMethod === 'QRIS' && booking.paymentStatus === 'UNPAID' && (
+              <section className="pt-4 border-t border-neutral-100 text-center space-y-3" aria-label="Pembayaran QRIS">
+                <div>
+                  <h3 className="text-sm font-bold text-neutral-900">QRIS Pembayaran</h3>
+                  <p className="mt-1 text-[11px] text-neutral-500">
+                    Scan QR ini untuk membayar {formatRupiah(booking.price)}. Tiket tetap bisa dibuka selama pembayaran diproses.
+                  </p>
+                </div>
+                <div className="w-48 h-48 mx-auto rounded-2xl bg-white p-2 border border-neutral-200 flex items-center justify-center">
+                  <img
+                    src={getDynamicQrisImageUrl(booking.price)}
+                    alt={`QRIS pembayaran ${formatRupiah(booking.price)}`}
+                    className="w-full h-full object-contain"
+                  />
+                </div>
+                <p className="text-[11px] text-neutral-500">
+                  QR akan hilang otomatis setelah pembayaran terverifikasi.
+                </p>
+              </section>
+            )}
+
             {/* Alamat & Lokasi Studio */}
             {(matchedBarber?.address || matchedBarber?.locationCity) && (
               <div className="pt-3 border-t border-neutral-100">
@@ -386,20 +458,6 @@ export default function CustomerTicket() {
                 </div>
               </div>
             )}
-
-            {/* QR Code Check-in Verification */}
-            <div className="pt-3 border-t border-neutral-100 text-center space-y-2">
-              <div className="w-36 h-36 mx-auto rounded-2xl bg-neutral-50 p-2 border border-neutral-200 flex items-center justify-center">
-                <img 
-                  src={qrImageUrl} 
-                  alt="QR Code Check-in" 
-                  className="w-full h-full object-contain"
-                />
-              </div>
-              <p className="text-[11px] text-neutral-400 font-mono">
-                Scan QR Code ini untuk verifikasi check-in di kasir
-              </p>
-            </div>
 
           </div>
         </motion.div>

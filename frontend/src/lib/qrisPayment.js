@@ -139,21 +139,3 @@ export async function checkQrisPaymentStatus(referenceId) {
     return { success: false, error: err.message };
   }
 }
-
-/**
- * Simulasi webhook pembayaran (untuk testing dev tanpa uang asli)
- */
-export async function simulateQrisPayment(referenceId, amount) {
-  try {
-    const res = await fetch(`${API_BASE}/simulate`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ referenceId, amount: Number(amount) || 0 })
-    });
-    return await res.json();
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-}

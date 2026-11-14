@@ -1,22 +1,30 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { uploadBarberProfilePhoto, uploadPortfolioPhoto, uploadBarberBannerPhoto } from './lib/imageUploader';
+import { createGuestTicketToken, getJakartaDate } from './lib/bookingTracking';
 
 // ─── STATUS MAPPERS (SUPABASE DB <-> UI) ───
 export const dbToUiStatus = (dbStatus) => {
   switch (dbStatus) {
+    case 'PENDING_CONFIRMATION':
+      return 'Menunggu konfirmasi';
+    case 'PENDING_PAYMENT':
+      return 'Menunggu pembayaran';
     case 'CONFIRMED':
       return 'Terkonfirmasi';
+    case 'WAITING':
     case 'ARRIVED':
-      return 'Tiba di Lokasi';
+      return 'Menunggu antrean';
+    case 'IN_SERVICE':
+      return 'Sedang dilayani';
     case 'COMPLETED':
       return 'Selesai';
     case 'CANCELLED':
+      return 'Dibatalkan';
     case 'EXPIRED':
-      return 'Batal';
-    case 'PENDING_PAYMENT':
+      return 'Kedaluwarsa';
     default:
-      return 'Menunggu';
+      return 'Status tidak diketahui';
   }
 };
 
@@ -24,6 +32,10 @@ export const uiToDbStatus = (uiStatus) => {
   switch (uiStatus) {
     case 'Terkonfirmasi':
       return 'CONFIRMED';
+    case 'Menunggu antrean':
+      return 'WAITING';
+    case 'Sedang dilayani':
+      return 'IN_SERVICE';
     case 'Tiba di Lokasi':
       return 'ARRIVED';
     case 'Selesai':
@@ -513,7 +525,9 @@ export const useStore = create((set, get) => ({
             barberName: row.barber_name || matchedBarber?.name || 'Semua Capster',
             serviceName: row.service_name || 'Layanan Cukur',
             date: row.booking_date || 'Hari Ini',
+            dateIso: row.booking_date || '',
             time: row.start_time ? row.start_time.substring(0, 5) : '10:00',
+            endTime: row.end_time ? row.end_time.substring(0, 5) : '',
             status: dbToUiStatus(row.booking_status),
             paymentMethod: row.payment_method === 'QRIS' ? 'QRIS' : (row.payment_method || 'Tunai'),
             paymentStatus: row.payment_status || 'UNPAID',
@@ -1038,45 +1052,50 @@ export const useStore = create((set, get) => ({
   // ─── TAMBAH BOOKING REALTIME (DARI LINK BIO) ───
   addBooking: async (booking) => {
     let finalId = `ECK-${Math.floor(100 + Math.random() * 900)}`;
-    const dbStatus = 'PENDING_PAYMENT';
+    const ticketToken = createGuestTicketToken();
 
     // 1. Simpan ke database Supabase
     if (isSupabaseConfigured) {
-      try {
-        const { data, error } = await supabase
-          .from('bookings')
-          .insert({
-            customer_name: booking.customerName,
-            customer_phone: booking.customerPhone,
-            barber_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(booking.barberId)) ? booking.barberId : null,
-            barber_name: booking.barberName,
-            service_name: booking.serviceName,
-            booking_date: booking.dateIso || new Date().toISOString().split('T')[0],
-            start_time: booking.time ? (booking.time.length === 5 ? `${booking.time}:00` : booking.time) : '10:00:00',
-            end_time: '11:00:00',
-            booking_status: dbStatus,
-            payment_method: 'QRIS',
-            payment_status: 'UNPAID',
-            total_price: Number(booking.price) || 0
-          })
-          .select()
-          .single();
+      const { data, error } = await supabase.rpc('create_guest_booking_with_ticket', {
+        p_customer_name: booking.customerName,
+        p_customer_phone: booking.customerPhone,
+        p_customer_email: booking.customerEmail || null,
+        p_barber_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(booking.barberId)) ? booking.barberId : null,
+        p_barber_name: booking.barberName || null,
+        p_service_id: booking.serviceId ? String(booking.serviceId) : null,
+        p_service_name: booking.serviceName || null,
+        p_booking_date: booking.dateIso || getJakartaDate(),
+        p_start_time: booking.time ? (booking.time.length === 5 ? `${booking.time}:00` : booking.time) : '10:00:00',
+        p_payment_method: booking.paymentMethod || 'QRIS',
+        p_total_price: Number(booking.price) || 0,
+        p_ticket_token: ticketToken
+      });
 
-        if (!error && data && data.id) {
-          finalId = data.id;
-        }
-      } catch (err) {
-        console.warn('Supabase booking insert notice:', err.message);
-      }
+      if (error) throw error;
+      finalId = typeof data === 'string' ? data : data?.id;
+      if (!finalId) throw new Error('Supabase tidak mengembalikan ID booking.');
     }
 
     const newBooking = {
       ...booking,
       id: finalId,
-      status: 'Menunggu',
+      ticketToken,
+      status: booking.paymentMethod === 'QRIS' ? 'Menunggu pembayaran' : 'Terkonfirmasi',
       paymentStatus: 'UNPAID',
       createdAt: new Date().toISOString()
     };
+
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('ecukur_active_ticket', JSON.stringify({
+          id: finalId,
+          ticketToken,
+          savedAt: Date.now()
+        }));
+      } catch (error) {
+        console.warn('Tiket berhasil dibuat, tetapi akses tiket tidak dapat disimpan di perangkat:', error);
+      }
+    }
 
     set((state) => ({
       bookings: [newBooking, ...state.bookings]
@@ -1087,23 +1106,19 @@ export const useStore = create((set, get) => ({
 
   // ─── UPDATE STATUS BOOKING (KONFIRMASI / SELESAI / BATAL) ───
   updateBookingStatus: async (id, status) => {
-    // 1. Optimistic update
+    if (isSupabaseConfigured) {
+      const dbStatus = uiToDbStatus(status);
+      const { error } = await supabase.rpc('update_booking_tracking_status', {
+        p_booking_id: id,
+        p_new_status: dbStatus,
+        p_notes: null
+      });
+      if (error) throw error;
+    }
+
     set((state) => ({
       bookings: state.bookings.map((b) => (b.id === id ? { ...b, status } : b))
     }));
-
-    // 2. Update status di Supabase
-    if (isSupabaseConfigured) {
-      try {
-        const dbStatus = uiToDbStatus(status);
-        await supabase
-          .from('bookings')
-          .update({ booking_status: dbStatus })
-          .eq('id', id);
-      } catch (err) {
-        console.warn('Supabase update status notice:', err.message);
-      }
-    }
   },
 
   // ─── UPLOAD FOTO PROFIL KE SUPABASE STORAGE (KOMPRESI PERSEGI 1:1) ───

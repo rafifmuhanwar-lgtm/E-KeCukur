@@ -17,6 +17,13 @@ export default async function handler(req, res) {
     return res.status(405).json({ success: false, message: 'Method Not Allowed' });
   }
 
+  if (
+    process.env.NODE_ENV === 'production' ||
+    process.env.QRIS_SIMULATION_ENABLED !== 'true'
+  ) {
+    return res.status(404).json({ success: false, message: 'Not Found' });
+  }
+
   try {
     const { referenceId, amount } = req.body || {};
     const now = new Date().toISOString();

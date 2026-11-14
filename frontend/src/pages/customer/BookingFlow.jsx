@@ -95,7 +95,7 @@ export default function BookingFlow() {
     }
   };
 
-  const handleConfirm = (e) => {
+  const handleConfirm = async (e) => {
     e.preventDefault();
     if (!customerName.trim() || !customerPhone.trim()) {
       alert('Silakan lengkapi nama dan nomor WhatsApp Anda.');
@@ -103,27 +103,34 @@ export default function BookingFlow() {
     }
 
     setIsSubmitting(true);
-
-    setTimeout(async () => {
+    try {
       const created = await addBooking({
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim(),
         note: customerNote.trim() || '-',
         barberName: selectedBarber || 'Bebas (Capster Tersedia)',
+        serviceId: selectedService?.id,
         serviceName: selectedService?.name || 'CUKUR UMUM',
         date: selectedDate?.label || 'Hari Ini',
+        dateIso: selectedDate?.id,
         time: selectedTime || '10:00',
         price: selectedService?.price || 40000,
         paymentMethod
       });
 
-      setIsSubmitting(false);
       if (created?.id) {
-        navigate(`/tiket/${created.id}`);
+        const token = created.ticketToken
+          ? `?token=${encodeURIComponent(created.ticketToken)}`
+          : '';
+        navigate(`/tiket/${created.id}${token}`);
       } else {
-        navigate('/');
+        throw new Error('Booking tidak berhasil dibuat.');
       }
-    }, 600);
+    } catch (error) {
+      alert(`Booking gagal disimpan: ${error.message || 'Silakan coba lagi.'}`);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const STEPS = [
