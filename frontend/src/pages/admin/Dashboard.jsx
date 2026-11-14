@@ -357,9 +357,6 @@ export default function AdminMasterDashboard() {
   // Gateway QRIS & Webhook States
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [copiedQueryUrl, setCopiedQueryUrl] = useState(false);
-  const [copiedApiKey, setCopiedApiKey] = useState(false);
-  const [testingPing, setTestingPing] = useState(false);
-  const [lastTestResult, setLastTestResult] = useState(null);
   const [webhookLogs, setWebhookLogs] = useState([]);
 
   // Fetch live webhook & payment logs from Supabase
@@ -689,40 +686,6 @@ export default function AdminMasterDashboard() {
     setNewBarberSlug('');
     setNewBarberCity('');
     showToast(`Barber ${newBarberObj.name} berhasil dibuat! Bio link: ${appDomain}/${newBarberObj.slug}`);
-  };
-
-  // Test Ping Payhook Connection
-  const handleTestPingWebhook = async () => {
-    setTestingPing(true);
-    setLastTestResult(null);
-    try {
-      const res = await fetch('/api/payment/qris/webhook', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': 'ecukur_qris_secret_2026'
-        },
-        body: JSON.stringify({ test: true })
-      });
-      const data = await res.json();
-      setLastTestResult({
-        success: true,
-        time: new Date().toLocaleTimeString('id-ID'),
-        status: res.status,
-        message: data.message || 'Koneksi Payhook berhasil terhubung!'
-      });
-      showToast('Koneksi Webhook Payhook: 200 OK!');
-    } catch (err) {
-      setLastTestResult({
-        success: false,
-        time: new Date().toLocaleTimeString('id-ID'),
-        status: 'Error',
-        message: err.message
-      });
-      showToast('Tes koneksi gagal: ' + err.message);
-    } finally {
-      setTestingPing(false);
-    }
   };
 
   if (!isAdminUnlocked) {
@@ -1226,16 +1189,6 @@ export default function AdminMasterDashboard() {
               </div>
 
               <div className="flex items-center gap-2.5 shrink-0">
-                <button
-                  type="button"
-                  onClick={handleTestPingWebhook}
-                  disabled={testingPing}
-                  className="px-3.5 py-2 bg-white text-[#285844] hover:bg-neutral-100 rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer flex items-center gap-1.5"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${testingPing ? 'animate-spin' : ''}`} />
-                  <span>{testingPing ? 'Menguji...' : 'Uji Ping Payhook'}</span>
-                </button>
-
                 <button
                   type="button"
                   onClick={() => setActiveTab('gateway')}
@@ -1871,27 +1824,9 @@ export default function AdminMasterDashboard() {
                   <label className="text-xs font-bold text-neutral-800">
                     2. Secret Key Header (Kolom Header di Payhook)
                   </label>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="text" 
-                      readOnly
-                      value="x-api-key: ecukur_qris_secret_2026"
-                      className="w-full px-3 py-2 bg-neutral-100 border border-neutral-300 rounded-xl text-xs font-mono text-neutral-900 select-all outline-none"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        navigator.clipboard.writeText('ecukur_qris_secret_2026');
-                        setCopiedApiKey(true);
-                        setTimeout(() => setCopiedApiKey(false), 2000);
-                        showToast('Secret Key berhasil disalin!');
-                      }}
-                      className="px-3.5 py-2 bg-neutral-200 hover:bg-neutral-300 text-neutral-800 rounded-xl text-xs font-semibold shrink-0 cursor-pointer flex items-center gap-1"
-                    >
-                      {copiedApiKey ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedApiKey ? 'Tersalin' : 'Salin'}</span>
-                    </button>
-                  </div>
+                  <p className="text-xs text-neutral-600 leading-relaxed">
+                    Atur <code className="font-mono">QRIS_WEBHOOK_SECRET</code> di environment server, lalu masukkan nilai rahasia yang sama di Payhook sebagai header <code className="font-mono">x-api-key</code>. Secret tidak ditampilkan di dashboard.
+                  </p>
                 </div>
 
               </div>
@@ -1920,41 +1855,6 @@ export default function AdminMasterDashboard() {
                   Header Name: X-API-KEY | Header Value: [Nilai QRIS_WEBHOOK_SECRET di Vercel]
                 </code>
               </div>
-
-              {/* Action Buttons: Test Connection & Simulate */}
-              <div className="pt-2 border-t border-neutral-100 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-xs text-neutral-500">
-                  Uji koneksi Payhook ke server secara langsung:
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={handleTestPingWebhook}
-                    disabled={testingPing}
-                    className="px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${testingPing ? 'animate-spin' : ''}`} />
-                    <span>{testingPing ? 'Menguji...' : 'Uji Ping Koneksi'}</span>
-                  </button>
-
-                </div>
-              </div>
-
-              {/* Live Test Response Box */}
-              {lastTestResult && (
-                <div className={`p-3 rounded-xl border text-xs font-mono flex items-center justify-between ${
-                  lastTestResult.success ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-red-50 text-red-900 border-red-200'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600" />
-                    <span>[{lastTestResult.time}] Status {lastTestResult.status}: {lastTestResult.message}</span>
-                  </div>
-                  <button onClick={() => setLastTestResult(null)} className="text-neutral-400 hover:text-black">
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              )}
 
             </div>
 
@@ -1985,7 +1885,7 @@ export default function AdminMasterDashboard() {
                   <div className="w-6 h-6 rounded-full bg-[#285844] text-white flex items-center justify-center font-bold text-xs">3</div>
                   <span className="font-bold text-neutral-900 block">Isi Header Secret</span>
                   <p className="text-neutral-500 text-[11px] leading-relaxed">
-                    Di kolom Header tambahkan Name: <code className="font-mono text-[10px]">x-api-key</code> dan Value: <code className="font-mono text-[10px]">ecukur_qris_secret_2026</code>.
+                    Tambahkan header <code className="font-mono text-[10px]">x-api-key</code> dengan nilai <code className="font-mono text-[10px]">QRIS_WEBHOOK_SECRET</code> yang sudah diatur di environment server.
                   </p>
                 </div>
               </div>

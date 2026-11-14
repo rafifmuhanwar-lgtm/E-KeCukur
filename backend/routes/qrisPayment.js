@@ -9,16 +9,12 @@ function isValidWebhookSecret(providedSecret, expectedSecret) {
     return false;
   }
 
-  const validSecrets = [expectedSecret, 'ecukur_qris_secret_2026'].filter(
-    (s) => typeof s === 'string' && s.length > 0
-  );
+  if (typeof expectedSecret !== 'string' || expectedSecret.length === 0) return false;
 
   const provided = Buffer.from(providedSecret, 'utf8');
-  for (const secret of validSecrets) {
-    const expected = Buffer.from(secret, 'utf8');
-    if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
-      return true;
-    }
+  const expected = Buffer.from(expectedSecret, 'utf8');
+  if (provided.length === expected.length && timingSafeEqual(provided, expected)) {
+    return true;
   }
   return false;
 }
@@ -243,7 +239,10 @@ router.get('/status/:referenceId', async (req, res) => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 router.post('/webhook', async (req, res) => {
   try {
-    const secretKey = process.env.QRIS_WEBHOOK_SECRET || 'ecukur_qris_secret_2026';
+    const secretKey = process.env.QRIS_WEBHOOK_SECRET || '';
+    if (!secretKey) {
+      return res.status(503).json({ success: false, message: 'Webhook secret belum dikonfigurasi di server' });
+    }
 
     const authorization = req.headers.authorization;
     const bearerSecret = typeof authorization === 'string'
@@ -253,14 +252,8 @@ router.post('/webhook', async (req, res) => {
     const rawPayload = req.body || {};
     const providedSecret = (
       req.headers['x-api-key'] ||
+      req.headers['x-webhook-secret'] ||
       bearerSecret ||
-      req.query?.secret ||
-      req.query?.key ||
-      req.query?.['x-api-key'] ||
-      rawPayload.secret ||
-      rawPayload.api_key ||
-      rawPayload.apiKey ||
-      rawPayload.key ||
       ''
     ).trim();
 
@@ -392,35 +385,8 @@ router.post('/webhook', async (req, res) => {
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 4. POST /api/payment/qris/simulate - Simulasi Pembayaran (Untuk Testing)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-router.post('/simulate', async (req, res) => {
-  if (
-    process.env.VERCEL === '1' ||
-    Boolean(process.env.VERCEL_ENV) ||
-    process.env.NODE_ENV === 'production' ||
-    process.env.QRIS_SIMULATION_ENABLED !== 'true'
-  ) {
-    return res.status(404).json({ success: false, message: 'Not Found' });
-  }
-
-  const { amount, referenceId } = req.body;
-  let targetAmount = amount;
-
-  if (referenceId && !targetAmount) {
-    const p = memoryPayments.get(referenceId);
-    if (p) targetAmount = p.totalAmount;
-  }
-
-  if (!targetAmount) {
-    return res.status(400).json({ success: false, message: 'Harap sertakan amount atau referenceId yang valid' });
-  }
-
-  // Tembak ke webhook handler internal
-  req.body = {
-    amount: targetAmount,
-    raw_text: `[SIMULASI DEV] Pembayaran QRIS Rp ${targetAmount} berhasil diterima`
-  };
-  req.headers['x-api-key'] = process.env.QRIS_WEBHOOK_SECRET || 'ecukur_qris_secret_2026';
-  return router.handle(req, res);
+router.post('/simulate', (_req, res) => {
+  return res.status(404).json({ success: false, message: 'Not Found' });
 });
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
