@@ -34,6 +34,18 @@ to a staging Supabase project first; it removes anonymous payment-table access
 and limits payment-log reads to staff/admin users. Do not apply it to production
 until the Preview API and payment flow have been verified.
 
+To secure booking records without breaking guest booking, ticket links, or
+authorized dashboards, apply
+[`../backend/booking_access_hardening.sql`](../backend/booking_access_hardening.sql)
+to staging after the booking-tracking migration. It removes direct anonymous
+booking-table access, uses the existing booking/tracking RPCs, and exposes only
+non-identifying schedule data through the availability RPC. Test guest booking
+and token-based ticket links, customer-owned tickets, barber dashboards, and
+the admin dashboard before applying the migration to production.
+Admin accounts must be represented by the existing `users` row with role
+`STAFF` or `ADMIN`, or use an email already in the application's admin
+allowlist; barber accounts retain access only to their own shop's bookings.
+
 The inbox is available to customers at `/messages` and to authenticated
 barber/capster accounts at `/barber/messages`. Consultation starts from an
 individual public profile with a database-linked barber account.

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useLocation, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
   Scissors, 
@@ -15,11 +15,13 @@ import {
   Sparkles,
   Phone
 } from 'lucide-react';
-import { useStore } from '../../store';
-import { supabase, isSupabaseConfigured } from '../../lib/supabase';
+import { useStore, dbToUiStatus } from '../../store';
+import { isSupabaseConfigured } from '../../lib/supabase';
+import { fetchBookingTracking } from '../../lib/bookingTracking';
 
 export default function CustomerTicket() {
   const { id } = useParams();
+  const location = useLocation();
   const bookings = useStore((state) => state.bookings || []);
   const barbers = useStore((state) => state.barbers || []);
   const fetchBookings = useStore((state) => state.fetchBookings);
@@ -54,36 +56,42 @@ export default function CustomerTicket() {
         return;
       }
 
-      // Jika belum ada di store, query langsung ke Supabase
+      const ticketToken = new URLSearchParams(location.hash.replace(/^#/, '')).get('t')
+        || new URLSearchParams(location.search).get('token')
+        || (() => {
+          try {
+            const stored = JSON.parse(localStorage.getItem('ecukur_active_ticket') || 'null');
+            return stored?.id === id ? stored.ticketToken : null;
+          } catch {
+            return null;
+          }
+        })();
+
       if (isSupabaseConfigured) {
         try {
-          const { data, error } = await supabase
-            .from('bookings')
-            .select('*')
-            .eq('id', id)
-            .maybeSingle();
-
-          if (!error && data && isMounted) {
+          const { booking: data } = await fetchBookingTracking(id, ticketToken);
+          if (data && isMounted) {
             setBooking({
               id: data.id,
-              customerName: data.customer_name || 'Pelanggan',
-              customerPhone: data.customer_phone || '-',
-              barberId: data.barber_id || '',
-              barberName: data.barber_name || 'Barber E-CUKUR',
-              serviceName: data.service_name || 'Layanan Cukur',
-              date: data.booking_date || 'Hari Ini',
-              time: data.start_time ? data.start_time.substring(0, 5) : '10:00',
-              status: data.booking_status === 'CONFIRMED' ? 'Terkonfirmasi' : data.booking_status,
-              paymentMethod: data.payment_method || 'QRIS',
-              paymentStatus: data.payment_status || 'PAID',
-              price: Number(data.total_price) || 0,
-              createdAt: data.created_at
+              customerName: data.customerName || 'Pelanggan',
+              customerPhone: data.customerPhone || '-',
+              barberId: data.barberId || '',
+              barberName: data.barberName || 'Barber E-CUKUR',
+              serviceName: data.serviceName || 'Layanan Cukur',
+              date: data.date || 'Hari Ini',
+              time: data.startTime ? String(data.startTime).substring(0, 5) : '10:00',
+              status: dbToUiStatus(data.status),
+              paymentMethod: data.paymentMethod || 'QRIS',
+              paymentStatus: data.paymentStatus || 'UNPAID',
+              price: Number(data.price) || 0,
+              createdAt: data.createdAt,
+              ticketToken
             });
             setLoading(false);
             return;
           }
         } catch (e) {
-          console.warn('Direct ticket fetch error:', e);
+          console.warn('Ticket tracking fetch failed:', e);
         }
       }
 
@@ -99,7 +107,7 @@ export default function CustomerTicket() {
     return () => {
       isMounted = false;
     };
-  }, [id, bookings, fetchBookings]);
+  }, [id, bookings, fetchBookings, location.hash, location.search]);
 
   // Simpan ke localStorage agar browser HP mengingat tiket ini
   useEffect(() => {
@@ -132,6 +140,7 @@ export default function CustomerTicket() {
 
   const shortCode = booking?.id ? `#${String(booking.id).slice(-6).toUpperCase()}` : '#BK-001';
   const currentUrl = typeof window !== 'undefined' ? window.location.href : `https://ecukur.biz.id/tiket/${id}`;
+  const isPaid = booking?.paymentStatus === 'PAID';
 
   const copyCode = () => {
     if (!booking) return;
@@ -156,7 +165,7 @@ export default function CustomerTicket() {
       `✂️ *Layanan:* ${booking.serviceName}\n` +
       `💈 *Barber:* ${booking.barberName}\n` +
       `📅 *Jadwal:* ${booking.date} pukul ${booking.time} WIB\n` +
-      `💰 *Total:* ${formatRupiah(booking.price)} (LUNAS - QRIS)\n\n` +
+      `💰 *Total:* ${formatRupiah(booking.price)} (${isPaid ? 'LUNAS' : booking.status})\n\n` +
       `🔗 *Buka Tiket Digital:* ${currentUrl}`;
     
     window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
@@ -245,8 +254,14 @@ export default function CustomerTicket() {
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className="font-bold text-xs text-emerald-900">Reservasi Terkonfirmasi & Lunas</h4>
-            <p className="text-[11px] text-emerald-700">Tunjukkan tiket digital ini kepada capster saat Anda tiba di lokasi.</p>
+            <h4 className="font-bold text-xs text-emerald-900">
+              {isPaid ? 'Pembayaran Terkonfirmasi' : `Status Reservasi: ${booking.status}`}
+            </h4>
+            <p className="text-[11px] text-emerald-700">
+              {isPaid
+                ? 'Tunjukkan tiket digital ini kepada capster saat Anda tiba di lokasi.'
+                : 'Selesaikan pembayaran sesuai instruksi agar reservasi dapat dikonfirmasi.'}
+            </p>
           </div>
         </div>
 
@@ -271,7 +286,7 @@ export default function CustomerTicket() {
 
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>LUNAS (QRIS)</span>
+                <span>{isPaid ? 'LUNAS' : booking.paymentStatus || 'BELUM BAYAR'}</span>
               </span>
             </div>
 

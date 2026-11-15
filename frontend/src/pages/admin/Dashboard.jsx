@@ -1651,9 +1651,11 @@ export default function AdminMasterDashboard() {
                               {b.status === 'Menunggu' && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    updateBookingStatus(b.id, 'Terkonfirmasi');
-                                    showToast(`Booking ${b.id} dikonfirmasi!`);
+                                  onClick={async () => {
+                                    const result = await updateBookingStatus(b.id, 'Terkonfirmasi');
+                                    showToast(result?.success
+                                      ? `Booking ${b.id} dikonfirmasi!`
+                                      : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
                                   }}
                                   className="px-2.5 py-1 bg-[#285844] hover:bg-[#1E4334] text-white rounded-lg text-[10.5px] font-semibold cursor-pointer"
                                 >
@@ -1664,9 +1666,11 @@ export default function AdminMasterDashboard() {
                               {b.status === 'Terkonfirmasi' && (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    updateBookingStatus(b.id, 'Selesai');
-                                    showToast(`Booking ${b.id} selesai!`);
+                                  onClick={async () => {
+                                    const result = await updateBookingStatus(b.id, 'Selesai');
+                                    showToast(result?.success
+                                      ? `Booking ${b.id} selesai!`
+                                      : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
                                   }}
                                   className="px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg text-[10.5px] font-semibold cursor-pointer"
                                 >

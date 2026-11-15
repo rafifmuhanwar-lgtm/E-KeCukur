@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -15,7 +15,6 @@ import {
   MessageCircle, 
   ExternalLink,
   Users,
-  Star,
   Crown,
   Globe,
   Heart,
@@ -33,6 +32,7 @@ import { getAppDomain } from '../../lib/domain';
 import Logo from '../../components/Logo';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { createQrisPayment, checkQrisPaymentStatus, getDynamicQrisImageUrl } from '../../lib/qrisPayment';
+import { fetchBookingTracking } from '../../lib/bookingTracking';
 
 const TIME_SLOTS = [
   '09:30', '10:00', '10:45', '11:30', 
@@ -50,7 +50,7 @@ const generateNextDates = () => {
     const d = new Date(baseTime + i * 24 * 60 * 60 * 1000);
     const dayName = i === 0 ? 'Hari Ini' : i === 1 ? 'Besok' : days[d.getDay()];
     const label = `${dayName}, ${d.getDate()} ${months[d.getMonth()]}`;
-    const iso = d.toISOString().split('T')[0];
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     list.push({ id: iso, label, isToday: i === 0 });
   }
   return list;
@@ -59,6 +59,16 @@ const generateNextDates = () => {
 const UPCOMING_DATES = generateNextDates();
 
 const generateBookingCode = () => `ECK-${Math.floor(100 + Math.random() * 900)}`;
+
+const timeToMinutes = (time) => {
+  const [hours, minutes] = String(time || '').split(':').map(Number);
+  return hours * 60 + minutes;
+};
+
+const getServiceDurationMinutes = (service) => {
+  const duration = Number.parseInt(String(service?.duration || service?.duration_minutes || ''), 10);
+  return Number.isFinite(duration) && duration > 0 ? duration : 45;
+};
 
 export default function BarberBioLink({ customBarber = null, isPreview = false }) {
   const appDomain = getAppDomain();
@@ -166,9 +176,12 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   };
 
   // Effective services list (100% dari data barber, kosong jika belum diatur)
-  const activeServices = (barber && Array.isArray(barber.services) && barber.services.length > 0)
-    ? barber.services.filter(s => s.active !== false)
-    : [];
+  const activeServices = useMemo(
+    () => (Array.isArray(barber?.services) && barber.services.length > 0)
+      ? barber.services.filter(s => s.active !== false)
+      : [],
+    [barber]
+  );
 
   // UI States
   const [activeTab, setActiveTab] = useState('services'); // 'services' | 'team' | 'lookbook' | 'tipping' | 'info'
@@ -316,15 +329,87 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [selectedService, setSelectedService] = useState(null);
   const [selectedDate, setSelectedDate] = useState(UPCOMING_DATES[0].label);
   const [selectedTime, setSelectedTime] = useState(TIME_SLOTS[1]);
+  const [availabilityBookings, setAvailabilityBookings] = useState([]);
+  const [availabilityReady, setAvailabilityReady] = useState(false);
+  const [availabilityDate, setAvailabilityDate] = useState('');
+  const [availabilityError, setAvailabilityError] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('QRIS');
+  const paymentMethod = 'QRIS';
   const [noteStyle, setNoteStyle] = useState('');
   const [bookingSuccessData, setBookingSuccessData] = useState(null);
   const [bookingQrisData, setBookingQrisData] = useState(null);
   const [copiedBookingAmount, setCopiedBookingAmount] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
+
+  const isSlotAvailable = useCallback((slot) => {
+    if (!availabilityReady || availabilityDate !== selectedDate || availabilityError) return false;
+    const start = timeToMinutes(slot);
+    const end = start + getServiceDurationMinutes(selectedService || activeServices[0]);
+    if (!Number.isFinite(start) || end > 24 * 60) return false;
+    return !availabilityBookings.some((booking) => {
+      const bookingStart = timeToMinutes(booking.start_time);
+      const bookingEnd = booking.end_time
+        ? timeToMinutes(booking.end_time)
+        : bookingStart + 45;
+      return start < bookingEnd && end > bookingStart;
+    });
+  }, [availabilityReady, availabilityDate, selectedDate, availabilityError, availabilityBookings, selectedService, activeServices]);
+
+  useEffect(() => {
+    if (!isBookingOpen || isPreview) return undefined;
+
+    let active = true;
+    let refreshTimer;
+    const dateIso = UPCOMING_DATES.find((date) => date.label === selectedDate)?.id;
+    const barberId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(barber?.id))
+      ? barber.id
+      : null;
+
+    const refreshAvailability = async () => {
+      await Promise.resolve();
+      if (!active) return;
+      if (!isSupabaseConfigured) {
+        setAvailabilityBookings([]);
+        setAvailabilityReady(true);
+        setAvailabilityDate(selectedDate);
+        setAvailabilityError('');
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.rpc('get_public_booking_availability', {
+          p_barber_id: barberId,
+          p_booking_date: dateIso,
+          p_barber_name: barber?.name || null
+        });
+        if (error) throw error;
+        if (active) {
+          setAvailabilityBookings(Array.isArray(data) ? data : []);
+          setAvailabilityReady(true);
+          setAvailabilityDate(selectedDate);
+          setAvailabilityError('');
+        }
+      } catch (error) {
+        console.error('Booking availability fetch failed:', error);
+        if (active) {
+          setAvailabilityBookings([]);
+          setAvailabilityReady(false);
+          setAvailabilityError('Jadwal belum dapat dimuat. Coba beberapa saat lagi.');
+        }
+      }
+    };
+
+    Promise.resolve().then(() => {
+      if (active) refreshAvailability();
+    });
+    refreshTimer = setInterval(refreshAvailability, 5000);
+    return () => {
+      active = false;
+      clearInterval(refreshTimer);
+    };
+  }, [isBookingOpen, isPreview, selectedDate, barber?.id, barber?.name]);
 
   // Baca tiket aktif tersimpan di HP pelanggan
   useEffect(() => {
@@ -347,16 +432,16 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     const pollBooking = async () => {
       if (!isSupabaseConfigured) return;
       try {
-        const { data } = await supabase
-          .from('bookings')
-          .select('id, booking_status, payment_status')
-          .eq('id', bookingQrisData.bookingId)
-          .maybeSingle();
+        const { booking: data } = await fetchBookingTracking(
+          bookingQrisData.bookingId,
+          bookingQrisData.ticketToken
+        );
 
-        if (data && (data.payment_status === 'PAID' || data.booking_status === 'CONFIRMED')) {
+        if (data && (data.paymentStatus === 'PAID' || data.status === 'CONFIRMED')) {
           if (active) {
             const successPayload = {
               id: bookingQrisData.bookingId,
+              ticketToken: bookingQrisData.ticketToken,
               customerName,
               customerPhone,
               serviceName: selectedService?.name || activeServices[0]?.name,
@@ -375,7 +460,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
             setBookingStep('success');
           }
         }
-      } catch (err) {}
+      } catch (err) {
+        console.warn('Booking payment status check failed:', err);
+      }
     };
 
     const interval = setInterval(pollBooking, 2000);
@@ -383,7 +470,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       active = false;
       clearInterval(interval);
     };
-  }, [bookingStep, bookingQrisData]);
+  }, [bookingStep, bookingQrisData, customerName, customerPhone, selectedService, activeServices, selectedDate, selectedTime]);
 
   // Tipping Modal State
   const [isTippingOpen, setIsTippingOpen] = useState(false);
@@ -471,6 +558,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const handleSubmitBooking = async (e) => {
     e.preventDefault();
     if (!customerName.trim() || !customerPhone.trim()) return;
+    if (isSupabaseConfigured && (!availabilityReady || !isSlotAvailable(selectedTime))) {
+      window.alert(availabilityError || 'Slot ini tidak lagi tersedia. Silakan pilih jadwal lain.');
+      return;
+    }
 
     setIsSubmitting(true);
     const bookingCode = generateBookingCode();
@@ -488,19 +579,31 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       barberName: barber.name,
       serviceName: selectedService ? selectedService.name : activeServices[0].name,
       date: selectedDate,
+      dateIso: UPCOMING_DATES.find((date) => date.label === selectedDate)?.id,
       time: selectedTime,
+      serviceId: selectedService?.id || activeServices[0]?.id,
       status: paymentMethod === 'QRIS' ? 'Menunggu' : 'Terkonfirmasi',
       paymentMethod,
       price: finalPrice,
       note: noteStyle.trim()
     };
 
-    const saved = await addBooking(newBooking);
-    const resolvedId = saved?.id || bookingCode;
+    let saved;
+    try {
+      saved = await addBooking(newBooking);
+    } catch (error) {
+      saved = { success: false, error: error.message };
+    }
     setIsSubmitting(false);
+    if (!saved?.id) {
+      window.alert(saved?.error || 'Booking gagal disimpan. Silakan coba lagi.');
+      return;
+    }
+    const resolvedId = saved.id;
 
     setBookingQrisData({
       bookingId: resolvedId,
+      ticketToken: saved.ticketToken,
       basePrice,
       uniqueCode,
       totalAmount: finalPrice,
@@ -1608,7 +1711,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   </div>
                   <div className="space-y-2 pt-1">
                     <Link
-                      to={`/tiket/${bookingSuccessData.id}`}
+                      to={`/tiket/${bookingSuccessData.id}#t=${encodeURIComponent(bookingSuccessData.ticketToken || '')}`}
                       className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-center"
                     >
                       <Ticket className="w-4 h-4 text-emerald-300" />
@@ -1619,7 +1722,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       type="button"
                       onClick={() => {
                         const shortId = `#${String(bookingSuccessData.id).slice(-6).toUpperCase()}`;
-                        const text = `💈 *TIKET RESERVASI E-CUKUR*\nNo. Tiket: ${shortId}\nJadwal: ${bookingSuccessData.date} • ${bookingSuccessData.time} WIB\nLayanan: ${bookingSuccessData.serviceName}\nBuka Tiket: https://ecukur.biz.id/tiket/${bookingSuccessData.id}`;
+                        const ticketUrl = `${window.location.origin}/tiket/${bookingSuccessData.id}#t=${encodeURIComponent(bookingSuccessData.ticketToken || '')}`;
+                        const text = `💈 *TIKET RESERVASI E-CUKUR*\nNo. Tiket: ${shortId}\nJadwal: ${bookingSuccessData.date} • ${bookingSuccessData.time} WIB\nLayanan: ${bookingSuccessData.serviceName}\nBuka Tiket: ${ticketUrl}`;
                         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                       }}
                       className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -1685,16 +1789,24 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-xs font-semibold text-neutral-700">Pilih Jam Kedatangan:</label>
-                      <span className="text-[10px] font-mono text-neutral-500">WIB</span>
+                      <span className="text-[10px] font-mono text-neutral-500">
+                        {availabilityReady && availabilityDate === selectedDate ? 'WIB' : 'Memuat...'}
+                      </span>
                     </div>
+                    {availabilityError && (
+                      <p role="alert" className="mb-2 text-[10px] text-red-700">{availabilityError}</p>
+                    )}
                     <div className="grid grid-cols-4 gap-2">
                       {TIME_SLOTS.slice(0, 8).map((slot) => (
                         <button
                           key={slot}
                           type="button"
                           onClick={() => setSelectedTime(slot)}
+                          disabled={!isSlotAvailable(slot)}
                           className={`py-2 rounded-xl border text-center text-xs font-mono font-semibold transition-all ${
-                            selectedTime === slot 
+                            !isSlotAvailable(slot)
+                              ? 'border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed line-through'
+                              : selectedTime === slot
                               ? 'border-[#285844] bg-[#285844] text-white shadow-xs' 
                               : 'border-neutral-200 bg-white hover:border-neutral-300 text-neutral-700'
                           }`}
@@ -1759,7 +1871,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
                   <button
                     type="submit"
-                    disabled={isSubmitting}
+                    disabled={isSubmitting || (isSupabaseConfigured && (!availabilityReady || !isSlotAvailable(selectedTime)))}
                     className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm transition-transform active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
                     {isSubmitting 
@@ -2180,7 +2292,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       {activeTicket && !isBookingOpen && !isPreview && (
         <aside aria-label="Tiket Booking Aktif" className="fixed bottom-4 left-1/2 -translate-x-1/2 z-40 w-full max-w-sm px-4 pointer-events-auto">
           <Link
-            to={`/tiket/${activeTicket.id}`}
+            to={`/tiket/${activeTicket.id}#t=${encodeURIComponent(activeTicket.ticketToken || '')}`}
             className="w-full bg-[#285844] hover:bg-[#1E4334] text-white p-3 rounded-2xl shadow-xl flex items-center justify-between gap-3 border border-white/20 backdrop-blur-md transition-all active:scale-98 group"
           >
             <div className="flex items-center gap-2.5 min-w-0">
