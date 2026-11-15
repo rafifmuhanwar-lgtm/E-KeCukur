@@ -95,7 +95,6 @@ export default function BarberDashboard() {
   const addBarberTeamMember = useStore((state) => state.addBarberTeamMember);
   const deleteBarberTeamMember = useStore((state) => state.deleteBarberTeamMember);
   const updateBarberTippingConfig = useStore((state) => state.updateBarberTippingConfig);
-  const addBarberTip = useStore((state) => state.addBarberTip);
   const requestBarberWithdrawal = useStore((state) => state.requestBarberWithdrawal);
   const bookings = useStore((state) => state.bookings);
   const updateBookingStatus = useStore((state) => state.updateBookingStatus);
@@ -546,34 +545,6 @@ export default function BarberDashboard() {
     const removed = newPresets.splice(index, 1);
     updateBarberTippingConfig(barber.id, { presets: newPresets });
     showToast(`Pilihan paket ${removed[0]?.label || ''} dihapus`);
-  };
-
-  const handleSimulateIncomingTip = () => {
-    const presets = tippingConfig.presets || [
-      { amount: 10000, label: 'Kopi Hitam' },
-      { amount: 25000, label: 'Kopi Susu' },
-      { amount: 50000, label: 'V60 Special' }
-    ];
-    const picked = presets[Math.floor(Math.random() * presets.length)];
-    const names = ['Rian Pratama', 'Budi Santoso', 'Kevin Ardiansyah', 'Agung Nugroho', 'Fajar Ramadhan', 'Dedi Wijaya'];
-    const messages = [
-      'Guntingan fade-nya rapi banget bang!',
-      'Langganan terus di sini, mantap!',
-      'Kopinya buat nemenin cukur ya bro 🙏',
-      'Pelayanan top markotop, makasih banyak!',
-      'Hasil potongannya pas sesuai request!'
-    ];
-    const randomName = names[Math.floor(Math.random() * names.length)];
-    const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-
-    addBarberTip(barber.id, {
-      customerName: randomName,
-      amount: picked.amount,
-      coffeeLabel: picked.label,
-      message: randomMsg,
-      method: 'Payment Gateway QRIS'
-    });
-    showToast(`Simulasi tip masuk Rp ${picked.amount.toLocaleString('id-ID')} dari ${randomName}!`);
   };
 
   // ─── WITHDRAWAL / PENCAIRAN SALDO STATE (MIN. RP 15.000) ───
@@ -2153,15 +2124,6 @@ export default function BarberDashboard() {
                       <span>Tambah Pilihan</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={handleSimulateIncomingTip}
-                      className="px-3 py-2 border border-neutral-200 hover:bg-neutral-50 text-neutral-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-                      title="Uji simulasi tip masuk"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Uji Simulasi</span>
-                    </button>
                   </div>
                 </div>
 

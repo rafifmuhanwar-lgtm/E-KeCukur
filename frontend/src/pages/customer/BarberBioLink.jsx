@@ -32,7 +32,7 @@ import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
 import Logo from '../../components/Logo';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
-import { createQrisPayment, checkQrisPaymentStatus, simulateQrisPayment, getDynamicQrisImageUrl } from '../../lib/qrisPayment';
+import { createQrisPayment, checkQrisPaymentStatus, getDynamicQrisImageUrl } from '../../lib/qrisPayment';
 
 const TIME_SLOTS = [
   '09:30', '10:00', '10:45', '11:30', 
@@ -324,7 +324,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [bookingQrisData, setBookingQrisData] = useState(null);
   const [copiedBookingAmount, setCopiedBookingAmount] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [simulatingBooking, setSimulatingBooking] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
 
   // Baca tiket aktif tersimpan di HP pelanggan
@@ -387,7 +386,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   }, [bookingStep, bookingQrisData]);
 
   // Tipping Modal State
-  const addBarberTip = useStore((state) => state.addBarberTip);
   const [isTippingOpen, setIsTippingOpen] = useState(false);
   const [tipAmount, setTipAmount] = useState(25000);
   const [selectedCoffeeLabel, setSelectedCoffeeLabel] = useState('Kopi Susu');
@@ -396,8 +394,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [tipPaid, setTipPaid] = useState(false);
   const [tipQrisData, setTipQrisData] = useState(null);
   const [tipQrisLoading, setTipQrisLoading] = useState(false);
+  const [tipQrisError, setTipQrisError] = useState('');
   const [copiedTipAmount, setCopiedTipAmount] = useState(false);
-  const [simulatingTip, setSimulatingTip] = useState(false);
 
   // Auto-generate QRIS tagihan dengan kode unik saat modal tip dibuka
   useEffect(() => {
@@ -406,6 +404,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     let pollInterval = null;
 
     setTipQrisLoading(true);
+    setTipQrisError('');
     createQrisPayment({
       type: 'TIP',
       amount: tipAmount,
@@ -421,21 +420,19 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
         // Polling status tiap 2.5 detik untuk mendeteksi notifikasi MacroDroid
         pollInterval = setInterval(async () => {
           const statusRes = await checkQrisPaymentStatus(res.payment.referenceId);
-          if (statusRes?.status === 'PAID') {
+          if (statusRes?.success && statusRes.status === 'PAID') {
             clearInterval(pollInterval);
-            if (typeof addBarberTip === 'function') {
-              addBarberTip(barber.id, {
-                customerName: tipperName || 'Pelanggan',
-                amount: res.payment.totalAmount || tipAmount,
-                coffeeLabel: selectedCoffeeLabel || 'Kopi',
-                message: tipperMessage || 'Terima kasih atas pelayanannya!',
-                method: 'QRIS Listener'
-              });
-            }
             setTipPaid(true);
           }
         }, 2500);
+      } else {
+        setTipQrisError(res?.error || 'Tagihan QRIS gagal dibuat. Coba lagi.');
       }
+    }).catch((error) => {
+      console.error('Gagal membuat tagihan tip QRIS:', error);
+      if (!isCancelled) setTipQrisError('Tagihan QRIS gagal dibuat. Coba lagi.');
+    }).finally(() => {
+      if (!isCancelled) setTipQrisLoading(false);
     });
 
     return () => {
@@ -1554,24 +1551,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     <span>Menunggu verifikasi pembayaran otomatis...</span>
                   </div>
 
-                  {/* Simulasi Pembayaran Masuk untuk Pengujian */}
-                  <div className="pt-1">
-                    <button
-                      type="button"
-                      disabled={simulatingBooking}
-                      onClick={async () => {
-                        setSimulatingBooking(true);
-                        try {
-                          await simulateQrisPayment(bookingQrisData?.referenceId, bookingQrisData?.totalAmount);
-                        } catch (err) {}
-                        setTimeout(() => setSimulatingBooking(false), 2000);
-                      }}
-                      className="text-[11px] font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-3 py-1.5 rounded-lg cursor-pointer transition-colors inline-flex items-center gap-1.5 mx-auto"
-                    >
-                      <span>{simulatingBooking ? '⏳ Memproses Notifikasi Bank...' : '⚡ Uji Simulasi Pembayaran Masuk (Testing)'}</span>
-                    </button>
-                  </div>
-
                   <div className="pt-2">
                     <button
                       type="button"
@@ -1841,10 +1820,19 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   </div>
 
                   {/* QRIS Box dengan Kode Unik & Verifikasi Realtime */}
+                  {tipQrisLoading ? (
+                    <p className="rounded-xl bg-neutral-50 p-4 text-center text-xs text-neutral-500" aria-live="polite">
+                      Menyiapkan tagihan QRIS...
+                    </p>
+                  ) : tipQrisError ? (
+                    <p className="rounded-xl border border-red-200 bg-red-50 p-4 text-center text-xs text-red-700" role="alert">
+                      {tipQrisError}
+                    </p>
+                  ) : tipQrisData ? (
                   <div className="p-3.5 bg-neutral-50 rounded-2xl border border-neutral-200 text-center space-y-2.5">
                     <div className="w-36 h-36 mx-auto rounded-xl bg-white p-2 border border-neutral-200 flex items-center justify-center overflow-hidden shadow-2xs">
                       <img 
-                        src={getDynamicQrisImageUrl(tipQrisData?.totalAmount || tipAmount)} 
+                        src={tipQrisData.qrisImageUrl || getDynamicQrisImageUrl(tipQrisData.totalAmount)}
                         alt="QRIS" 
                         className="w-full h-full object-contain"
                       />
@@ -1857,12 +1845,12 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       </span>
                       <div className="flex items-center justify-center gap-2 mt-0.5">
                         <span className="font-display font-extrabold text-base text-neutral-900 font-mono">
-                          Rp {(tipQrisData?.totalAmount || tipAmount).toLocaleString('id-ID')}
+                          Rp {tipQrisData.totalAmount.toLocaleString('id-ID')}
                         </span>
                         <button
                           type="button"
                           onClick={() => {
-                            navigator.clipboard.writeText(String(tipQrisData?.totalAmount || tipAmount));
+                            navigator.clipboard.writeText(String(tipQrisData.totalAmount));
                             setCopiedTipAmount(true);
                             setTimeout(() => setCopiedTipAmount(false), 2000);
                           }}
@@ -1872,7 +1860,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                         </button>
                       </div>
                       <span className="text-[9px] text-amber-700 block mt-0.5">
-                        *Kode unik acak: +Rp {tipQrisData?.uniqueCode || '...'} agar diverifikasi otomatis
+                        *Kode unik acak: +Rp {tipQrisData.uniqueCode} agar diverifikasi otomatis
                       </span>
                     </div>
 
@@ -1885,36 +1873,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       <span>Menunggu pembayaran otomatis...</span>
                     </div>
 
-                    {/* Simulasi Cepat (Untuk Demo/Testing) */}
-                    <button
-                      type="button"
-                      disabled={simulatingTip}
-                      onClick={async () => {
-                        setSimulatingTip(true);
-                        const finalTipAmt = tipQrisData?.totalAmount || tipAmount;
-                        try {
-                          await simulateQrisPayment(tipQrisData?.referenceId, finalTipAmt);
-                        } catch (e) {}
-
-                        setTimeout(() => {
-                          setSimulatingTip(false);
-                          if (typeof addBarberTip === 'function') {
-                            addBarberTip(barber.id, {
-                              customerName: tipperName || 'Pelanggan',
-                              amount: finalTipAmt,
-                              coffeeLabel: selectedCoffeeLabel || 'Kopi',
-                              message: tipperMessage || 'Terima kasih atas pelayanannya!',
-                              method: 'QRIS Listener (Simulasi)'
-                            });
-                          }
-                          setTipPaid(true);
-                        }, 1200);
-                      }}
-                      className="text-[10px] text-neutral-400 hover:text-neutral-700 underline cursor-pointer block mx-auto"
-                    >
-                      {simulatingTip ? 'Memproses Notifikasi Bank...' : '⚡ Uji Simulasi Pembayaran Tip'}
-                    </button>
                   </div>
+                  ) : null}
 
                   {/* Input fields for customer */}
                   <div className="space-y-2">

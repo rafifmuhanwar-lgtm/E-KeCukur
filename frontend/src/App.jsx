@@ -19,8 +19,9 @@ export default function App() {
     initApp();
   }, [initApp]);
 
-  // Deteksi jika pengunjung membuka lewat domain lama vercel.app
-  const isVercelDomain = typeof window !== 'undefined' && window.location.hostname.endsWith('.vercel.app');
+  // Alihkan domain Vercel lama tanpa mengganggu deployment preview.
+  const isVercelDomain = typeof window !== 'undefined' &&
+    ['ecukur.vercel.app', 'e-cukur.vercel.app'].includes(window.location.hostname);
 
   if (isVercelDomain) {
     return <DomainMigrationNotice />;

@@ -99,29 +99,16 @@ export async function createQrisPayment({
         qrisImageUrl
       })
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || !data.success) {
+      return {
+        success: false,
+        error: data.message || `Pembuatan tagihan gagal (HTTP ${res.status}).`
+      };
+    }
     return data;
   } catch (err) {
-    // Fallback jika backend offline: kalkulasi kode unik lokal
-    const uniqueCode = Math.floor(100 + Math.random() * 899);
-    const totalAmount = Number(amount) + uniqueCode;
-    const dynamicQrisStr = generateDynamicQris(totalAmount);
-    const dynamicQrImg = getDynamicQrisImageUrl(totalAmount);
-
-    return {
-      success: true,
-      payment: {
-        referenceId: `LOCAL-${Date.now().toString(36).toUpperCase()}-${uniqueCode}`,
-        baseAmount: Number(amount),
-        uniqueCode,
-        totalAmount,
-        formattedTotal: `Rp ${totalAmount.toLocaleString('id-ID')}`,
-        qrisString: dynamicQrisStr,
-        qrisImageUrl: dynamicQrImg,
-        status: 'PENDING',
-        expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
-      }
-    };
+    return { success: false, error: err.message || 'Server pembayaran tidak dapat dihubungi.' };
   }
 }
 
@@ -134,24 +121,6 @@ export async function checkQrisPaymentStatus(referenceId) {
   }
   try {
     const res = await fetch(`${API_BASE}/status/${encodeURIComponent(referenceId)}`);
-    return await res.json();
-  } catch (err) {
-    return { success: false, error: err.message };
-  }
-}
-
-/**
- * Simulasi webhook pembayaran (untuk testing dev tanpa uang asli)
- */
-export async function simulateQrisPayment(referenceId, amount) {
-  try {
-    const res = await fetch(`${API_BASE}/simulate`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ referenceId, amount: Number(amount) || 0 })
-    });
     return await res.json();
   } catch (err) {
     return { success: false, error: err.message };

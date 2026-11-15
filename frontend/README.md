@@ -26,6 +26,14 @@ chat migration to install the display-name validation functions.
 Booking continues to collect customer name and WhatsApp in its existing form.
 Barber and capster sign-in continues to use the existing studio login.
 
+The QRIS API also requires `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
+`QRIS_WEBHOOK_SECRET` as server-side Vercel environment variables. Never prefix
+the service-role key with `VITE_` or expose it to frontend code. Apply
+[`../backend/qris_payment_hardening.sql`](../backend/qris_payment_hardening.sql)
+to a staging Supabase project first; it removes anonymous payment-table access
+and limits payment-log reads to staff/admin users. Do not apply it to production
+until the Preview API and payment flow have been verified.
+
 The inbox is available to customers at `/messages` and to authenticated
 barber/capster accounts at `/barber/messages`. Consultation starts from an
 individual public profile with a database-linked barber account.

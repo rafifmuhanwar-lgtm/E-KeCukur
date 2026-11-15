@@ -1,9 +1,6 @@
-import { createClient } from '@supabase/supabase-js';
+import { randomUUID } from 'node:crypto';
+import { getSupabaseAdmin } from './supabaseAdmin.js';
 
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://natgqaksuousldfxydnr.supabase.co';
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hdGdxYWtzdW91c2xkZnh5ZG5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MjUxMjAsImV4cCI6MjEwNzMwMTEyMH0.09noBpwZ6jHYeJJV-3rprhUtqPk8XvBRTLTJKCEJHA8';
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const MASTER_QRIS_STATIC = '00020101021126610014COM.GO-JEK.WWW01189360091433186083620210G3186083620303UMI51440014ID.CO.QRIS.WWW0215ID10264903050790303UMI5204899953033605802ID5925BAYAR VIA QRIS, Digital &6006BEKASI61051732062070703A01630454CF';
 
@@ -66,68 +63,93 @@ export default async function handler(req, res) {
       bookingId = null,
       barberId = null,
       customerName = 'Pelanggan',
-      customerPhone = '',
-      _qrisImageUrl = null
+      customerPhone = ''
     } = req.body || {};
 
-    const baseAmount = Number(amount) || 0;
-
-    // Cegah tabrakan nominal jika ada transaksi bersamaan: cari kode unik yang belum dipakai
-    let occupiedTotals = new Set();
-    try {
-      const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-      const { data: pendingRows } = await supabase
-        .from('qris_payments')
-        .select('total_amount')
-        .eq('status', 'PENDING')
-        .gte('created_at', fifteenMinsAgo);
-
-      if (pendingRows && pendingRows.length > 0) {
-        pendingRows.forEach(r => occupiedTotals.add(Number(r.total_amount)));
-      }
-    } catch {}
-
-    // Cari kode unik acak yang belum ada di transaksi PENDING lainnya
-    let uniqueCode = Math.floor(100 + Math.random() * 899);
-    for (let attempt = 0; attempt < 50; attempt++) {
-      if (!occupiedTotals.has(baseAmount + uniqueCode)) {
-        break;
-      }
-      uniqueCode = Math.floor(100 + Math.random() * 899);
+    const paymentType = String(type).toUpperCase();
+    const baseAmount = Number(amount);
+    if (!['BOOKING', 'TIP'].includes(paymentType) || !Number.isSafeInteger(baseAmount) || baseAmount <= 0) {
+      return res.status(400).json({ success: false, message: 'Tipe atau nominal pembayaran tidak valid.' });
     }
 
-    const totalAmount = baseAmount + uniqueCode;
-    const referenceId = `ECK-${Date.now().toString(36).toUpperCase()}-${uniqueCode}`;
-    const dynamicQrisStr = generateDynamicQris(totalAmount);
-    const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=12&data=${encodeURIComponent(dynamicQrisStr)}`;
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+    const supabase = getSupabaseAdmin();
+    let resolvedBarberId = barberId ? String(barberId) : null;
+    const resolvedBookingId = bookingId ? String(bookingId) : null;
+    if (paymentType === 'BOOKING') {
+      if (!resolvedBookingId) {
+        return res.status(400).json({ success: false, message: 'ID booking diperlukan untuk pembayaran booking.' });
+      }
 
-    const payment = {
-      referenceId,
-      type,
-      bookingId,
-      barberId,
-      customerName,
-      customerPhone,
-      baseAmount,
-      uniqueCode,
-      totalAmount,
-      formattedTotal: `Rp ${totalAmount.toLocaleString('id-ID')}`,
-      qrisString: dynamicQrisStr,
-      qrisImageUrl: qrImageUrl,
-      status: 'PENDING',
-      expiresAt
-    };
+      const { data: booking, error: bookingError } = await supabase
+        .from('bookings')
+        .select('id, total_price, booking_status, payment_status')
+        .eq('id', resolvedBookingId)
+        .maybeSingle();
+      if (bookingError) throw bookingError;
+      if (!booking) return res.status(404).json({ success: false, message: 'Booking tidak ditemukan.' });
+      if (Number(booking.total_price) !== baseAmount) {
+        return res.status(400).json({ success: false, message: 'Nominal pembayaran tidak sesuai booking.' });
+      }
+      if (booking.booking_status !== 'PENDING_PAYMENT' || booking.payment_status === 'PAID') {
+        return res.status(409).json({ success: false, message: 'Booking tidak menunggu pembayaran.' });
+      }
+    }
+    if (paymentType === 'TIP') {
+      if (!resolvedBarberId) {
+        return res.status(400).json({ success: false, message: 'ID barber diperlukan untuk pembayaran tip.' });
+      }
 
-    // Simpan ke Supabase jika tabel qris_payments tersedia
-    try {
-      await supabase.from('qris_payments').insert({
+      const { data: barber, error: barberError } = await supabase
+        .from('barbers')
+        .select('id')
+        .eq('id', resolvedBarberId)
+        .maybeSingle();
+      if (barberError) throw barberError;
+      if (!barber) return res.status(404).json({ success: false, message: 'Barber penerima tip tidak ditemukan.' });
+      resolvedBarberId = barber.id;
+    }
+
+    // Cegah tabrakan nominal jika ada transaksi bersamaan: cari kode unik yang belum dipakai
+    const now = new Date();
+    const { error: expireError } = await supabase
+      .from('qris_payments')
+      .update({ status: 'EXPIRED', updated_at: now.toISOString() })
+      .eq('status', 'PENDING')
+      .lte('expires_at', now.toISOString());
+    if (expireError) throw expireError;
+    const { error: missingExpiryError } = await supabase
+      .from('qris_payments')
+      .update({ status: 'EXPIRED', updated_at: now.toISOString() })
+      .eq('status', 'PENDING')
+      .is('expires_at', null);
+    if (missingExpiryError) throw missingExpiryError;
+
+    const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const { data: pendingRows, error: pendingError } = await supabase
+      .from('qris_payments')
+      .select('total_amount')
+      .eq('status', 'PENDING')
+      .gte('created_at', fifteenMinsAgo);
+    if (pendingError) throw pendingError;
+
+    const occupiedTotals = new Set((pendingRows || []).map((row) => Number(row.total_amount)));
+    let payment = null;
+    for (let attempt = 0; attempt < 899; attempt += 1) {
+      const uniqueCode = 100 + Math.floor(Math.random() * 899);
+      const totalAmount = baseAmount + uniqueCode;
+      if (occupiedTotals.has(totalAmount)) continue;
+
+      const referenceId = `ECK-${randomUUID().toUpperCase()}`;
+      const dynamicQrisStr = generateDynamicQris(totalAmount);
+      const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=360x360&margin=12&data=${encodeURIComponent(dynamicQrisStr)}`;
+      const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      const { error: insertError } = await supabase.from('qris_payments').insert({
         reference_id: referenceId,
-        type,
-        booking_id: bookingId ? String(bookingId) : null,
-        barber_id: barberId ? String(barberId) : null,
-        customer_name: customerName,
-        customer_phone: customerPhone,
+        type: paymentType,
+        booking_id: resolvedBookingId,
+        barber_id: resolvedBarberId,
+        customer_name: String(customerName || 'Pelanggan').slice(0, 120),
+        customer_phone: String(customerPhone || '').slice(0, 40),
         base_amount: baseAmount,
         unique_code: uniqueCode,
         total_amount: totalAmount,
@@ -135,13 +157,41 @@ export default async function handler(req, res) {
         status: 'PENDING',
         expires_at: expiresAt
       });
-    } catch (dbErr) {
-      console.warn('Note: qris_payments table insert failed (fallback to client flow):', dbErr.message);
+
+      if (insertError?.code === '23505') {
+        occupiedTotals.add(totalAmount);
+        continue;
+      }
+      if (insertError) throw insertError;
+
+      payment = {
+        referenceId,
+        type: paymentType,
+        bookingId: resolvedBookingId,
+        barberId: resolvedBarberId,
+        customerName,
+        customerPhone,
+        baseAmount,
+        uniqueCode,
+        totalAmount,
+        formattedTotal: `Rp ${totalAmount.toLocaleString('id-ID')}`,
+        qrisString: dynamicQrisStr,
+        qrisImageUrl: qrImageUrl,
+        status: 'PENDING',
+        expiresAt
+      };
+      break;
+    }
+
+    if (!payment) {
+      return res.status(503).json({ success: false, message: 'Slot nominal QRIS sedang penuh. Coba lagi sebentar.' });
     }
 
     return res.status(200).json({ success: true, payment });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    console.error('QRIS payment creation failed:', err);
+    const statusCode = err.code === 'SUPABASE_SERVER_CONFIG' ? 503 : 500;
+    return res.status(statusCode).json({ success: false, message: 'Tagihan QRIS gagal dibuat.' });
   }
 }
 
