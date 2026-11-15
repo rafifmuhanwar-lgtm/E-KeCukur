@@ -77,6 +77,8 @@ export default function CustomerTicket() {
               customerPhone: data.customerPhone || '-',
               barberId: data.barberId || '',
               barberName: data.barberName || 'Barber E-CUKUR',
+              capsterId: data.capsterId || null,
+              capsterName: data.capsterName || null,
               serviceName: data.serviceName || 'Layanan Cukur',
               date: data.date || 'Hari Ini',
               time: data.startTime ? String(data.startTime).substring(0, 5) : '10:00',
@@ -164,6 +166,7 @@ export default function CustomerTicket() {
       `👤 *Nama:* ${booking.customerName}\n` +
       `✂️ *Layanan:* ${booking.serviceName}\n` +
       `💈 *Barber:* ${booking.barberName}\n` +
+      (booking.capsterName ? `🧑‍🦱 *Capster:* ${booking.capsterName}\n` : '') +
       `📅 *Jadwal:* ${booking.date} pukul ${booking.time} WIB\n` +
       `💰 *Total:* ${formatRupiah(booking.price)} (${isPaid ? 'LUNAS' : booking.status})\n\n` +
       `🔗 *Buka Tiket Digital:* ${currentUrl}`;
@@ -367,6 +370,13 @@ export default function CustomerTicket() {
                   <span>{booking.barberName}</span>
                 </div>
               </div>
+
+              {booking.capsterName && (
+                <div className="flex justify-between items-center py-1 border-b border-neutral-100">
+                  <span className="text-neutral-500">Capster</span>
+                  <strong className="text-neutral-900 font-bold">{booking.capsterName}</strong>
+                </div>
+              )}
 
               <div className="flex justify-between items-center pt-2">
                 <span className="text-neutral-500 font-medium">Total Tarif</span>

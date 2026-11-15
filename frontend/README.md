@@ -56,6 +56,13 @@ Admin accounts must be represented by the existing `users` row with role
 `STAFF` or `ADMIN`, or use an email already in the application's admin
 allowlist; barber accounts retain access only to their own shop's bookings.
 
+Capster assignment and public availability require
+[`../backend/capster_booking_migration.sql`](../backend/capster_booking_migration.sql)
+after the booking access migration. Apply it to staging first; it adds capster
+assignment to bookings and allows separate capsters in the same shop to accept
+overlapping appointments. Apply it to production before deploying the matching
+frontend.
+
 The inbox is available to customers at `/messages` and to authenticated
 barber/capster accounts at `/barber/messages`. Consultation starts from an
 individual public profile with a database-linked barber account.

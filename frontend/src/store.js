@@ -170,9 +170,12 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
 };
 
 async function saveBarberPayloadToSupabase(barberId, payload) {
-  if (!isSupabaseConfigured || !barberId || !payload || Object.keys(payload).length === 0) return;
+  if (!isSupabaseConfigured || !barberId || !payload || Object.keys(payload).length === 0) {
+    return { success: false, error: 'Supabase is not configured or the update is invalid.' };
+  }
 
   let toSend = { ...payload };
+  let lastError = null;
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(barberId));
 
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -189,6 +192,7 @@ async function saveBarberPayloadToSupabase(barberId, payload) {
       if (!error) {
         return { success: true };
       }
+      lastError = error.message;
 
       // Jika kolom tertentu belum ada di Supabase, hapus dari toSend lalu ulangi sisa kolom
       const match = error.message && (
@@ -204,9 +208,11 @@ async function saveBarberPayloadToSupabase(barberId, payload) {
       }
     } catch (e) {
       console.warn('[Supabase update exception]:', e.message);
+      lastError = e.message;
       break;
     }
   }
+  return { success: false, error: lastError || 'Unable to save the profile update.' };
 }
 
 let bookingsChannel = null;
@@ -534,6 +540,8 @@ export const useStore = create((set, get) => ({
             customerPhone: row.customer_phone || '-',
             barberId: row.barber_id || matchedBarber?.id || '',
             barberName: row.barber_name || matchedBarber?.name || 'Semua Capster',
+            capsterId: row.capster_id || null,
+            capsterName: row.capster_name || null,
             serviceName: row.service_name || 'Layanan Cukur',
             date: row.booking_date || 'Hari Ini',
             time: row.start_time ? row.start_time.substring(0, 5) : '10:00',
@@ -1055,7 +1063,7 @@ export const useStore = create((set, get) => ({
     if (updates.bannerImage !== undefined) payload.banner_image = updates.bannerImage;
     if (updates.locationCity !== undefined) payload.location_city = updates.locationCity;
 
-    await saveBarberPayloadToSupabase(barberId, payload);
+    return await saveBarberPayloadToSupabase(barberId, payload);
   },
 
   // ─── TAMBAH BOOKING REALTIME (DARI LINK BIO) ───
@@ -1074,7 +1082,10 @@ export const useStore = create((set, get) => ({
         const barberId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(booking.barberId))
           ? booking.barberId
           : null;
-        const { data, error } = await supabase.rpc('create_guest_booking_with_ticket', {
+        const rpcName = booking.capsterId
+          ? 'create_guest_booking_with_capster'
+          : 'create_guest_booking_with_ticket';
+        const rpcParams = {
           p_customer_name: booking.customerName,
           p_customer_phone: booking.customerPhone,
           p_customer_email: get().authUser?.email || null,
@@ -1087,7 +1098,9 @@ export const useStore = create((set, get) => ({
           p_payment_method: booking.paymentMethod === 'QRIS' ? 'QRIS' : 'Tunai',
           p_total_price: Number(booking.price) || 0,
           p_ticket_token: ticketToken
-        });
+        };
+        if (booking.capsterId) rpcParams.p_capster_id = String(booking.capsterId);
+        const { data, error } = await supabase.rpc(rpcName, rpcParams);
 
         if (error) return { success: false, error: error.message };
         if (!data) return { success: false, error: 'Database tidak mengembalikan ID booking.' };

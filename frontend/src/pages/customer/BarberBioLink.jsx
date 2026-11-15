@@ -25,7 +25,8 @@ import {
   Send,
   Camera,
   Ticket,
-  Phone
+  Phone,
+  ChevronLeft
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
@@ -40,23 +41,48 @@ const TIME_SLOTS = [
   '16:00', '17:00', '18:30', '19:15', '20:00'
 ];
 
-const generateNextDates = () => {
-  const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
-  const list = [];
-  const baseTime = Date.now();
-  
-  for (let i = 0; i < 5; i++) {
-    const d = new Date(baseTime + i * 24 * 60 * 60 * 1000);
-    const dayName = i === 0 ? 'Hari Ini' : i === 1 ? 'Besok' : days[d.getDay()];
-    const label = `${dayName}, ${d.getDate()} ${months[d.getMonth()]}`;
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    list.push({ id: iso, label, isToday: i === 0 });
-  }
-  return list;
+const getJakartaDateKey = (date = new Date()) => {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Jakarta',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}`;
 };
 
-const UPCOMING_DATES = generateNextDates();
+const formatDateKey = (dateKey, options) => {
+  const [year, month, day] = dateKey.split('-').map(Number);
+  return new Intl.DateTimeFormat('id-ID', { ...options, timeZone: 'UTC' })
+    .format(new Date(Date.UTC(year, month - 1, day)));
+};
+
+const getCalendarDays = (monthKey) => {
+  const [year, month] = monthKey.split('-').map(Number);
+  const firstDay = new Date(Date.UTC(year, month - 1, 1));
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return [
+    ...Array(firstDay.getUTCDay()).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    })
+  ];
+};
+
+const shiftMonth = (monthKey, amount) => {
+  const [year, month] = monthKey.split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1 + amount, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+};
+
+const getCapsterStatus = (member) => {
+  const status = String(member?.status || 'AVAILABLE').toUpperCase();
+  if (status === 'OFF') return 'OFF';
+  if (status === 'CUTTING' || status === 'IN_SERVICE') return 'CUTTING';
+  return 'AVAILABLE';
+};
 
 const generateBookingCode = () => `ECK-${Math.floor(100 + Math.random() * 900)}`;
 
@@ -327,8 +353,12 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState('form'); // 'form' | 'qris' | 'success'
   const [selectedService, setSelectedService] = useState(null);
-  const [selectedDate, setSelectedDate] = useState(UPCOMING_DATES[0].label);
+  const [todayIso, setTodayIso] = useState(() => getJakartaDateKey());
+  const [selectedDate, setSelectedDate] = useState(() => getJakartaDateKey());
+  const [calendarMonth, setCalendarMonth] = useState(() => getJakartaDateKey().slice(0, 7));
   const [selectedTime, setSelectedTime] = useState(TIME_SLOTS[1]);
+  const [selectedCapsterId, setSelectedCapsterId] = useState('');
+  const [liveTeamMembers, setLiveTeamMembers] = useState(barber?.teamMembers || []);
   const [availabilityBookings, setAvailabilityBookings] = useState([]);
   const [availabilityReady, setAvailabilityReady] = useState(false);
   const [availabilityDate, setAvailabilityDate] = useState('');
@@ -343,8 +373,69 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeTicket, setActiveTicket] = useState(null);
 
+  const teamMembers = liveTeamMembers;
+  const teamBookingEnabled = barber?.profileType === 'barbershop'
+    && barber?.features?.team === true
+    && teamMembers.length > 0;
+  const selectedCapster = teamMembers.find((member) => member.id === selectedCapsterId) || null;
+  const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);
+  const calendarMonthLabel = useMemo(() => {
+    const [year, month] = calendarMonth.split('-').map(Number);
+    return new Intl.DateTimeFormat('id-ID', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+      .format(new Date(Date.UTC(year, month - 1, 1)));
+  }, [calendarMonth]);
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const currentDate = getJakartaDateKey();
+      setTodayIso((previousDate) => previousDate === currentDate ? previousDate : currentDate);
+    }, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    if (selectedDate < todayIso) setSelectedDate(todayIso);
+    if (calendarMonth < todayIso.slice(0, 7)) setCalendarMonth(todayIso.slice(0, 7));
+  }, [todayIso, selectedDate, calendarMonth]);
+
+  useEffect(() => {
+    setLiveTeamMembers(barber?.teamMembers || []);
+  }, [barber?.id, barber?.teamMembers]);
+
+  useEffect(() => {
+    const barberId = barber?.id;
+    if (!isSupabaseConfigured || isPreview || !barberId || !barber?.features?.team) return undefined;
+
+    let active = true;
+    const refreshTeamStatus = async () => {
+      const { data, error } = await supabase
+        .from('barbers')
+        .select('team_members')
+        .eq('id', barberId)
+        .maybeSingle();
+
+      if (error) {
+        console.warn('Capster status refresh failed:', error);
+        return;
+      }
+      if (active && Array.isArray(data?.team_members)) {
+        setLiveTeamMembers(data.team_members);
+      }
+    };
+
+    refreshTeamStatus();
+    const interval = setInterval(refreshTeamStatus, 5000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [barber?.id, barber?.features?.team, isPreview]);
+
   const isSlotAvailable = useCallback((slot) => {
     if (!availabilityReady || availabilityDate !== selectedDate || availabilityError) return false;
+    if (teamBookingEnabled && (
+      !selectedCapster || getCapsterStatus(selectedCapster) !== 'AVAILABLE'
+    )) return false;
     const start = timeToMinutes(slot);
     const end = start + getServiceDurationMinutes(selectedService || activeServices[0]);
     if (!Number.isFinite(start) || end > 24 * 60) return false;
@@ -355,14 +446,13 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
         : bookingStart + 45;
       return start < bookingEnd && end > bookingStart;
     });
-  }, [availabilityReady, availabilityDate, selectedDate, availabilityError, availabilityBookings, selectedService, activeServices]);
+  }, [availabilityReady, availabilityDate, selectedDate, availabilityError, availabilityBookings, selectedService, activeServices, teamBookingEnabled, selectedCapster]);
 
   useEffect(() => {
     if (!isBookingOpen || isPreview) return undefined;
 
     let active = true;
     let refreshTimer;
-    const dateIso = UPCOMING_DATES.find((date) => date.label === selectedDate)?.id;
     const barberId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(barber?.id))
       ? barber.id
       : null;
@@ -378,12 +468,27 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
         return;
       }
 
+      if (teamBookingEnabled && !selectedCapsterId) {
+        setAvailabilityBookings([]);
+        setAvailabilityReady(true);
+        setAvailabilityDate(selectedDate);
+        setAvailabilityError('');
+        return;
+      }
+
       try {
-        const { data, error } = await supabase.rpc('get_public_booking_availability', {
-          p_barber_id: barberId,
-          p_booking_date: dateIso,
-          p_barber_name: barber?.name || null
-        });
+        const { data, error } = teamBookingEnabled && selectedCapsterId
+          ? await supabase.rpc('get_public_capster_booking_availability', {
+              p_barber_id: barberId,
+              p_booking_date: selectedDate,
+              p_barber_name: barber?.name || null,
+              p_capster_id: selectedCapsterId
+            })
+          : await supabase.rpc('get_public_booking_availability', {
+              p_barber_id: barberId,
+              p_booking_date: selectedDate,
+              p_barber_name: barber?.name || null
+            });
         if (error) throw error;
         if (active) {
           setAvailabilityBookings(Array.isArray(data) ? data : []);
@@ -409,7 +514,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       active = false;
       clearInterval(refreshTimer);
     };
-  }, [isBookingOpen, isPreview, selectedDate, barber?.id, barber?.name]);
+  }, [isBookingOpen, isPreview, selectedDate, selectedCapsterId, teamBookingEnabled, barber?.id, barber?.name]);
 
   // Baca tiket aktif tersimpan di HP pelanggan
   useEffect(() => {
@@ -444,8 +549,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               ticketToken: bookingQrisData.ticketToken,
               customerName,
               customerPhone,
+              capsterName: selectedCapster?.name || null,
               serviceName: selectedService?.name || activeServices[0]?.name,
-              date: selectedDate,
+              date: formatDateKey(selectedDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
               time: selectedTime,
               price: bookingQrisData.totalAmount,
               paymentMethod: 'QRIS (Lunas Otomatis)'
@@ -470,7 +576,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       active = false;
       clearInterval(interval);
     };
-  }, [bookingStep, bookingQrisData, customerName, customerPhone, selectedService, activeServices, selectedDate, selectedTime]);
+  }, [bookingStep, bookingQrisData, customerName, customerPhone, selectedCapster, selectedService, activeServices, selectedDate, selectedTime]);
 
   // Tipping Modal State
   const [isTippingOpen, setIsTippingOpen] = useState(false);
@@ -537,9 +643,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     }
   };
 
-  const handleOpenBooking = (service = null, prefilledNote = '') => {
+  const handleOpenBooking = (service = null, capsterId = '') => {
     setSelectedService(service || activeServices[0]);
-    if (prefilledNote) setNoteStyle(prefilledNote);
+    const firstAvailableCapster = teamMembers.find((member) => getCapsterStatus(member) === 'AVAILABLE');
+    setSelectedCapsterId(capsterId || firstAvailableCapster?.id || '');
     setBookingSuccessData(null);
     setBookingQrisData(null);
     setBookingStep('form');
@@ -558,6 +665,12 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const handleSubmitBooking = async (e) => {
     e.preventDefault();
     if (!customerName.trim() || !customerPhone.trim()) return;
+    if (teamBookingEnabled && (
+      !selectedCapster || getCapsterStatus(selectedCapster) !== 'AVAILABLE'
+    )) {
+      window.alert('Pilih capster yang sedang free sebelum melanjutkan booking.');
+      return;
+    }
     if (isSupabaseConfigured && (!availabilityReady || !isSlotAvailable(selectedTime))) {
       window.alert(availabilityError || 'Slot ini tidak lagi tersedia. Silakan pilih jadwal lain.');
       return;
@@ -577,9 +690,11 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       customerPhone: customerPhone.trim(),
       barberId: barber.id,
       barberName: barber.name,
+      capsterId: teamBookingEnabled ? selectedCapster.id : null,
+      capsterName: teamBookingEnabled ? selectedCapster.name : null,
       serviceName: selectedService ? selectedService.name : activeServices[0].name,
-      date: selectedDate,
-      dateIso: UPCOMING_DATES.find((date) => date.label === selectedDate)?.id,
+      date: formatDateKey(selectedDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
+      dateIso: selectedDate,
       time: selectedTime,
       serviceId: selectedService?.id || activeServices[0]?.id,
       status: paymentMethod === 'QRIS' ? 'Menunggu' : 'Terkonfirmasi',
@@ -1090,21 +1205,27 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
             <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-3 transform-gpu will-change-transform">
               <div className="flex items-center justify-between px-1 mb-1">
                 <span className={`text-[11px] font-mono font-bold uppercase tracking-wider ${theme.textSecondary}`}>
-                  Tim Capster Bertugas
+                  Status Capster
                 </span>
                 <span className="text-[11px] text-neutral-400 font-mono">
-                  {(barber.teamMembers || []).length} Capster
+                  {teamMembers.length} Capster
                 </span>
               </div>
 
-              {(barber.teamMembers || []).length === 0 ? (
+              {teamMembers.length === 0 ? (
                 <div className={`${isPreview ? 'p-4 rounded-xl' : 'p-8 rounded-2xl'} text-center border border-dashed ${theme.cardBorder} text-neutral-400`}>
                   <Users className={`${isPreview ? 'w-5 h-5 mb-1.5' : 'w-8 h-8 mb-2'} mx-auto opacity-40`} />
                   <p className={`${isPreview ? 'text-[11px]' : 'text-xs'} font-semibold`}>Belum ada capster yang didaftarkan</p>
                   <p className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} opacity-75 mt-0.5`}>Owner belum menambahkan anggota tim capster di studio ini.</p>
                 </div>
               ) : (
-                (barber.teamMembers || []).map((member) => (
+                teamMembers.map((member) => {
+                  const status = getCapsterStatus(member);
+                  const statusLabel = status === 'CUTTING'
+                    ? 'Sedang cukur'
+                    : status === 'OFF' ? 'Libur' : 'Free';
+                  const isAvailable = status === 'AVAILABLE';
+                  return (
                   <div 
                     key={member.id}
                     className={`${isPreview ? 'p-2.5 rounded-xl' : 'p-3.5 rounded-2xl'} border flex items-center justify-between gap-2 shadow-2xs ${theme.cardBg} ${theme.cardBorder}`}
@@ -1122,9 +1243,14 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       <div className="min-w-0">
                         <div className="flex items-center gap-1">
                           <h4 className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-sm'} tracking-tight truncate`}>{member.name}</h4>
-                          <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${member.status === 'OFF' ? 'bg-neutral-400' : 'bg-emerald-500'}`} />
                         </div>
                         <p className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} truncate ${theme.textSecondary}`}>{member.specialty || 'Capster'}</p>
+                        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold mt-1 ${
+                          status === 'CUTTING' ? 'text-amber-700' : status === 'OFF' ? 'text-neutral-400' : 'text-emerald-700'
+                        }`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${status === 'CUTTING' ? 'bg-amber-500' : status === 'OFF' ? 'bg-neutral-400' : 'bg-emerald-500'}`} />
+                          {statusLabel}
+                        </span>
                         {member.schedule && (
                           <span className="text-[9px] text-neutral-400 font-mono block mt-0.5">{member.schedule}</span>
                         )}
@@ -1134,14 +1260,16 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     {features.booking !== false && activeServices.length > 0 && (
                       <button
                         type="button"
-                        onClick={() => handleOpenBooking(activeServices[0], `Pilihan Capster: ${member.name}`)}
-                        className={`${isPreview ? 'px-2 py-1 text-[10px] rounded-lg' : 'px-3 py-2 text-[11px] rounded-xl'} text-white font-bold shrink-0 transition-transform active:scale-95 ${theme.accentBg}`}
+                        onClick={() => handleOpenBooking(activeServices[0], member.id)}
+                        disabled={!isAvailable}
+                        className={`${isPreview ? 'px-2 py-1 text-[10px] rounded-lg' : 'px-3 py-2 text-[11px] rounded-xl'} text-white font-bold shrink-0 transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${theme.accentBg}`}
                       >
-                        Pilih
+                        {isAvailable ? 'Pilih' : statusLabel}
                       </button>
                     )}
                   </div>
-                ))
+                );
+                })
               )}
             </motion.div>
           )}
@@ -1696,6 +1824,12 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       <span className="text-neutral-500">Layanan:</span>
                       <strong className="text-[#171717]">{bookingSuccessData.serviceName}</strong>
                     </div>
+                    {bookingSuccessData.capsterName && (
+                      <div className="flex justify-between">
+                        <span className="text-neutral-500">Capster:</span>
+                        <strong className="text-[#171717]">{bookingSuccessData.capsterName}</strong>
+                      </div>
+                    )}
                     <div className="flex justify-between">
                       <span className="text-neutral-500">Waktu Kedatangan:</span>
                       <strong className="text-[#285844]">{bookingSuccessData.date} • {bookingSuccessData.time} WIB</strong>
@@ -1723,7 +1857,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       onClick={() => {
                         const shortId = `#${String(bookingSuccessData.id).slice(-6).toUpperCase()}`;
                         const ticketUrl = `${window.location.origin}/tiket/${bookingSuccessData.id}#t=${encodeURIComponent(bookingSuccessData.ticketToken || '')}`;
-                        const text = `💈 *TIKET RESERVASI E-CUKUR*\nNo. Tiket: ${shortId}\nJadwal: ${bookingSuccessData.date} • ${bookingSuccessData.time} WIB\nLayanan: ${bookingSuccessData.serviceName}\nBuka Tiket: ${ticketUrl}`;
+                        const capsterLine = bookingSuccessData.capsterName ? `\nCapster: ${bookingSuccessData.capsterName}` : '';
+                        const text = `💈 *TIKET RESERVASI E-CUKUR*\nNo. Tiket: ${shortId}\nJadwal: ${bookingSuccessData.date} • ${bookingSuccessData.time} WIB\nLayanan: ${bookingSuccessData.serviceName}${capsterLine}\nBuka Tiket: ${ticketUrl}`;
                         window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                       }}
                       className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
@@ -1764,24 +1899,85 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     </select>
                   </div>
 
+                  {teamBookingEnabled && (
+                    <div>
+                      <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Pilih Capster:</label>
+                      <select
+                        value={selectedCapsterId}
+                        onChange={(e) => setSelectedCapsterId(e.target.value)}
+                        className="w-full text-xs font-semibold p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844] text-[#171717] cursor-pointer"
+                      >
+                        <option value="">Pilih capster yang sedang free</option>
+                        {teamMembers.map((member) => {
+                          const status = getCapsterStatus(member);
+                          const label = status === 'CUTTING' ? 'Sedang cukur' : status === 'OFF' ? 'Libur' : 'Free';
+                          return (
+                            <option key={member.id} value={member.id} disabled={status !== 'AVAILABLE'}>
+                              {member.name} — {label}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  )}
+
                   {/* Pick Date */}
                   <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-2">Pilih Hari:</label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {UPCOMING_DATES.slice(0, 3).map((dt) => (
+                    <div className="flex items-center justify-between mb-2">
+                      <label className="text-xs font-semibold text-neutral-700">Pilih Tanggal:</label>
+                      <span className="text-[10px] text-neutral-500 font-medium">{formatDateKey(selectedDate, { weekday: 'long', day: 'numeric', month: 'long' })}</span>
+                    </div>
+                    <div className="rounded-xl border border-neutral-200 bg-white p-2.5">
+                      <div className="flex items-center justify-between mb-2">
                         <button
-                          key={dt.id}
                           type="button"
-                          onClick={() => setSelectedDate(dt.label)}
-                          className={`p-2.5 rounded-xl border text-center text-xs font-semibold transition-all ${
-                            selectedDate === dt.label 
-                              ? 'border-[#285844] bg-[#D9E5DC]/40 text-[#285844] font-bold' 
-                              : 'border-neutral-200 bg-white hover:border-neutral-300 text-neutral-600'
-                          }`}
+                          onClick={() => setCalendarMonth((month) => shiftMonth(month, -1))}
+                          disabled={calendarMonth <= todayIso.slice(0, 7)}
+                          aria-label="Bulan sebelumnya"
+                          className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100 disabled:opacity-30 disabled:cursor-not-allowed"
                         >
-                          {dt.label}
+                          <ChevronLeft className="w-4 h-4" />
                         </button>
-                      ))}
+                        <span className="text-xs font-bold capitalize text-neutral-800">{calendarMonthLabel}</span>
+                        <button
+                          type="button"
+                          onClick={() => setCalendarMonth((month) => shiftMonth(month, 1))}
+                          aria-label="Bulan berikutnya"
+                          className="p-1.5 rounded-lg text-neutral-500 hover:bg-neutral-100"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <div className="grid grid-cols-7 mb-1">
+                        {['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'].map((day) => (
+                          <span key={day} className="py-1 text-center text-[9px] font-semibold text-neutral-400">{day}</span>
+                        ))}
+                      </div>
+                      <div className="grid grid-cols-7 gap-y-1">
+                        {calendarDays.map((dateKey, index) => {
+                          const isPast = dateKey && dateKey < todayIso;
+                          return dateKey ? (
+                            <button
+                              key={dateKey}
+                              type="button"
+                              onClick={() => setSelectedDate(dateKey)}
+                              disabled={isPast}
+                              aria-pressed={selectedDate === dateKey}
+                              className={`mx-auto h-8 w-8 rounded-full text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:text-neutral-300 ${
+                                selectedDate === dateKey
+                                  ? 'bg-[#285844] text-white'
+                                  : dateKey === todayIso
+                                  ? 'border border-[#285844] text-[#285844]'
+                                  : 'text-neutral-700 hover:bg-neutral-100'
+                              }`}
+                            >
+                              {Number(dateKey.slice(-2))}
+                            </button>
+                          ) : (
+                            <span key={`empty-${index}`} className="h-8" />
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
 
@@ -1790,14 +1986,16 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-xs font-semibold text-neutral-700">Pilih Jam Kedatangan:</label>
                       <span className="text-[10px] font-mono text-neutral-500">
-                        {availabilityReady && availabilityDate === selectedDate ? 'WIB' : 'Memuat...'}
+                        {teamBookingEnabled && !selectedCapster
+                          ? 'Pilih capster'
+                          : availabilityReady && availabilityDate === selectedDate ? 'WIB' : 'Memuat...'}
                       </span>
                     </div>
                     {availabilityError && (
                       <p role="alert" className="mb-2 text-[10px] text-red-700">{availabilityError}</p>
                     )}
                     <div className="grid grid-cols-4 gap-2">
-                      {TIME_SLOTS.slice(0, 8).map((slot) => (
+                      {TIME_SLOTS.map((slot) => (
                         <button
                           key={slot}
                           type="button"

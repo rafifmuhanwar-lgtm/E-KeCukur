@@ -42,6 +42,8 @@ CREATE TABLE bookings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   customer_id UUID REFERENCES users(id),
   barber_id UUID REFERENCES barbers(id),
+  capster_id TEXT,
+  capster_name TEXT,
   service_id UUID REFERENCES services(id),
   booking_date DATE NOT NULL,
   start_time TIME NOT NULL,

@@ -354,7 +354,24 @@ export default function BarberDashboard() {
   const [newTeamPhoto, setNewTeamPhoto] = useState('');
   const [teamPhotoStats, setTeamPhotoStats] = useState(null);
   const [isCompressingTeamPhoto, setIsCompressingTeamPhoto] = useState(false);
+  const [updatingCapsterId, setUpdatingCapsterId] = useState(null);
   const teamPhotoInputRef = useRef(null);
+
+  const handleToggleCapsterStatus = async (member) => {
+    const nextStatus = String(member.status || 'AVAILABLE').toUpperCase() === 'CUTTING'
+      ? 'AVAILABLE'
+      : 'CUTTING';
+    const teamMembers = (barber.teamMembers || []).map((teamMember) =>
+      teamMember.id === member.id ? { ...teamMember, status: nextStatus } : teamMember
+    );
+
+    setUpdatingCapsterId(member.id);
+    const result = await updateBarber(barber.id, { teamMembers });
+    setUpdatingCapsterId(null);
+    showToast(result?.success
+      ? `${member.name} sekarang ${nextStatus === 'CUTTING' ? 'sedang cukur' : 'free'}.`
+      : `Gagal memperbarui status capster: ${result?.error || 'tidak dapat menyimpan perubahan'}`);
+  };
 
   // Mode & Feature Toggle helpers
   const handleToggleFeature = (featureKey) => {
@@ -1547,7 +1564,7 @@ export default function BarberDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
                     {(barber.teamMembers || []).map((m) => (
-                      <div key={m.id} className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/50 flex items-center justify-between gap-3">
+                      <div key={m.id} className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-12 h-12 rounded-full overflow-hidden bg-neutral-200 border border-neutral-300 shrink-0">
                             {m.photo ? (
@@ -1565,17 +1582,35 @@ export default function BarberDashboard() {
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            deleteBarberTeamMember(barber.id, m.id);
-                            showToast(`Capster ${m.name} berhasil dihapus`);
-                          }}
-                          className="p-2 text-neutral-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer shrink-0"
-                          title="Hapus Capster"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCapsterStatus(m)}
+                            disabled={updatingCapsterId === m.id}
+                            className={`px-3 py-2 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                              String(m.status || 'AVAILABLE').toUpperCase() === 'CUTTING'
+                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                            }`}
+                          >
+                            {updatingCapsterId === m.id
+                              ? 'Menyimpan...'
+                              : String(m.status || 'AVAILABLE').toUpperCase() === 'CUTTING'
+                              ? 'Selesai cukur · Free'
+                              : 'Mulai cukur'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteBarberTeamMember(barber.id, m.id);
+                              showToast(`Capster ${m.name} berhasil dihapus`);
+                            }}
+                            className="p-2 text-neutral-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer shrink-0"
+                            title="Hapus Capster"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2027,6 +2062,12 @@ export default function BarberDashboard() {
 
                         <div className="text-xs text-neutral-600 flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-[#285844]">{b.serviceName}</span>
+                          {b.capsterName && (
+                            <>
+                              <span>•</span>
+                              <span>Capster: <strong>{b.capsterName}</strong></span>
+                            </>
+                          )}
                           <span>•</span>
                           <span className="font-mono font-medium">{formatRupiah(b.price)}</span>
                         </div>
