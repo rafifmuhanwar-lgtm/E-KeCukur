@@ -1,5 +1,15 @@
 # React + Vite
 
+## Google OAuth setup
+
+Google sign-in uses Supabase OAuth redirects, so Vercel Preview deployments do
+not need their own Google JavaScript origins. Configure the Google OAuth client
+in Supabase **Authentication → Sign In / Providers → Google**. In Google Cloud,
+authorize the Supabase callback URL (`https://<project-ref>.supabase.co/auth/v1/callback`).
+In Supabase **Authentication → URL Configuration**, add the production URL and
+the Vercel Preview URL pattern for this project to the allowed redirect URLs;
+otherwise Supabase will reject the return to a Preview deployment.
+
 ## Consultation chat setup
 
 The chat uses the existing Supabase Auth client and persists conversations and
