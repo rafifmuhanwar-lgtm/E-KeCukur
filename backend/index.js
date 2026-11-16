@@ -77,6 +77,27 @@ app.get('/api/barbers', async (req, res) => {
   }
 });
 
+// ━━━ 5. Update Barber Status Endpoint ━━━
+app.patch('/api/barbers/:id/status', async (req, res) => {
+  const barberId = req.params.id;
+  const { status } = req.body;
+  const allowed = ['AVAILABLE', 'BREAK', 'LEAVE', 'OFF'];
+  if (!allowed.includes(status)) {
+    return res.status(400).json({ success: false, error: 'Invalid status value' });
+  }
+  try {
+    const { data, error } = await supabase
+      .from('barbers')
+      .update({ availability_status: status })
+      .eq('id', barberId)
+      .single();
+    if (error) throw error;
+    res.json({ success: true, data });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // ━━━ 4. Bookings Endpoints ━━━
 app.get('/api/bookings', async (req, res) => {
   try {
