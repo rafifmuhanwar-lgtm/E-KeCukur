@@ -131,9 +131,8 @@ export async function createQrisPayment({
       signal: controller.signal
     });
     clearTimeout(timeoutId);
-
     if (res.ok) {
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
       if (data?.success && data?.payment) {
         return data;
       }
@@ -245,6 +244,7 @@ export async function checkQrisPaymentStatus(referenceId) {
   }
 }
 
+
 /**
  * Simulasi webhook pembayaran (untuk testing dev tanpa uang asli)
  */
@@ -292,3 +292,4 @@ export async function simulateQrisPayment(referenceId, amount) {
     message: 'Simulasi pembayaran fallback berhasil'
   };
 }
+

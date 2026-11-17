@@ -1,5 +1,15 @@
 # React + Vite
 
+## Google OAuth setup
+
+Google sign-in uses Supabase OAuth redirects, so Vercel Preview deployments do
+not need their own Google JavaScript origins. Configure the Google OAuth client
+in Supabase **Authentication → Sign In / Providers → Google**. In Google Cloud,
+authorize the Supabase callback URL (`https://<project-ref>.supabase.co/auth/v1/callback`).
+In Supabase **Authentication → URL Configuration**, add the production URL and
+the Vercel Preview URL pattern for this project to the allowed redirect URLs;
+otherwise Supabase will reject the return to a Preview deployment.
+
 ## Consultation chat setup
 
 The chat uses the existing Supabase Auth client and persists conversations and
@@ -25,6 +35,33 @@ name-only step does not verify a person's legal identity. Re-run the updated
 chat migration to install the display-name validation functions.
 Booking continues to collect customer name and WhatsApp in its existing form.
 Barber and capster sign-in continues to use the existing studio login.
+
+The QRIS API also requires `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
+`QRIS_WEBHOOK_SECRET` as server-side Vercel environment variables. Never prefix
+the service-role key with `VITE_` or expose it to frontend code. Apply
+[`../backend/qris_payment_hardening.sql`](../backend/qris_payment_hardening.sql)
+to a staging Supabase project first; it removes anonymous payment-table access
+and limits payment-log reads to staff/admin users. Do not apply it to production
+until the Preview API and payment flow have been verified.
+
+To secure booking records without breaking guest booking, ticket links, or
+authorized dashboards, apply
+[`../backend/booking_access_hardening.sql`](../backend/booking_access_hardening.sql)
+to staging after the booking-tracking migration. It removes direct anonymous
+booking-table access, uses the existing booking/tracking RPCs, and exposes only
+non-identifying schedule data through the availability RPC. Test guest booking
+and token-based ticket links, customer-owned tickets, barber dashboards, and
+the admin dashboard before applying the migration to production.
+Admin accounts must be represented by the existing `users` row with role
+`STAFF` or `ADMIN`, or use an email already in the application's admin
+allowlist; barber accounts retain access only to their own shop's bookings.
+
+Capster assignment and public availability require
+[`../backend/capster_booking_migration.sql`](../backend/capster_booking_migration.sql)
+after the booking access migration. Apply it to staging first; it adds capster
+assignment to bookings and allows separate capsters in the same shop to accept
+overlapping appointments. Apply it to production before deploying the matching
+frontend.
 
 The inbox is available to customers at `/messages` and to authenticated
 barber/capster accounts at `/barber/messages`. Consultation starts from an

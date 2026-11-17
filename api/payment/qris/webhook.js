@@ -6,7 +6,7 @@ const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 const CONFIGURED_SECRET = (process.env.QRIS_WEBHOOK_SECRET || '').trim();
-const EXPECTED_SECRET = CONFIGURED_SECRET || 'ecukur_qris_secret_2026';
+const EXPECTED_SECRET = CONFIGURED_SECRET;
 
 function isValidWebhookSecret(providedSecret, expectedSecret) {
   if (typeof providedSecret !== 'string' || providedSecret.length === 0) {
@@ -167,6 +167,10 @@ export default async function handler(req, res) {
       ''
     ).trim();
 
+    if (!EXPECTED_SECRET) {
+      return res.status(503).json({ success: false, message: 'Webhook secret belum dikonfigurasi di server' });
+    }
+
     if (!providedSecret || !isValidWebhookSecret(providedSecret, EXPECTED_SECRET)) {
       return res.status(401).json({ success: false, message: 'Unauthorized: Secret key header tidak valid atau tidak disertakan' });
     }
@@ -212,15 +216,10 @@ export default async function handler(req, res) {
     console.log('[Vercel QRIS Webhook] Parsed Amount:', targetAmount);
 
     if (!targetAmount || targetAmount <= 0) {
-      if (matched && matchDetails) {
-      // Trigger notifikasi instan ke Grup Telegram
-      sendTelegramPaymentNotification(matchDetails, targetAmount).catch(() => {});
-    }
-
-    return res.status(200).json({
-        success: true,
+      return res.status(400).json({
+        success: false,
         matched: false,
-        message: 'Notifikasi berhasil diterima, namun tidak ada nominal transaksi pembayaran yang cocok.'
+        message: 'Tidak ada nominal pembayaran yang valid pada notifikasi.'
       });
     }
 

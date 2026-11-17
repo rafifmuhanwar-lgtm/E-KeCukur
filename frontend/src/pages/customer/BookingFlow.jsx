@@ -34,7 +34,7 @@ const generateUpcomingDates = () => {
     const dayName = i === 0 ? 'Hari Ini' : i === 1 ? 'Besok' : days[d.getDay()];
     const label = `${dayName}, ${d.getDate()} ${months[d.getMonth()]}`;
     const short = `${d.getDate()} ${months[d.getMonth()]}`;
-    const iso = d.toISOString().split('T')[0];
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     list.push({ id: iso, label, short, dayName, isToday: i === 0 });
   }
   return list;
@@ -110,8 +110,10 @@ export default function BookingFlow() {
         customerPhone: customerPhone.trim(),
         note: customerNote.trim() || '-',
         barberName: selectedBarber || 'Bebas (Capster Tersedia)',
+        serviceId: selectedService?.id,
         serviceName: selectedService?.name || 'CUKUR UMUM',
         date: selectedDate?.label || 'Hari Ini',
+        dateIso: selectedDate?.id,
         time: selectedTime || '10:00',
         price: selectedService?.price || 40000,
         paymentMethod
@@ -119,9 +121,9 @@ export default function BookingFlow() {
 
       setIsSubmitting(false);
       if (created?.id) {
-        navigate(`/tiket/${created.id}`);
+        navigate(`/tiket/${created.id}#t=${encodeURIComponent(created.ticketToken || '')}`);
       } else {
-        navigate('/');
+        window.alert(created?.error || 'Booking gagal disimpan. Silakan coba lagi.');
       }
     }, 600);
   };

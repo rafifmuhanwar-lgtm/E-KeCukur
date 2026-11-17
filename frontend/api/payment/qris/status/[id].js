@@ -1,9 +1,4 @@
-import { createClient } from '@supabase/supabase-js';
-
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://natgqaksuousldfxydnr.supabase.co';
-const SUPABASE_KEY = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5hdGdxYWtzdW91c2xkZnh5ZG5yIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MjUxMjAsImV4cCI6MjEwNzMwMTEyMH0.09noBpwZ6jHYeJJV-3rprhUtqPk8XvBRTLTJKCEJHA8';
-
-const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+import { getSupabaseAdmin } from '../supabaseAdmin.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Credentials', true);
@@ -19,47 +14,44 @@ export default async function handler(req, res) {
   }
 
   try {
+    const supabase = getSupabaseAdmin();
     // 1. Cek tabel qris_payments
-    try {
-      const { data: qrisRow } = await supabase
-        .from('qris_payments')
-        .select('*')
-        .eq('reference_id', refId)
-        .maybeSingle();
+    const { data: qrisRow, error: paymentError } = await supabase
+      .from('qris_payments')
+      .select('status, paid_at, total_amount, type, booking_id')
+      .eq('reference_id', refId)
+      .maybeSingle();
+    if (paymentError) throw paymentError;
 
-      if (qrisRow) {
-        return res.status(200).json({
-          success: true,
-          status: qrisRow.status,
-          paidAt: qrisRow.paid_at,
-          totalAmount: qrisRow.total_amount,
-          type: qrisRow.type,
-          bookingId: qrisRow.booking_id
-        });
-      }
-    } catch (e) {
-      // qris_payments table may not exist yet
+    if (qrisRow) {
+      return res.status(200).json({
+        success: true,
+        status: qrisRow.status,
+        paidAt: qrisRow.paid_at,
+        totalAmount: qrisRow.total_amount,
+        type: qrisRow.type,
+        bookingId: qrisRow.booking_id
+      });
     }
 
     // 2. Fallback cek ke tabel bookings
-    try {
-      const { data: bookingRow } = await supabase
-        .from('bookings')
-        .select('*')
-        .eq('id', refId)
-        .maybeSingle();
+    const { data: bookingRow, error: bookingError } = await supabase
+      .from('bookings')
+      .select('payment_status, booking_status, total_price')
+      .eq('id', refId)
+      .maybeSingle();
+    if (bookingError) throw bookingError;
 
-      if (bookingRow) {
-        const isPaid = bookingRow.payment_status === 'PAID';
-        return res.status(200).json({
-          success: true,
-          status: isPaid ? 'PAID' : 'PENDING',
-          paymentStatus: bookingRow.payment_status,
-          bookingStatus: bookingRow.booking_status,
-          totalPrice: bookingRow.total_price
-        });
-      }
-    } catch (e) {}
+    if (bookingRow) {
+      const isPaid = bookingRow.payment_status === 'PAID';
+      return res.status(200).json({
+        success: true,
+        status: isPaid ? 'PAID' : 'PENDING',
+        paymentStatus: bookingRow.payment_status,
+        bookingStatus: bookingRow.booking_status,
+        totalPrice: bookingRow.total_price
+      });
+    }
 
     // Default response jika belum ditemukan
     return res.status(200).json({
@@ -68,7 +60,8 @@ export default async function handler(req, res) {
       message: 'Menunggu notifikasi pembayaran masuk'
     });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    const statusCode = err.code === 'SUPABASE_SERVER_CONFIG' ? 503 : 500;
+    return res.status(statusCode).json({ success: false, message: 'Status pembayaran gagal diperiksa.' });
   }
 }
 

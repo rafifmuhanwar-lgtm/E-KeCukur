@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS bookings (
   customer_email TEXT,
   barber_id UUID REFERENCES barbers(id) ON DELETE SET NULL,
   barber_name TEXT,
+  capster_id TEXT,
+  capster_name TEXT,
   service_id UUID REFERENCES services(id) ON DELETE SET NULL,
   service_name TEXT,
   booking_date DATE,

@@ -1,14 +1,19 @@
 import { create } from 'zustand';
 import { supabase, isSupabaseConfigured } from './lib/supabase';
 import { uploadBarberProfilePhoto, uploadPortfolioPhoto, uploadBarberBannerPhoto } from './lib/imageUploader';
+import { createGuestTicketToken } from './lib/bookingTracking';
 
-// ─── STATUS MAPPERS (SUPABASE DB <-> UI) ───
+// â”€â”€â”€ STATUS MAPPERS (SUPABASE DB <-> UI) â”€â”€â”€
 export const dbToUiStatus = (dbStatus) => {
   switch (dbStatus) {
     case 'CONFIRMED':
       return 'Terkonfirmasi';
     case 'ARRIVED':
       return 'Tiba di Lokasi';
+    case 'WAITING':
+      return 'Menunggu';
+    case 'IN_SERVICE':
+      return 'Sedang Dilayani';
     case 'COMPLETED':
       return 'Selesai';
     case 'CANCELLED':
@@ -26,6 +31,8 @@ export const uiToDbStatus = (uiStatus) => {
       return 'CONFIRMED';
     case 'Tiba di Lokasi':
       return 'ARRIVED';
+    case 'Sedang Dilayani':
+      return 'IN_SERVICE';
     case 'Selesai':
       return 'COMPLETED';
     case 'Batal':
@@ -116,14 +123,14 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
       bankName: 'BCA / QRIS',
       accountNumber: '',
       accountHolder: '',
-      thankYouMessage: 'Terima kasih banyak atas tip kopinya! Sehat dan sukses selalu bro 🙏',
+      thankYouMessage: 'Terima kasih banyak atas tip kopinya! Sehat dan sukses selalu bro ðŸ™',
       presets: [
-        { id: 'p1', amount: 5000, label: 'Kopi Tubruk', price: '5K', active: true, emoji: '☕' },
-        { id: 'p2', amount: 10000, label: 'Es Kopi Susu', price: '10K', active: true, emoji: '🥤' },
-        { id: 'p3', amount: 20000, label: 'Roti & Kopi', price: '20K', active: true, emoji: '🥐' },
-        { id: 'p4', amount: 35000, label: 'Paket Makan Siang', price: '35K', active: true, emoji: '🍱' },
-        { id: 'p5', amount: 50000, label: 'Traktir Sultan', price: '50K', active: true, emoji: '👑' },
-        { id: 'p6', amount: 100000, label: 'Super Fan Cukur', price: '100K', active: false, emoji: '🔥' },
+        { id: 'p1', amount: 5000, label: 'Kopi Tubruk', price: '5K', active: true, emoji: 'â˜•' },
+        { id: 'p2', amount: 10000, label: 'Es Kopi Susu', price: '10K', active: true, emoji: 'ðŸ¥¤' },
+        { id: 'p3', amount: 20000, label: 'Roti & Kopi', price: '20K', active: true, emoji: 'ðŸ¥' },
+        { id: 'p4', amount: 35000, label: 'Paket Makan Siang', price: '35K', active: true, emoji: 'ðŸ±' },
+        { id: 'p5', amount: 50000, label: 'Traktir Sultan', price: '50K', active: true, emoji: 'ðŸ‘‘' },
+        { id: 'p6', amount: 100000, label: 'Super Fan Cukur', price: '100K', active: false, emoji: 'ðŸ”¥' },
       ]
     },
     tipsHistory: Array.isArray(row.tips_history) ? row.tips_history : [],
@@ -163,9 +170,12 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
 };
 
 async function saveBarberPayloadToSupabase(barberId, payload) {
-  if (!isSupabaseConfigured || !barberId || !payload || Object.keys(payload).length === 0) return;
+  if (!isSupabaseConfigured || !barberId || !payload || Object.keys(payload).length === 0) {
+    return { success: false, error: 'Supabase is not configured or the update is invalid.' };
+  }
 
   let toSend = { ...payload };
+  let lastError = null;
   const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(barberId));
 
   for (let attempt = 0; attempt < 5; attempt++) {
@@ -182,6 +192,7 @@ async function saveBarberPayloadToSupabase(barberId, payload) {
       if (!error) {
         return { success: true };
       }
+      lastError = error.message;
 
       // Jika kolom tertentu belum ada di Supabase, hapus dari toSend lalu ulangi sisa kolom
       const match = error.message && (
@@ -197,12 +208,15 @@ async function saveBarberPayloadToSupabase(barberId, payload) {
       }
     } catch (e) {
       console.warn('[Supabase update exception]:', e.message);
+      lastError = e.message;
       break;
     }
   }
+  return { success: false, error: lastError || 'Unable to save the profile update.' };
 }
 
 let bookingsChannel = null;
+let barbersChannel = null;
 let anonymousSessionRequest = null;
 
 export const useStore = create((set, get) => ({
@@ -216,7 +230,7 @@ export const useStore = create((set, get) => ({
   isSyncedWithSupabase: isSupabaseConfigured,
   error: null,
 
-  // ─── INITIALIZATION (AUTH & DATABASE REALTIME) ───
+  // â”€â”€â”€ INITIALIZATION (AUTH & DATABASE REALTIME) â”€â”€â”€
   initApp: async () => {
     set({ isLoading: true });
     
@@ -243,8 +257,15 @@ export const useStore = create((set, get) => ({
             set({ authUser: u });
             if (u) {
               get().matchActiveBarber(u);
+              get().fetchBookingsFromSupabase();
+              get().subscribeToBookings();
             } else {
               set({ activeBarber: null, activeBarberId: null });
+              set({ bookings: [] });
+              if (bookingsChannel) {
+                supabase.removeChannel(bookingsChannel);
+                bookingsChannel = null;
+              }
             }
           });
         } catch (err) {
@@ -434,11 +455,38 @@ export const useStore = create((set, get) => ({
   fetchBarbers: async () => {
     return await get().fetchBarbersFromSupabase();
   },
+
+  // Update status barber (admin) â€“ mengirim PATCH ke backend dan memperbarui state lokal
+  updateBarberStatus: async (barberId, newStatus) => {
+    if (!isSupabaseConfigured) return { success: false, error: 'Supabase tidak terkonfigurasi' };
+    const allowed = ['AVAILABLE', 'BREAK', 'LEAVE', 'OFF'];
+    if (!allowed.includes(newStatus)) {
+      return { success: false, error: 'Nilai status tidak valid' };
+    }
+    try {
+      const { data, error } = await supabase
+        .from('barbers')
+        .update({ availability_status: newStatus })
+        .eq('id', barberId)
+        .single();
+      if (error) throw error;
+      // Perbarui state lokal
+      set(state => {
+        const updatedBarbers = state.barbers.map(b => b.id === barberId ? { ...b, status: newStatus } : b);
+        const active = state.activeBarberId === barberId ? { ...state.activeBarber, status: newStatus } : state.activeBarber;
+        return { barbers: updatedBarbers, activeBarber: active };
+      });
+      return { success: true, data };
+    } catch (err) {
+      console.warn('updateBarberStatus error:', err);
+      return { success: false, error: err.message };
+    }
+  },
   fetchBookings: async () => {
     return await get().fetchBookingsFromSupabase();
   },
 
-  // ─── FETCH SERVICES DARI SUPABASE ───
+  // â”€â”€â”€ FETCH SERVICES DARI SUPABASE â”€â”€â”€
   fetchServicesFromSupabase: async () => {
     if (!isSupabaseConfigured) return;
     try {
@@ -458,7 +506,7 @@ export const useStore = create((set, get) => ({
     return [];
   },
 
-  // ─── FETCH BARBERS DARI SUPABASE ───
+  // â”€â”€â”€ FETCH BARBERS DARI SUPABASE â”€â”€â”€
   fetchBarbersFromSupabase: async () => {
     if (!isSupabaseConfigured) return;
     try {
@@ -484,16 +532,25 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // ─── FETCH BOOKINGS REALTIME DARI SUPABASE ───
+  // â”€â”€â”€ FETCH BOOKINGS REALTIME DARI SUPABASE â”€â”€â”€
   fetchBookingsFromSupabase: async () => {
     if (!isSupabaseConfigured) return;
+    if (!get().authUser) {
+      set({ bookings: [] });
+      return;
+    }
     try {
       const { data, error } = await supabase
         .from('bookings')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (!error && Array.isArray(data)) {
+      if (error) {
+        console.warn('Fetch bookings error:', error);
+        return;
+      }
+
+      if (Array.isArray(data)) {
         const currentBarbers = get().barbers || [];
         const mapped = data.map((row) => {
           const matchedBarber = currentBarbers.find(b => {
@@ -511,6 +568,8 @@ export const useStore = create((set, get) => ({
             customerPhone: row.customer_phone || '-',
             barberId: row.barber_id || matchedBarber?.id || '',
             barberName: row.barber_name || matchedBarber?.name || 'Semua Capster',
+            capsterId: row.capster_id || null,
+            capsterName: row.capster_name || null,
             serviceName: row.service_name || 'Layanan Cukur',
             date: row.booking_date || 'Hari Ini',
             time: row.start_time ? row.start_time.substring(0, 5) : '10:00',
@@ -529,10 +588,34 @@ export const useStore = create((set, get) => ({
       console.warn('Fetch bookings error:', err);
     }
   },
-
-  // Realtime subscription ke tabel bookings
-  subscribeToBookings: () => {
+  // Realtime subscription ke tabel barbers (status updates)
+  subscribeToBarbers: () => {
     if (!isSupabaseConfigured) return () => {};
+    try {
+      if (barbersChannel) {
+        supabase.removeChannel(barbersChannel);
+        barbersChannel = null;
+      }
+      barbersChannel = supabase
+        .channel(`realtime:barbers:${Date.now()}`)
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'barbers' }, () => {
+          get().fetchBarbersFromSupabase();
+        })
+        .subscribe();
+      return () => {
+        if (barbersChannel) {
+          supabase.removeChannel(barbersChannel);
+          barbersChannel = null;
+        }
+      };
+    } catch (err) {
+      console.warn('Supabase barbers subscribe error:', err);
+      return () => {};
+    }
+  },
+
+  // Realtime subscription ke tabel bookings (booking updates)
+  subscribeToBookings: () => {
     try {
       if (bookingsChannel) {
         try {
@@ -564,7 +647,9 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // ─── AUTHENTICATION (LOGIN & DAFTAR SUPABASE) ───
+  // AUTHENTICATION
+
+  // â”€â”€â”€ AUTHENTICATION (LOGIN & DAFTAR SUPABASE) â”€â”€â”€
   signUpBarber: async ({ name, email, password, phone, slug }) => {
     if (!isSupabaseConfigured) {
       return { success: false, error: 'Koneksi Supabase belum terkonfigurasi.' };
@@ -917,7 +1002,7 @@ export const useStore = create((set, get) => ({
     set({ authUser: null, activeBarber: null, activeBarberId: null });
   },
 
-  // ─── SYNC KE SUPABASE & LOCALSTORAGE HELPER ───
+  // â”€â”€â”€ SYNC KE SUPABASE & LOCALSTORAGE HELPER â”€â”€â”€
   syncBarberToSupabase: async (barberId) => {
     const { barbers, activeBarber } = get();
     const target = (activeBarber && (activeBarber.id === barberId || activeBarber.slug === barberId))
@@ -971,7 +1056,7 @@ export const useStore = create((set, get) => ({
     await saveBarberPayloadToSupabase(target.id || barberId, payload);
   },
 
-  // ─── UPDATE PROFIL BARBER (KE SUPABASE & LOCALSTORAGE) ───
+  // â”€â”€â”€ UPDATE PROFIL BARBER (KE SUPABASE & LOCALSTORAGE) â”€â”€â”€
   updateBarber: async (barberId, updates) => {
     // 1. Update state lokal seketika (optimistic)
     set((state) => {
@@ -1032,47 +1117,58 @@ export const useStore = create((set, get) => ({
     if (updates.bannerImage !== undefined) payload.banner_image = updates.bannerImage;
     if (updates.locationCity !== undefined) payload.location_city = updates.locationCity;
 
-    await saveBarberPayloadToSupabase(barberId, payload);
+    return await saveBarberPayloadToSupabase(barberId, payload);
   },
 
-  // ─── TAMBAH BOOKING REALTIME (DARI LINK BIO) ───
+  // â”€â”€â”€ TAMBAH BOOKING REALTIME (DARI LINK BIO) â”€â”€â”€
   addBooking: async (booking) => {
     let finalId = `ECK-${Math.floor(100 + Math.random() * 900)}`;
-    const dbStatus = 'PENDING_PAYMENT';
+    let ticketToken;
+    try {
+      ticketToken = createGuestTicketToken();
+    } catch (err) {
+      return { success: false, error: err.message };
+    }
 
     // 1. Simpan ke database Supabase
     if (isSupabaseConfigured) {
       try {
-        const { data, error } = await supabase
-          .from('bookings')
-          .insert({
-            customer_name: booking.customerName,
-            customer_phone: booking.customerPhone,
-            barber_id: /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(booking.barberId)) ? booking.barberId : null,
-            barber_name: booking.barberName,
-            service_name: booking.serviceName,
-            booking_date: booking.dateIso || new Date().toISOString().split('T')[0],
-            start_time: booking.time ? (booking.time.length === 5 ? `${booking.time}:00` : booking.time) : '10:00:00',
-            end_time: '11:00:00',
-            booking_status: dbStatus,
-            payment_method: 'QRIS',
-            payment_status: 'UNPAID',
-            total_price: Number(booking.price) || 0
-          })
-          .select()
-          .single();
+        const barberId = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(booking.barberId))
+          ? booking.barberId
+          : null;
+        const rpcName = booking.capsterId
+          ? 'create_guest_booking_with_capster'
+          : 'create_guest_booking_with_ticket';
+        const rpcParams = {
+          p_customer_name: booking.customerName,
+          p_customer_phone: booking.customerPhone,
+          p_customer_email: get().authUser?.email || null,
+          p_barber_id: barberId,
+          p_barber_name: booking.barberName || null,
+          p_service_id: booking.serviceId ? String(booking.serviceId) : null,
+          p_service_name: booking.serviceName,
+          p_booking_date: booking.dateIso || new Date().toISOString().split('T')[0],
+          p_start_time: booking.time ? (booking.time.length === 5 ? `${booking.time}:00` : booking.time) : '10:00:00',
+          p_payment_method: booking.paymentMethod === 'QRIS' ? 'QRIS' : 'Tunai',
+          p_total_price: Number(booking.price) || 0,
+          p_ticket_token: ticketToken
+        };
+        if (booking.capsterId) rpcParams.p_capster_id = String(booking.capsterId);
+        const { data, error } = await supabase.rpc(rpcName, rpcParams);
 
-        if (!error && data && data.id) {
-          finalId = data.id;
-        }
+        if (error) return { success: false, error: error.message };
+        if (!data) return { success: false, error: 'Database tidak mengembalikan ID booking.' };
+        finalId = data;
       } catch (err) {
-        console.warn('Supabase booking insert notice:', err.message);
+        console.error('Supabase booking insert failed:', err);
+        return { success: false, error: err.message };
       }
     }
 
     const newBooking = {
       ...booking,
       id: finalId,
+      ticketToken,
       status: 'Menunggu',
       paymentStatus: 'UNPAID',
       createdAt: new Date().toISOString()
@@ -1085,28 +1181,31 @@ export const useStore = create((set, get) => ({
     return newBooking;
   },
 
-  // ─── UPDATE STATUS BOOKING (KONFIRMASI / SELESAI / BATAL) ───
+  // â”€â”€â”€ UPDATE STATUS BOOKING (KONFIRMASI / SELESAI / BATAL) â”€â”€â”€
   updateBookingStatus: async (id, status) => {
-    // 1. Optimistic update
-    set((state) => ({
-      bookings: state.bookings.map((b) => (b.id === id ? { ...b, status } : b))
-    }));
-
-    // 2. Update status di Supabase
     if (isSupabaseConfigured) {
       try {
         const dbStatus = uiToDbStatus(status);
-        await supabase
-          .from('bookings')
-          .update({ booking_status: dbStatus })
-          .eq('id', id);
+        const { error } = await supabase.rpc('update_booking_tracking_status', {
+          p_booking_id: id,
+          p_new_status: dbStatus,
+          p_notes: null
+        });
+        if (error) throw error;
       } catch (err) {
-        console.warn('Supabase update status notice:', err.message);
+        console.error('Supabase update status failed:', err);
+        await get().fetchBookingsFromSupabase();
+        return { success: false, error: err.message };
       }
     }
+
+    set((state) => ({
+      bookings: state.bookings.map((b) => (b.id === id ? { ...b, status } : b))
+    }));
+    return { success: true };
   },
 
-  // ─── UPLOAD FOTO PROFIL KE SUPABASE STORAGE (KOMPRESI PERSEGI 1:1) ───
+  // â”€â”€â”€ UPLOAD FOTO PROFIL KE SUPABASE STORAGE (KOMPRESI PERSEGI 1:1) â”€â”€â”€
   uploadBarberPhoto: async (barberId, file) => {
     try {
       const result = await uploadBarberProfilePhoto(file, barberId);
@@ -1121,7 +1220,7 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // ─── UPLOAD FOTO PORTOFOLIO KE SUPABASE STORAGE (KOMPRESI RASIO ASLI) ───
+  // â”€â”€â”€ UPLOAD FOTO PORTOFOLIO KE SUPABASE STORAGE (KOMPRESI RASIO ASLI) â”€â”€â”€
   uploadBarberPortfolioPhoto: async (barberId, file, itemData = {}) => {
     try {
       const result = await uploadPortfolioPhoto(file, barberId);
@@ -1138,7 +1237,7 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  // ─── UPLOAD FOTO BANNER COVER KE SUPABASE STORAGE (KOMPRESI LANSKAP) ───
+  // â”€â”€â”€ UPLOAD FOTO BANNER COVER KE SUPABASE STORAGE (KOMPRESI LANSKAP) â”€â”€â”€
   uploadBarberBanner: async (barberId, file) => {
     try {
       const result = await uploadBarberBannerPhoto(file, barberId);

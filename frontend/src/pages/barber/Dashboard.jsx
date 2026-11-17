@@ -97,7 +97,6 @@ export default function BarberDashboard() {
   const addBarberTeamMember = useStore((state) => state.addBarberTeamMember);
   const deleteBarberTeamMember = useStore((state) => state.deleteBarberTeamMember);
   const updateBarberTippingConfig = useStore((state) => state.updateBarberTippingConfig);
-  const addBarberTip = useStore((state) => state.addBarberTip);
   const requestBarberWithdrawal = useStore((state) => state.requestBarberWithdrawal);
   const bookings = useStore((state) => state.bookings);
   const updateBookingStatus = useStore((state) => state.updateBookingStatus);
@@ -357,7 +356,24 @@ export default function BarberDashboard() {
   const [newTeamPhoto, setNewTeamPhoto] = useState('');
   const [teamPhotoStats, setTeamPhotoStats] = useState(null);
   const [isCompressingTeamPhoto, setIsCompressingTeamPhoto] = useState(false);
+  const [updatingCapsterId, setUpdatingCapsterId] = useState(null);
   const teamPhotoInputRef = useRef(null);
+
+  const handleToggleCapsterStatus = async (member) => {
+    const nextStatus = String(member.status || 'AVAILABLE').toUpperCase() === 'CUTTING'
+      ? 'AVAILABLE'
+      : 'CUTTING';
+    const teamMembers = (barber.teamMembers || []).map((teamMember) =>
+      teamMember.id === member.id ? { ...teamMember, status: nextStatus } : teamMember
+    );
+
+    setUpdatingCapsterId(member.id);
+    const result = await updateBarber(barber.id, { teamMembers });
+    setUpdatingCapsterId(null);
+    showToast(result?.success
+      ? `${member.name} sekarang ${nextStatus === 'CUTTING' ? 'sedang cukur' : 'free'}.`
+      : `Gagal memperbarui status capster: ${result?.error || 'tidak dapat menyimpan perubahan'}`);
+  };
 
   // Mode & Feature Toggle helpers
   const handleToggleFeature = (featureKey) => {
@@ -548,34 +564,6 @@ export default function BarberDashboard() {
     const removed = newPresets.splice(index, 1);
     updateBarberTippingConfig(barber.id, { presets: newPresets });
     showToast(`Pilihan paket ${removed[0]?.label || ''} dihapus`);
-  };
-
-  const handleSimulateIncomingTip = () => {
-    const presets = tippingConfig.presets || [
-      { amount: 10000, label: 'Kopi Hitam' },
-      { amount: 25000, label: 'Kopi Susu' },
-      { amount: 50000, label: 'V60 Special' }
-    ];
-    const picked = presets[Math.floor(Math.random() * presets.length)];
-    const names = ['Rian Pratama', 'Budi Santoso', 'Kevin Ardiansyah', 'Agung Nugroho', 'Fajar Ramadhan', 'Dedi Wijaya'];
-    const messages = [
-      'Guntingan fade-nya rapi banget bang!',
-      'Langganan terus di sini, mantap!',
-      'Kopinya buat nemenin cukur ya bro 🙏',
-      'Pelayanan top markotop, makasih banyak!',
-      'Hasil potongannya pas sesuai request!'
-    ];
-    const randomName = names[Math.floor(Math.random() * names.length)];
-    const randomMsg = messages[Math.floor(Math.random() * messages.length)];
-
-    addBarberTip(barber.id, {
-      customerName: randomName,
-      amount: picked.amount,
-      coffeeLabel: picked.label,
-      message: randomMsg,
-      method: 'Payment Gateway QRIS'
-    });
-    showToast(`Simulasi tip masuk Rp ${picked.amount.toLocaleString('id-ID')} dari ${randomName}!`);
   };
 
   // ─── WITHDRAWAL / PENCAIRAN SALDO STATE (MIN. RP 15.000) ───
@@ -1703,7 +1691,7 @@ export default function BarberDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
                     {(barber.teamMembers || []).map((m) => (
-                      <div key={m.id} className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/50 flex items-center justify-between gap-3">
+                      <div key={m.id} className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="flex items-center gap-3 min-w-0">
                           <div className="w-12 h-12 rounded-full overflow-hidden bg-neutral-200 border border-neutral-300 shrink-0">
                             {m.photo ? (
@@ -1721,17 +1709,35 @@ export default function BarberDashboard() {
                           </div>
                         </div>
 
-                        <button
-                          type="button"
-                          onClick={() => {
-                            deleteBarberTeamMember(barber.id, m.id);
-                            showToast(`Capster ${m.name} berhasil dihapus`);
-                          }}
-                          className="p-2 text-neutral-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer shrink-0"
-                          title="Hapus Capster"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
+                        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleToggleCapsterStatus(m)}
+                            disabled={updatingCapsterId === m.id}
+                            className={`px-3 py-2 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 ${
+                              String(m.status || 'AVAILABLE').toUpperCase() === 'CUTTING'
+                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                            }`}
+                          >
+                            {updatingCapsterId === m.id
+                              ? 'Menyimpan...'
+                              : String(m.status || 'AVAILABLE').toUpperCase() === 'CUTTING'
+                              ? 'Selesai cukur · Free'
+                              : 'Mulai cukur'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              deleteBarberTeamMember(barber.id, m.id);
+                              showToast(`Capster ${m.name} berhasil dihapus`);
+                            }}
+                            className="p-2 text-neutral-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer shrink-0"
+                            title="Hapus Capster"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -2183,6 +2189,12 @@ export default function BarberDashboard() {
 
                         <div className="text-xs text-neutral-600 flex items-center gap-2 flex-wrap">
                           <span className="font-semibold text-[#285844]">{b.serviceName}</span>
+                          {b.capsterName && (
+                            <>
+                              <span>•</span>
+                              <span>Capster: <strong>{b.capsterName}</strong></span>
+                            </>
+                          )}
                           <span>•</span>
                           <span className="font-mono font-medium">{formatRupiah(b.price)}</span>
                         </div>
@@ -2218,9 +2230,11 @@ export default function BarberDashboard() {
                         {b.status === 'Menunggu' && (
                           <button
                             type="button"
-                            onClick={() => {
-                              updateBookingStatus(b.id, 'Terkonfirmasi');
-                              showToast(`Booking ${b.id} dikonfirmasi!`);
+                            onClick={async () => {
+                              const result = await updateBookingStatus(b.id, 'Terkonfirmasi');
+                              showToast(result?.success
+                                ? `Booking ${b.id} dikonfirmasi!`
+                                : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
                             }}
                             className="px-3 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
                           >
@@ -2231,9 +2245,11 @@ export default function BarberDashboard() {
                         {b.status === 'Terkonfirmasi' && (
                           <button
                             type="button"
-                            onClick={() => {
-                              updateBookingStatus(b.id, 'Selesai');
-                              showToast(`Booking ${b.id} selesai!`);
+                            onClick={async () => {
+                              const result = await updateBookingStatus(b.id, 'Selesai');
+                              showToast(result?.success
+                                ? `Booking ${b.id} selesai!`
+                                : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
                             }}
                             className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl text-xs font-semibold transition-colors"
                           >
@@ -2280,15 +2296,6 @@ export default function BarberDashboard() {
                       <span>Tambah Pilihan</span>
                     </button>
 
-                    <button
-                      type="button"
-                      onClick={handleSimulateIncomingTip}
-                      className="px-3 py-2 border border-neutral-200 hover:bg-neutral-50 text-neutral-700 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
-                      title="Uji simulasi tip masuk"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                      <span>Uji Simulasi</span>
-                    </button>
                   </div>
                 </div>
 
