@@ -280,7 +280,7 @@ export default function Login({ defaultTab = 'login' }) {
   }, [navigate, postLoginPath]);
 
   useEffect(() => {
-    const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '239781382181-sk41bl7t8ovgl98e04j13tsj0crevnqi.apps.googleusercontent.com').trim();
+    const googleClientId = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '327269682442-hogedjp8qus8foj0trbpee77ce8tk9vi.apps.googleusercontent.com').trim();
 
     const initGoogleGsi = () => {
       if (window.google?.accounts?.id && googleBtnContainerRef.current) {
