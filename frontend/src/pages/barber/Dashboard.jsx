@@ -50,7 +50,7 @@ import BarberBioLink from '../customer/BarberBioLink';
 import { compressImage } from '../../lib/imageUploader';
 import { getAppDomain } from '../../lib/domain';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
-import { getDynamicQrisImageUrl, simulateQrisPayment } from '../../lib/qrisPayment';
+import { getDynamicQrisImageUrl } from '../../lib/qrisPayment';
 
 const computeWeeklyChartData = (bookingsList) => {
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -112,6 +112,14 @@ export default function BarberDashboard() {
   const matchActiveBarber = useStore((state) => state.matchActiveBarber);
   const [unreadChatSummary, setUnreadChatSummary] = useState({ userId: '', count: 0 });
   const unreadChatCount = unreadChatSummary.userId === authUser?.id ? unreadChatSummary.count : 0;
+  const [nowTimestamp, setNowTimestamp] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTimestamp(Date.now());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
 
   // File upload state & ref
   const fileInputRef = useRef(null);
@@ -359,20 +367,137 @@ export default function BarberDashboard() {
   const [updatingCapsterId, setUpdatingCapsterId] = useState(null);
   const teamPhotoInputRef = useRef(null);
 
+  // Smart Start Cutting Modal State
+  const [startCuttingModal, setStartCuttingModal] = useState({
+    isOpen: false,
+    member: null,
+    selectedTarget: 'WALK_IN' // 'WALK_IN' | bookingId
+  });
+
+  // Filter antrean khusus capster ini
+  const getCapsterActiveBookings = (memberId, memberName) => {
+    if (!memberId && !memberName) return [];
+    const activeStatuses = ['Menunggu', 'Terkonfirmasi', 'CONFIRMED', 'PENDING_PAYMENT', 'Tiba di Lokasi', 'ARRIVED'];
+    return (barberBookings || []).filter((b) => {
+      const matchId = b.capsterId && String(b.capsterId) === String(memberId);
+      const matchName = b.capsterName && String(b.capsterName).toLowerCase() === String(memberName).toLowerCase();
+      const isActive = activeStatuses.includes(b.status);
+      return (matchId || matchName) && isActive;
+    }).sort((a, b) => String(a.time || '').localeCompare(String(b.time || '')));
+  };
+
+  // Cek jadwal terdekat untuk peringatan tamu walk-in
+  const getNearestBookingWarning = (member) => {
+    if (!member) return null;
+    const activeBookings = getCapsterActiveBookings(member.id, member.name);
+    if (activeBookings.length === 0) return null;
+
+    const nearest = activeBookings[0];
+    if (!nearest.time) return null;
+
+    const now = new Date(nowTimestamp);
+    const [hours, minutes] = nearest.time.split(':').map(Number);
+    const bookingDate = new Date(nowTimestamp);
+    bookingDate.setHours(hours || 0, minutes || 0, 0, 0);
+
+    const diffMinutes = Math.round((bookingDate - now) / 60000);
+
+    if (diffMinutes >= -15 && diffMinutes <= 45) {
+      return {
+        booking: nearest,
+        diffMinutes,
+        isUrgent: diffMinutes <= 20
+      };
+    }
+    return {
+      booking: nearest,
+      diffMinutes,
+      isUrgent: false
+    };
+  };
+
   const handleToggleCapsterStatus = async (member) => {
-    const nextStatus = String(member.status || 'AVAILABLE').toUpperCase() === 'CUTTING'
-      ? 'AVAILABLE'
-      : 'CUTTING';
-    const teamMembers = (barber.teamMembers || []).map((teamMember) =>
-      teamMember.id === member.id ? { ...teamMember, status: nextStatus } : teamMember
-    );
+    const isCurrentlyCutting = String(member.status || 'AVAILABLE').toUpperCase() === 'CUTTING';
+
+    if (isCurrentlyCutting) {
+      // Selesaikan cukur
+      setUpdatingCapsterId(member.id);
+
+      // Jika terikat ke tiket booking online, update tiket jadi Selesai
+      if (member.activeBookingId && member.activeBookingId !== 'WALK_IN') {
+        try {
+          await updateBookingStatus(member.activeBookingId, 'Selesai');
+        } catch (err) {
+          console.warn('Gagal update status booking selesai:', err);
+        }
+      }
+
+      const teamMembers = (barber.teamMembers || []).map((teamMember) =>
+        teamMember.id === member.id ? { 
+          ...teamMember, 
+          status: 'AVAILABLE',
+          activeBookingId: null,
+          activeCustomerName: null,
+          cuttingStartedAt: null
+        } : teamMember
+      );
+
+      const result = await updateBarber(barber.id, { teamMembers });
+      setUpdatingCapsterId(null);
+      showToast(result?.success
+        ? `${member.name} telah selesai cukur dan kembali Free.`
+        : `Gagal memperbarui status: ${result?.error || 'tidak dapat menyimpan perubahan'}`);
+    } else {
+      // Buka Modal Mulai Cukur Cerdas
+      const capsterBookings = getCapsterActiveBookings(member.id, member.name);
+      setStartCuttingModal({
+        isOpen: true,
+        member,
+        selectedTarget: capsterBookings.length > 0 ? capsterBookings[0].id : 'WALK_IN'
+      });
+    }
+  };
+
+  const handleConfirmStartCutting = async () => {
+    const { member, selectedTarget } = startCuttingModal;
+    if (!member) return;
 
     setUpdatingCapsterId(member.id);
+
+    let activeCustomerName = 'Pelanggan Walk-In';
+    let activeBookingId = 'WALK_IN';
+
+    if (selectedTarget && selectedTarget !== 'WALK_IN') {
+      const targetBooking = (barberBookings || []).find((b) => String(b.id) === String(selectedTarget));
+      if (targetBooking) {
+        activeBookingId = targetBooking.id;
+        activeCustomerName = targetBooking.customerName || 'Pelanggan Online';
+        try {
+          await updateBookingStatus(targetBooking.id, 'Sedang Dilayani');
+        } catch (err) {
+          console.warn('Gagal update status booking sedang dilayani:', err);
+        }
+      }
+    }
+
+    const teamMembers = (barber.teamMembers || []).map((teamMember) =>
+      teamMember.id === member.id ? { 
+        ...teamMember, 
+        status: 'CUTTING',
+        activeBookingId,
+        activeCustomerName,
+        cuttingStartedAt: new Date().toISOString()
+      } : teamMember
+    );
+
     const result = await updateBarber(barber.id, { teamMembers });
     setUpdatingCapsterId(null);
+    setStartCuttingModal({ isOpen: false, member: null, selectedTarget: 'WALK_IN' });
+
     showToast(result?.success
-      ? `${member.name} sekarang ${nextStatus === 'CUTTING' ? 'sedang cukur' : 'free'}.`
-      : `Gagal memperbarui status capster: ${result?.error || 'tidak dapat menyimpan perubahan'}`);
+      ? `${member.name} mulai mencukur (${activeCustomerName}).`
+      : `Gagal memperbarui status: ${result?.error || 'terjadi kesalahan'}`
+    );
   };
 
   // Mode & Feature Toggle helpers
@@ -571,8 +696,6 @@ export default function BarberDashboard() {
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeQrisData, setUpgradeQrisData] = useState(null);
   const [upgradeTargetPlan, setUpgradeTargetPlan] = useState(null);
-  const [isUpgradeQrisLoading, setIsUpgradeQrisLoading] = useState(false);
-  const [isSimulatingUpgradePayment, setIsSimulatingUpgradePayment] = useState(false);
   const [copiedUpgradeAmount, setCopiedUpgradeAmount] = useState(false);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
 
@@ -619,7 +742,7 @@ export default function BarberDashboard() {
             }, 2000);
           }
         }
-      } catch (e) {}
+      } catch {}
     }, 2500);
 
     return () => {
@@ -688,34 +811,6 @@ export default function BarberDashboard() {
         }).then(() => {}).catch(() => {});
       }
     } catch {}
-  };
-
-  const handleSimulateUpgradePayment = async () => {
-    if (!upgradeQrisData?.referenceId) return;
-    setIsSimulatingUpgradePayment(true);
-
-    try {
-      if (isSupabaseConfigured && supabase) {
-        await supabase
-          .from('qris_payments')
-          .update({ status: 'PAID', paid_at: new Date().toISOString() })
-          .eq('reference_id', upgradeQrisData.referenceId);
-      }
-    } catch (e) {}
-
-    setTimeout(async () => {
-      setUpgradeSuccess(true);
-      const planNames = { capster: 'Paket Capster Pro (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
-      await updateBarber(barber.id, { plan: upgradeTargetPlan });
-      showToast(`🎉 Pembayaran QRIS Dikonfirmasi! Paket ${planNames[upgradeTargetPlan] || upgradeTargetPlan} kini AKTIF!`);
-      setTimeout(() => {
-        setUpgradeQrisData(null);
-        setUpgradeTargetPlan(null);
-        setUpgradeSuccess(false);
-        setIsUpgradeModalOpen(false);
-        setIsSimulatingUpgradePayment(false);
-      }, 1800);
-    }, 800);
   };
 
   const handleExportCSV = () => {
@@ -1154,9 +1249,7 @@ export default function BarberDashboard() {
             <span>{toastMsg}</span>
           </motion.div>
         )}
-      </AnimatePresence>
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      </AnimatePresence>{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ TOP NAVBAR: STUDIO COMMAND BAR ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ TOP NAVBAR: SLEEK CREATOR STUDIO ━━━ */}
@@ -1690,56 +1783,90 @@ export default function BarberDashboard() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
-                    {(barber.teamMembers || []).map((m) => (
-                      <div key={m.id} className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-12 h-12 rounded-full overflow-hidden bg-neutral-200 border border-neutral-300 shrink-0">
-                            {m.photo ? (
-                              <img src={m.photo} alt={m.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center font-bold text-sm text-neutral-500">
-                                {m.name?.charAt(0) || 'C'}
-                              </div>
-                            )}
-                          </div>
-                          <div className="min-w-0">
-                            <h4 className="font-display font-bold text-sm text-[#171717] truncate">{m.name}</h4>
-                            <p className="text-[11px] text-neutral-500 truncate">{m.specialty || 'Capster Professional'}</p>
-                            <span className="text-[10px] text-neutral-400 font-mono block mt-0.5">{m.schedule || 'Shift Harian'}</span>
-                          </div>
-                        </div>
+                    {(barber.teamMembers || []).map((m) => {
+                      const isCutting = String(m.status || 'AVAILABLE').toUpperCase() === 'CUTTING';
+                      const activeBookingsCount = getCapsterActiveBookings(m.id, m.name).length;
 
-                        <div className="flex items-center gap-2 self-end sm:self-auto shrink-0">
-                          <button
-                            type="button"
-                            onClick={() => handleToggleCapsterStatus(m)}
-                            disabled={updatingCapsterId === m.id}
-                            className={`px-3 py-2 rounded-lg text-[11px] font-semibold transition-colors disabled:opacity-50 ${
-                              String(m.status || 'AVAILABLE').toUpperCase() === 'CUTTING'
-                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                : 'bg-amber-100 text-amber-800 hover:bg-amber-200'
-                            }`}
-                          >
-                            {updatingCapsterId === m.id
-                              ? 'Menyimpan...'
-                              : String(m.status || 'AVAILABLE').toUpperCase() === 'CUTTING'
-                              ? 'Selesai cukur · Free'
-                              : 'Mulai cukur'}
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              deleteBarberTeamMember(barber.id, m.id);
-                              showToast(`Capster ${m.name} berhasil dihapus`);
-                            }}
-                            className="p-2 text-neutral-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer shrink-0"
-                            title="Hapus Capster"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                      return (
+                        <div key={m.id} className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                          isCutting ? 'bg-amber-50/40 border-amber-200' : 'bg-neutral-50/50 border-neutral-200'
+                        }`}>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="w-12 h-12 rounded-full overflow-hidden bg-neutral-200 border border-neutral-300 shrink-0 relative">
+                                {m.photo ? (
+                                  <img src={m.photo} alt={m.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center font-bold text-sm text-neutral-500">
+                                    {m.name?.charAt(0) || 'C'}
+                                  </div>
+                                )}
+                                <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
+                                  isCutting ? 'bg-amber-500' : 'bg-emerald-500'
+                                }`} />
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <h4 className="font-display font-bold text-sm text-[#171717] truncate">{m.name}</h4>
+                                  <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded-full ${
+                                    isCutting ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                                  }`}>
+                                    {isCutting ? 'Sedang Cukur' : 'Free'}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-neutral-500 truncate">{m.specialty || 'Capster Professional'}</p>
+                                <span className="text-[10px] text-neutral-400 font-mono block mt-0.5">{m.schedule || 'Shift Harian'}</span>
+                              </div>
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                deleteBarberTeamMember(barber.id, m.id);
+                                showToast(`Capster ${m.name} berhasil dihapus`);
+                              }}
+                              className="p-1.5 text-neutral-400 hover:text-red-600 rounded-lg transition-colors cursor-pointer shrink-0"
+                              title="Hapus Capster"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          {/* Sedang melayani info & Action button */}
+                          <div className="pt-2 border-t border-neutral-200/60 flex items-center justify-between gap-2 flex-wrap">
+                            <div className="text-[11px] text-neutral-600 min-w-0">
+                              {isCutting ? (
+                                <span className="flex items-center gap-1 text-amber-900 font-medium truncate">
+                                  <Scissors className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                                  <span>Melayani: <strong>{m.activeCustomerName || 'Pelanggan'}</strong></span>
+                                </span>
+                              ) : (
+                                <span className="text-[10.5px] text-neutral-500">
+                                  Antrean aktif: <strong className="text-[#285844]">{activeBookingsCount} booking</strong>
+                                </span>
+                              )}
+                            </div>
+
+                            <button
+                              type="button"
+                              onClick={() => handleToggleCapsterStatus(m)}
+                              disabled={updatingCapsterId === m.id}
+                              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-50 cursor-pointer active:scale-95 ${
+                                isCutting
+                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                                  : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-xs'
+                              }`}
+                            >
+                              {updatingCapsterId === m.id
+                                ? 'Menyimpan...'
+                                : isCutting
+                                ? 'Selesai Cukur · Set Free'
+                                : 'Mulai Cukur'}
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
@@ -3689,9 +3816,7 @@ export default function BarberDashboard() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      </AnimatePresence>{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ MODAL: BUAT POSTINGAN FEED (INSTAGRAM STYLE) ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <AnimatePresence>
@@ -3925,9 +4050,7 @@ export default function BarberDashboard() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      </AnimatePresence>{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ MODAL: ADD CUSTOM LINK ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <AnimatePresence>
@@ -3997,9 +4120,7 @@ export default function BarberDashboard() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      </AnimatePresence>{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ MODAL: TAMBAH CAPSTER (TIM) ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <AnimatePresence>
@@ -4160,15 +4281,11 @@ export default function BarberDashboard() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      </AnimatePresence>{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ MODAL: TARIK SALDO TIP (MIN. RP 15.000) ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <AnimatePresence>
-        </AnimatePresence>
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+        </AnimatePresence>{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ MOBILE BOTTOM DRAWER FOR PHONE PREVIEW ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <AnimatePresence>
@@ -4199,9 +4316,7 @@ export default function BarberDashboard() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
-
-      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      </AnimatePresence>{/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       {/* ━━━ MODAL: KELOLA & UPGRADE PAKET BERLANGGANAN ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <AnimatePresence>
@@ -4317,17 +4432,6 @@ export default function BarberDashboard() {
                       </span>
                       <span>Menunggu konfirmasi pembayaran...</span>
                     </div>
-
-                    {/* Dev/Testing simulation button */}
-                    <button
-                      type="button"
-                      disabled={isSimulatingUpgradePayment}
-                      onClick={handleSimulateUpgradePayment}
-                      className="mt-3 w-full py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-xs active:scale-98"
-                    >
-                      <Sparkles className="w-4 h-4 text-emerald-600" />
-                      <span>{isSimulatingUpgradePayment ? 'Memproses Simulasi...' : '⚡ Uji Pembayaran Berhasil (Testing/Simulasi)'}</span>
-                    </button>
                   </div>
                 </div>
               ) : (
@@ -4529,9 +4633,7 @@ export default function BarberDashboard() {
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
-
-      {/* MODAL PENARIKAN SALDO DARI STATISTIK */}
+      </AnimatePresence>{/* MODAL PENARIKAN SALDO DARI STATISTIK */}
       <AnimatePresence>
         {isWithdrawModalOpen && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
@@ -4745,6 +4847,182 @@ export default function BarberDashboard() {
             </motion.div>
           </div>
         )}
+      </AnimatePresence>
+
+
+
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      {/* ━━━ MODAL: MULAI CUKUR CERDAS & LINK TIKET ━━━ */}
+      {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+      <AnimatePresence>
+        {startCuttingModal.isOpen && startCuttingModal.member && (() => {
+          const m = startCuttingModal.member;
+          const capsterBookings = getCapsterActiveBookings(m.id, m.name);
+          const nearestWarning = getNearestBookingWarning(m);
+          const isWalkIn = startCuttingModal.selectedTarget === 'WALK_IN';
+
+          return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                className="bg-white rounded-3xl p-6 sm:p-7 max-w-lg w-full border border-neutral-200 shadow-2xl relative max-h-[90vh] overflow-y-auto"
+              >
+                <button
+                  type="button"
+                  onClick={() => setStartCuttingModal({ isOpen: false, member: null, selectedTarget: 'WALK_IN' })}
+                  className="absolute top-5 right-5 p-2 text-neutral-400 hover:text-black rounded-full"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-neutral-200 border border-neutral-300 shrink-0">
+                    {m.photo ? (
+                      <img src={m.photo} alt={m.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center font-bold text-sm text-neutral-500">
+                        {m.name?.charAt(0) || 'C'}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-display font-bold text-lg text-[#171717] leading-tight">
+                      Mulai Cukur — {m.name}
+                    </h3>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Pilih pelanggan yang sedang dilayani agar status tracking otomatis sinkron
+                    </p>
+                  </div>
+                </div>
+
+                {/* Pilihan Antrean Online */}
+                <div className="space-y-3 mb-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold text-neutral-800 block">
+                      Antrean Online Khusus {m.name} ({capsterBookings.length}):
+                    </label>
+                    <span className="text-[10px] text-neutral-400 font-mono">Hari Ini</span>
+                  </div>
+
+                  {capsterBookings.length > 0 ? (
+                    <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                      {capsterBookings.map((b) => {
+                        const isSelected = startCuttingModal.selectedTarget === b.id;
+                        return (
+                          <div
+                            key={b.id}
+                            onClick={() => setStartCuttingModal((prev) => ({ ...prev, selectedTarget: b.id }))}
+                            className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                              isSelected
+                                ? 'border-[#285844] bg-[#F0F5F2] ring-1 ring-[#285844] shadow-2xs'
+                                : 'border-neutral-200 hover:border-neutral-300 bg-white'
+                            }`}
+                          >
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-mono text-xs font-bold text-[#285844]">
+                                  #{String(b.id).slice(-6).toUpperCase()}
+                                </span>
+                                <span className="font-bold text-xs text-neutral-900 truncate">{b.customerName}</span>
+                              </div>
+                              <p className="text-[11px] text-neutral-500 truncate mt-0.5">
+                                {b.serviceName || 'Layanan Cukur'} • {b.date || 'Hari Ini'}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <span className="inline-flex items-center gap-1 font-mono text-xs font-bold bg-neutral-100 px-2 py-0.5 rounded-md text-neutral-800">
+                                <Clock className="w-3 h-3 text-[#285844]" />
+                                {b.time || '10:00'}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="p-3.5 rounded-2xl border border-dashed border-neutral-200 bg-neutral-50 text-center text-xs text-neutral-500">
+                      Belum ada antrean booking online untuk {m.name} saat ini.
+                    </div>
+                  )}
+
+                  {/* Opsi Pelanggan Walk-In */}
+                  <div className="pt-2 border-t border-neutral-200">
+                    <div
+                      onClick={() => setStartCuttingModal((prev) => ({ ...prev, selectedTarget: 'WALK_IN' }))}
+                      className={`p-3.5 rounded-2xl border text-left cursor-pointer transition-all flex items-center justify-between gap-3 ${
+                        isWalkIn
+                          ? 'border-[#285844] bg-[#F0F5F2] ring-1 ring-[#285844] shadow-2xs'
+                          : 'border-neutral-200 hover:border-neutral-300 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+                          isWalkIn ? 'bg-[#285844] text-white' : 'bg-neutral-100 text-neutral-600'
+                        }`}>
+                          <User className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <div className="font-bold text-xs text-neutral-900">Pelanggan Langsung (Walk-In)</div>
+                          <div className="text-[10.5px] text-neutral-500">Tamu datang langsung tanpa booking online</div>
+                        </div>
+                      </div>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md ${
+                        isWalkIn ? 'bg-[#285844] text-white' : 'bg-neutral-100 text-neutral-600'
+                      }`}>
+                        Offline
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Warning Box jika pilih Walk-In dan ada jadwal mepet */}
+                  {isWalkIn && nearestWarning?.booking && (
+                    <div className={`p-3.5 rounded-2xl border text-xs leading-relaxed flex items-start gap-2.5 ${
+                      nearestWarning.isUrgent
+                        ? 'bg-red-50 border-red-200 text-red-900'
+                        : 'bg-amber-50 border-amber-200 text-amber-900'
+                    }`}>
+                      <AlertCircle className={`w-4 h-4 mt-0.5 shrink-0 ${
+                        nearestWarning.isUrgent ? 'text-red-600' : 'text-amber-600'
+                      }`} />
+                      <div>
+                        <strong className="block font-semibold">
+                          {nearestWarning.isUrgent ? '⚠️ Peringatan Jadwal Mepet!' : 'ℹ️ Informasi Jadwal Terdekat:'}
+                        </strong>
+                        <p className="mt-0.5">
+                          Ada booking online pukul <strong>{nearestWarning.booking.time}</strong>{' '}
+                          {nearestWarning.diffMinutes > 0 ? `(${nearestWarning.diffMinutes} menit lagi)` : '(sekarang)'}{' '}
+                          atas nama <strong>{nearestWarning.booking.customerName}</strong> ({nearestWarning.booking.serviceName || 'Cukur'}).
+                          Pastikan pengerjaan walk-in tidak membuat pelanggan online menunggu.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer Modal Action */}
+                <div className="pt-3 border-t border-neutral-100 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setStartCuttingModal({ isOpen: false, member: null, selectedTarget: 'WALK_IN' })}
+                    className="px-4 py-2.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-100 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Batal
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleConfirmStartCutting}
+                    disabled={updatingCapsterId === m.id}
+                    className="px-5 py-2.5 bg-[#285844] hover:bg-[#1E4334] text-white text-xs font-bold rounded-xl transition-all shadow-xs cursor-pointer active:scale-95 disabled:opacity-50"
+                  >
+                    {updatingCapsterId === m.id ? 'Memproses...' : 'Konfirmasi Mulai Cukur'}
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          );
+        })()}
       </AnimatePresence>
 
     </div>

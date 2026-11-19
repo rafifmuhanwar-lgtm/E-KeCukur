@@ -103,15 +103,39 @@ const formatConversationTime = (value) => value
   : '';
 
 const getChatErrorMessage = (error) => {
+  if (!error) return '';
+  const msg = error?.message || (typeof error === 'string' ? error : '');
+  const code = error?.code || '';
+
   if (
-    error?.code === 'PGRST205'
-    || error?.message?.includes("Could not find the table 'public.conversations'")
-    || error?.message?.includes("Could not find the table 'public.messages'")
+    code === 'PGRST205'
+    || msg.includes("Could not find the table 'public.conversations'")
+    || msg.includes("Could not find the table 'public.messages'")
   ) {
     return 'Tabel chat belum tersedia. Jalankan backend/chat_migration.sql di Supabase SQL Editor setelah setup skema, lalu muat ulang halaman.';
   }
 
-  return error?.message || 'Terjadi kesalahan saat memuat chat.';
+  if (
+    code === '42501'
+    || msg.includes('violates row-level security policy')
+    || msg.includes('row-level security')
+  ) {
+    return 'Akses pesan dibatasi oleh sistem keamanan. Akun barber tidak dapat memulai konsultasi ke akun barber lain. Silakan keluar dari akun barber terlebih dahulu.';
+  }
+
+  if (msg.includes('A customer can only create a conversation for their own account.')) {
+    return 'Sesi percakapan tidak sesuai dengan akun Anda. Silakan muat ulang halaman.';
+  }
+
+  if (msg.includes('Only customer accounts can start a consultation.')) {
+    return 'Hanya akun pelanggan yang dapat memulai konsultasi. Silakan keluar dari akun barber terlebih dahulu.';
+  }
+
+  if (msg.includes('The selected barber account is not active or connected.')) {
+    return 'Barber yang dipilih saat ini sedang tidak aktif atau belum terhubung.';
+  }
+
+  return msg || 'Terjadi kesalahan saat memuat chat.';
 };
 
 export default function Messages({ barberMode = false }) {
@@ -136,6 +160,7 @@ export default function Messages({ barberMode = false }) {
   const [customerName, setCustomerName] = useState('');
   const [savingCustomerName, setSavingCustomerName] = useState(false);
   const [customerNameSaveFailed, setCustomerNameSaveFailed] = useState(false);
+  const [isBarberAccountDetected, setIsBarberAccountDetected] = useState(false);
   const [pageReady, setPageReady] = useState(false);
   const [messageText, setMessageText] = useState('');
   const [sending, setSending] = useState(false);
@@ -194,9 +219,11 @@ export default function Messages({ barberMode = false }) {
     (conversation) => conversation.id === requestedConversationId
   ) ? requestedConversationId : '';
   const customerNameError = validateCustomerName(customerName);
-  const savedCustomerName = authUser?.user_metadata?.name || '';
-  const requiresCustomerName = !barberMode && Boolean(authUser?.is_anonymous)
-    && (Boolean(validateCustomerName(savedCustomerName)) || customerNameSaveFailed);
+  const savedCustomerName = authUser?.user_metadata?.name || account?.name || '';
+  const isCustomerNameValid = Boolean(savedCustomerName)
+    && savedCustomerName.trim().toLowerCase() !== 'pelanggan'
+    && !validateCustomerName(savedCustomerName);
+  const requiresCustomerName = !barberMode && !isBarberAccountDetected && (!isCustomerNameValid || customerNameSaveFailed);
   const routeError = requestedBarberId && !UUID_PATTERN.test(requestedBarberId)
     ? 'Identitas barber tidak valid.'
     : requestedConversationId && !UUID_PATTERN.test(requestedConversationId)
@@ -304,25 +331,38 @@ export default function Messages({ barberMode = false }) {
         }
         if (active) setAccount({ ...barber, role, userId: authUser.id });
       } else {
+        setIsBarberAccountDetected(false);
         if (authUser.is_anonymous) {
           if (active) {
             setCustomerName((currentName) => currentName || authUser.user_metadata?.name || '');
             setAccount({ name: authUser.user_metadata?.name || 'Pelanggan', role: 'CUSTOMER', userId: authUser.id });
           }
         } else {
-          const { data: userProfile, error: userError } = await supabase
+          const { data: userProfile } = await supabase
             .from('users')
             .select('id, name, role')
             .eq('id', authUser.id)
             .maybeSingle();
 
-          if (userError) throw userError;
-          if (!userProfile) throw new Error('Profil akun tidak ditemukan. Silakan hubungi pengelola E-Cukur.');
-          const role = String(userProfile.role || '').toUpperCase();
-          if (role === 'BARBER') {
-            throw new Error('Inbox barber hanya dapat dibuka dari dashboard akun barber. Untuk konsultasi sebagai pelanggan, keluar dari akun barber terlebih dahulu.');
+          const { data: barberCheck } = await supabase
+            .from('barbers')
+            .select('id, name')
+            .eq('user_id', authUser.id)
+            .maybeSingle();
+
+          const role = String(userProfile?.role || '').toUpperCase();
+          if (role === 'BARBER' || barberCheck) {
+            if (active) {
+              setIsBarberAccountDetected(true);
+              setPageReady(true);
+            }
+            return;
           }
-          if (active) setAccount({ name: userProfile.name, role, userId: authUser.id });
+          if (active) {
+            const customerDisplayName = userProfile?.name || authUser.user_metadata?.name || '';
+            setCustomerName((currentName) => currentName || customerDisplayName);
+            setAccount({ name: customerDisplayName || 'Pelanggan', role: role || 'CUSTOMER', userId: authUser.id });
+          }
         }
       }
 
@@ -350,7 +390,7 @@ export default function Messages({ barberMode = false }) {
   }, [barberMode, conversations, navigate, pageReady, requestedConversationId]);
 
   useEffect(() => {
-    if (!pageReady || barberMode) return undefined;
+    if (!pageReady || barberMode || isBarberAccountDetected) return undefined;
     if (requestedConversationId || !requestedBarberId || !authUser) return undefined;
     if (requiresCustomerName) return undefined;
 
@@ -437,7 +477,7 @@ export default function Messages({ barberMode = false }) {
     return () => {
       active = false;
     };
-  }, [authUser, barberMode, customerName, loadConversations, navigate, pageReady, requestedBarberId, requestedConversationId, requiresCustomerName]);
+  }, [authUser, barberMode, customerName, isBarberAccountDetected, loadConversations, navigate, pageReady, requestedBarberId, requestedConversationId, requiresCustomerName]);
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConversationId) || null,
@@ -665,6 +705,10 @@ export default function Messages({ barberMode = false }) {
     if (event) event.preventDefault();
     const bodyText = messageText.trim();
     if (!bodyText || !selectedConversation || !authUser || sending) return;
+    if (!barberMode && !isCustomerNameValid) {
+      setError('Silakan masukkan nama Anda terlebih dahulu sebelum mengirim pesan.');
+      return;
+    }
     if (bodyText.length > 4000) {
       setError('Pesan maksimal 4.000 karakter.');
       return;
@@ -706,6 +750,10 @@ export default function Messages({ barberMode = false }) {
   // ─── SEND IMAGE MESSAGE (FITUR 1) ───
   const sendImageMessage = async (mediaUrl, caption = '') => {
     if (!mediaUrl || !selectedConversation || !authUser) return;
+    if (!barberMode && !isCustomerNameValid) {
+      setError('Silakan masukkan nama Anda terlebih dahulu sebelum mengirim pesan.');
+      return;
+    }
 
     setSending(true);
     setError('');
@@ -805,11 +853,29 @@ export default function Messages({ barberMode = false }) {
     setImageCaption('');
   };
 
+  const handleSwitchToCustomer = async () => {
+    try {
+      setPageReady(false);
+      setError('');
+      await supabase.auth.signOut().catch(() => {});
+      useStore.setState({ authUser: null, activeBarber: null, activeBarberId: null });
+      const result = await ensureAnonymousCustomerSession();
+      if (!result.success) {
+        setError(result.error);
+      }
+      setIsBarberAccountDetected(false);
+    } catch (err) {
+      setError(getChatErrorMessage(err));
+    } finally {
+      setPageReady(true);
+    }
+  };
+
   const saveCustomerName = async (event) => {
     event.preventDefault();
     const name = customerName.trim().replace(/\s+/g, ' ');
     const validationError = validateCustomerName(name);
-    if (validationError || !authUser?.is_anonymous || savingCustomerName) {
+    if (validationError || savingCustomerName || !authUser) {
       if (validationError) setError(validationError);
       return;
     }
@@ -834,24 +900,48 @@ export default function Messages({ barberMode = false }) {
       });
       if (rpcError) console.warn('update_my_chat_display_name error:', rpcError);
 
-      setAccount((currentAccount) => currentAccount ? { ...currentAccount, name } : currentAccount);
+      setAccount((currentAccount) => currentAccount ? { ...currentAccount, name } : { name, role: 'CUSTOMER', userId: data.user.id });
 
       if (requestedBarberId && UUID_PATTERN.test(requestedBarberId)) {
         try {
           const { data: bData } = await supabase
             .from('barbers')
-            .select('id, user_id')
+            .select('id, user_id, slug')
             .or(`user_id.eq.${requestedBarberId},id.eq.${requestedBarberId}`)
             .maybeSingle();
-          const targetId = bData?.user_id || bData?.id || requestedBarberId;
+          const targetId = bData?.user_id || requestedBarberId;
 
-          await supabase
-            .from('conversations')
-            .upsert({
-              customer_id: data.user.id,
-              barber_id: targetId,
-              customer_name: name
-            }, { onConflict: 'customer_id,barber_id' });
+          if (targetId && targetId !== data.user.id) {
+            let { data: convData } = await supabase
+              .from('conversations')
+              .select('*')
+              .eq('customer_id', data.user.id)
+              .eq('barber_id', targetId)
+              .maybeSingle();
+
+            if (!convData) {
+              const { data: inserted, error: insertError } = await supabase
+                .from('conversations')
+                .insert({
+                  customer_id: data.user.id,
+                  barber_id: targetId,
+                  customer_name: name
+                })
+                .select('*')
+                .single();
+
+              if (!insertError && inserted) {
+                convData = inserted;
+              }
+            }
+
+            if (convData) {
+              await loadConversations();
+              const profileParam = bData?.slug ? `&profileSlug=${encodeURIComponent(bData.slug)}` : '';
+              navigate(`/messages?conversationId=${encodeURIComponent(convData.id)}${profileParam}`, { replace: true });
+              return;
+            }
+          }
         } catch (upsertError) {
           console.warn('Upsert conversation info:', upsertError);
         }
@@ -898,6 +988,40 @@ export default function Messages({ barberMode = false }) {
       <main className="min-h-screen flex items-center justify-center bg-[#F7F6F2] text-neutral-500">
         <LoaderCircle className="w-5 h-5 animate-spin mr-2" />
         <span className="text-sm">Memuat percakapan...</span>
+      </main>
+    );
+  }
+
+  if (isBarberAccountDetected) {
+    return (
+      <main
+        style={viewportHeight ? { height: `${viewportHeight}px` } : undefined}
+        className="fixed inset-0 w-full bg-[#F7F6F2] px-4 py-6 flex items-center justify-center overflow-y-auto overscroll-contain"
+      >
+        <div className="w-full max-w-md my-auto rounded-3xl border border-[#DCE7DF] bg-white p-6 sm:p-8 shadow-[0_18px_45px_rgba(40,88,68,0.14),0_5px_12px_rgba(40,88,68,0.08)] text-center">
+          <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-amber-100 text-amber-800 shadow-[0_3px_0_#FCD34D]">
+            <UserRound className="h-7 w-7" />
+          </span>
+          <h1 className="text-lg sm:text-xl font-bold text-[#171717]">Akun Barber Terdeteksi</h1>
+          <p className="mt-2 text-xs sm:text-sm leading-relaxed text-neutral-600">
+            Anda saat ini sedang login dengan akun <strong>Barber / Capster</strong>. Halaman ini diperuntukkan bagi pelanggan yang ingin berkonsultasi dengan barber.
+          </p>
+          <div className="mt-6 flex flex-col gap-3">
+            <button
+              onClick={() => navigate('/barber/messages')}
+              className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-br from-[#397457] to-[#1E4334] px-4 py-3 text-sm font-semibold text-white shadow-[0_4px_0_#173829,0_7px_12px_rgba(40,88,68,0.22)] transition hover:-translate-y-0.5"
+            >
+              Buka Inbox Pesan Barber
+            </button>
+            <button
+              onClick={handleSwitchToCustomer}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#D5E1D8] bg-[#F8FAF8] px-4 py-3 text-sm font-semibold text-[#285844] transition hover:bg-white"
+            >
+              Keluar & Mulai Konsultasi Sebagai Pelanggan
+            </button>
+          </div>
+          {error && <p role="alert" className="mt-3 text-sm text-red-700">{error}</p>}
+        </div>
       </main>
     );
   }

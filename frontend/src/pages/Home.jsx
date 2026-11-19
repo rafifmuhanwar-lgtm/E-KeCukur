@@ -839,7 +839,7 @@ export default function Home() {
       <section id="preview" className="scroll-mt-20 py-16 sm:py-24 max-w-6xl mx-auto px-4 sm:px-6">
         <div className="text-center max-w-2xl mx-auto mb-10">
           <span className="text-xs font-mono uppercase tracking-widest text-[#285844] font-semibold">
-            Simulasi Interaktif
+            Pratinjau Interaktif
           </span>
           <h2 className="text-2xl sm:text-4xl font-display font-extrabold text-[#171717] tracking-tight mt-2 mb-3">
             Lihat Bagaimana Tampilan Profilmu
@@ -876,7 +876,7 @@ export default function Home() {
           
           <div className="flex items-center justify-between pb-4 mb-4 border-b border-neutral-100">
             <span className="text-xs font-mono text-neutral-500">
-              Simulasi Tampilan Link Bio
+              Pratinjau Tampilan Link Bio
             </span>
             <span className="text-[11px] font-mono px-2.5 py-0.5 rounded-full bg-neutral-100 text-neutral-600 font-semibold">
               Interaktif

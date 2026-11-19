@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -105,6 +105,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const activeBarber = useStore((state) => state.activeBarber);
   const authUser = useStore((state) => state.authUser);
   const addBooking = useStore((state) => state.addBooking);
+  const bookings = useStore((state) => state.bookings || []);
   const toggleLookbookLike = useStore((state) => state.toggleLookbookLike);
   const isLoading = useStore((state) => state.isLoading);
 
@@ -373,7 +374,18 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [bookingQrisData, setBookingQrisData] = useState(null);
   const [copiedBookingAmount, setCopiedBookingAmount] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [activeTicket, setActiveTicket] = useState(null);
+  const [activeTicket, setActiveTicket] = useState(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem('ecukur_active_ticket');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed?.id) return parsed;
+        }
+      }
+    } catch {}
+    return null;
+  });
 
   const teamMembers = liveTeamMembers;
   const teamBookingEnabled = barber?.profileType === 'barbershop'
@@ -390,18 +402,26 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   useEffect(() => {
     const interval = setInterval(() => {
       const currentDate = getJakartaDateKey();
-      setTodayIso((previousDate) => previousDate === currentDate ? previousDate : currentDate);
+      setTodayIso((previousDate) => {
+        if (previousDate === currentDate) return previousDate;
+        setSelectedDate((prevDate) => (prevDate < currentDate ? currentDate : prevDate));
+        setCalendarMonth((prevMonth) => (prevMonth < currentDate.slice(0, 7) ? currentDate.slice(0, 7) : prevMonth));
+        return currentDate;
+      });
     }, 60_000);
     return () => clearInterval(interval);
   }, []);
 
   useEffect(() => {
-    if (selectedDate < todayIso) setSelectedDate(todayIso);
-    if (calendarMonth < todayIso.slice(0, 7)) setCalendarMonth(todayIso.slice(0, 7));
-  }, [todayIso, selectedDate, calendarMonth]);
-
-  useEffect(() => {
-    setLiveTeamMembers(barber?.teamMembers || []);
+    let active = true;
+    (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      setLiveTeamMembers(barber?.teamMembers || []);
+    })();
+    return () => {
+      active = false;
+    };
   }, [barber?.id, barber?.teamMembers]);
 
   useEffect(() => {
@@ -441,6 +461,14 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     const start = timeToMinutes(slot);
     const end = start + getServiceDurationMinutes(selectedService || activeServices[0]);
     if (!Number.isFinite(start) || end > 24 * 60) return false;
+
+    // Jika tanggal yang dipilih adalah hari ini atau sebelumnya, jam yang sudah lewat tidak bisa dipilih
+    if (selectedDate <= todayIso) {
+      const now = new Date();
+      const currentJakartaMinutes = ((now.getUTCHours() + 7) % 24) * 60 + now.getUTCMinutes();
+      if (start <= currentJakartaMinutes) return false;
+    }
+
     return !availabilityBookings.some((booking) => {
       const bookingStart = timeToMinutes(booking.start_time);
       const bookingEnd = booking.end_time
@@ -448,7 +476,21 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
         : bookingStart + 45;
       return start < bookingEnd && end > bookingStart;
     });
-  }, [availabilityReady, availabilityDate, selectedDate, availabilityError, availabilityBookings, selectedService, activeServices, teamBookingEnabled, selectedCapster]);
+  }, [availabilityReady, availabilityDate, selectedDate, todayIso, availabilityError, availabilityBookings, selectedService, activeServices, teamBookingEnabled, selectedCapster]);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      if (selectedTime && !isSlotAvailable(selectedTime)) {
+        setSelectedTime('');
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [selectedTime, isSlotAvailable, selectedDate]);
 
   useEffect(() => {
     if (!isBookingOpen || isPreview) return undefined;
@@ -499,11 +541,26 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
           setAvailabilityError('');
         }
       } catch (error) {
-        console.error('Booking availability fetch failed:', error);
+        console.warn('Booking availability fetch failed, switching to local store fallback:', error);
         if (active) {
-          setAvailabilityBookings([]);
-          setAvailabilityReady(false);
-          setAvailabilityError('Jadwal belum dapat dimuat. Coba beberapa saat lagi.');
+          // Fallback lokal: gunakan bookings dari memory store agar jam tetap bisa dipilih
+          const localBookings = (bookings || []).filter((b) => {
+            const dateMatch = b.dateIso === selectedDate || b.date === selectedDate;
+            const capsterMatch = !teamBookingEnabled || !selectedCapsterId ||
+              String(b.capsterId) === String(selectedCapsterId) ||
+              String(b.capsterName || '').toLowerCase() === String(selectedCapster?.name || '').toLowerCase();
+            const isActive = !['Batal', 'CANCELLED', 'EXPIRED', 'Selesai', 'COMPLETED'].includes(b.status);
+            return dateMatch && capsterMatch && isActive;
+          }).map((b) => ({
+            start_time: b.time || '10:00',
+            end_time: null,
+            booking_status: b.status
+          }));
+
+          setAvailabilityBookings(localBookings);
+          setAvailabilityReady(true);
+          setAvailabilityDate(selectedDate);
+          setAvailabilityError('');
         }
       }
     };
@@ -516,20 +573,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       active = false;
       clearInterval(refreshTimer);
     };
-  }, [isBookingOpen, isPreview, selectedDate, selectedCapsterId, teamBookingEnabled, barber?.id, barber?.name]);
-
-  // Baca tiket aktif tersimpan di HP pelanggan
-  useEffect(() => {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        const raw = localStorage.getItem('ecukur_active_ticket');
-        if (raw) {
-          const parsed = JSON.parse(raw);
-          if (parsed?.id) setActiveTicket(parsed);
-        }
-      }
-    } catch {}
-  }, []);
+  }, [isBookingOpen, isPreview, selectedDate, selectedCapsterId, teamBookingEnabled, barber?.id, barber?.name, bookings, selectedCapster]);
 
   // Auto-listen when customer is on QRIS payment step
   useEffect(() => {
@@ -585,6 +629,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [tipAmount, setTipAmount] = useState(25000);
   const [selectedCoffeeLabel, setSelectedCoffeeLabel] = useState('Kopi Susu');
   const [tipperName, setTipperName] = useState('');
+  const tipperNameRef = useRef(tipperName);
+  useEffect(() => {
+    tipperNameRef.current = tipperName;
+  }, [tipperName]);
   const [tipperMessage, setTipperMessage] = useState('');
   const [tipPaid, setTipPaid] = useState(false);
   const [tipQrisData, setTipQrisData] = useState(null);
@@ -592,49 +640,61 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [tipQrisError, setTipQrisError] = useState('');
   const [copiedTipAmount, setCopiedTipAmount] = useState(false);
 
+  const barberId = barber?.id;
+  const tippingQrisImage = barber?.tippingConfig?.qrisImage || null;
+
   // Auto-generate QRIS tagihan dengan kode unik saat modal tip dibuka
   useEffect(() => {
-    if (!isTippingOpen || tipPaid) return;
+    if (!isTippingOpen || tipPaid || !barberId) return undefined;
     let isCancelled = false;
     let pollInterval = null;
 
-    setTipQrisLoading(true);
-    setTipQrisError('');
-    createQrisPayment({
-      type: 'TIP',
-      amount: tipAmount,
-      barberId: barber.id,
-      customerName: tipperName || 'Pelanggan',
-      qrisImageUrl: barber.tippingConfig?.qrisImage || null
-    }).then((res) => {
+    (async () => {
+      await Promise.resolve();
       if (isCancelled) return;
-      setTipQrisLoading(false);
-      if (res?.success && res.payment) {
-        setTipQrisData(res.payment);
 
-        // Polling status tiap 2.5 detik untuk mendeteksi notifikasi MacroDroid
-        pollInterval = setInterval(async () => {
-          const statusRes = await checkQrisPaymentStatus(res.payment.referenceId);
-          if (statusRes?.success && statusRes.status === 'PAID') {
-            clearInterval(pollInterval);
-            setTipPaid(true);
-          }
-        }, 2500);
-      } else {
-        setTipQrisError(res?.error || 'Tagihan QRIS gagal dibuat. Coba lagi.');
+      setTipQrisLoading(true);
+      setTipQrisError('');
+
+      try {
+        const res = await createQrisPayment({
+          type: 'TIP',
+          amount: tipAmount,
+          barberId,
+          customerName: tipperNameRef.current || 'Pelanggan',
+          qrisImageUrl: tippingQrisImage
+        });
+
+        if (isCancelled) return;
+        setTipQrisLoading(false);
+
+        if (res?.success && res.payment) {
+          setTipQrisData(res.payment);
+
+          // Polling status tiap 2.5 detik untuk mendeteksi notifikasi MacroDroid
+          pollInterval = setInterval(async () => {
+            const statusRes = await checkQrisPaymentStatus(res.payment.referenceId);
+            if (statusRes?.success && statusRes.status === 'PAID') {
+              clearInterval(pollInterval);
+              setTipPaid(true);
+            }
+          }, 2500);
+        } else {
+          setTipQrisError(res?.error || 'Tagihan QRIS gagal dibuat. Coba lagi.');
+        }
+      } catch (error) {
+        console.error('Gagal membuat tagihan tip QRIS:', error);
+        if (!isCancelled) setTipQrisError('Tagihan QRIS gagal dibuat. Coba lagi.');
+      } finally {
+        if (!isCancelled) setTipQrisLoading(false);
       }
-    }).catch((error) => {
-      console.error('Gagal membuat tagihan tip QRIS:', error);
-      if (!isCancelled) setTipQrisError('Tagihan QRIS gagal dibuat. Coba lagi.');
-    }).finally(() => {
-      if (!isCancelled) setTipQrisLoading(false);
-    });
+    })();
 
     return () => {
       isCancelled = true;
       if (pollInterval) clearInterval(pollInterval);
     };
-  }, [isTippingOpen, tipAmount, tipPaid]);
+  }, [isTippingOpen, tipAmount, tipPaid, barberId, tippingQrisImage]);
 
   // Share link copy
   const handleShare = () => {
@@ -668,9 +728,29 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   };
   const isOwnProfile = Boolean(authUser?.id && authUser.id === barber?.user_id);
 
+  const handlePhoneChange = (e) => {
+    let val = e.target.value.replace(/\D/g, '');
+    if (val.startsWith('628')) {
+      val = '08' + val.slice(3);
+    }
+    if (val.length > 13) {
+      val = val.slice(0, 13);
+    }
+    setCustomerPhone(val);
+  };
+
   const handleSubmitBooking = async (e) => {
     e.preventDefault();
-    if (!customerName.trim() || !customerPhone.trim()) return;
+    const trimmedName = customerName.trim();
+    const trimmedPhone = customerPhone.trim();
+    if (!trimmedName || !trimmedPhone) {
+      window.alert('Silakan lengkapi nama dan nomor WhatsApp Anda.');
+      return;
+    }
+    if (!/^08[0-9]{8,11}$/.test(trimmedPhone)) {
+      window.alert('Nomor WhatsApp tidak valid. Nomor wajib diawali 08 dan memiliki panjang 10–13 angka (maksimal 13 digit).');
+      return;
+    }
     if (teamBookingEnabled && (
       !selectedCapster || getCapsterStatus(selectedCapster) !== 'AVAILABLE'
     )) {
@@ -2025,6 +2105,11 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                         </button>
                       ))}
                     </div>
+                    {selectedDate <= todayIso && (
+                      <p className="text-[10px] text-neutral-400 mt-1.5">
+                        * Jam yang dicoret telah terlewat dan tidak dapat dipilih.
+                      </p>
+                    )}
                   </div>
 
                   {/* Contact Info */}
@@ -2041,15 +2126,31 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       />
                     </div>
                     <div>
-                      <label className="text-xs font-semibold text-neutral-700 block mb-1">Nomor WhatsApp Aktif</label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-neutral-700">Nomor WhatsApp Aktif *</label>
+                        <span className="text-[10px] text-neutral-400 font-mono">
+                          {customerPhone.length}/13 digit
+                        </span>
+                      </div>
                       <input 
                         type="tel"
                         required
+                        maxLength={13}
                         value={customerPhone}
-                        onChange={(e) => setCustomerPhone(e.target.value)}
+                        onChange={handlePhoneChange}
                         placeholder="081234567890"
-                        className="w-full text-xs font-mono p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
+                        className={`w-full text-xs font-mono p-3 bg-neutral-50 border rounded-xl outline-none transition-colors ${
+                          customerPhone && !customerPhone.startsWith('08')
+                            ? 'border-red-400 focus:border-red-500 bg-red-50/20'
+                            : 'border-neutral-300 focus:border-[#285844]'
+                        }`}
                       />
+                      {customerPhone && !customerPhone.startsWith('08') && (
+                        <p className="text-[11px] text-red-600 mt-1">Nomor WhatsApp wajib diawali 08.</p>
+                      )}
+                      {customerPhone && customerPhone.startsWith('08') && customerPhone.length < 10 && (
+                        <p className="text-[11px] text-amber-600 mt-1">Nomor terlalu pendek (minimal 10 digit, maks 13 digit).</p>
+                      )}
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-neutral-700 block mb-1">Catatan Khusus (Opsional)</label>

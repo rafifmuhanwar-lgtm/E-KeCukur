@@ -72,48 +72,81 @@ export default function AdminMasterDashboard() {
     (import.meta.env.VITE_ADMIN_EMAIL || '').trim()
   ].filter(Boolean), []);
 
-  const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
-  const [adminPasskey, setAdminPasskey] = useState('');
-  const [pinInput, setPinInput] = useState('');
-  const [authMode, setAuthMode] = useState('pin'); // 'pin' | 'passkey'
-  const [showPassword, setShowPassword] = useState(false);
-  const [authError, setAuthError] = useState('');
-  const [authNotice, setAuthNotice] = useState('');
-  const [failedAttempts, setFailedAttempts] = useState(0);
-  const [lockoutSeconds, setLockoutSeconds] = useState(0);
-  const [isVerifying, setIsVerifying] = useState(false);
-
-  // 1. Cek Sesi Tersimpan & Lockout saat Mount
-  useEffect(() => {
-    try {
-      const lockoutUntil = Number(sessionStorage.getItem('ecukur_admin_lockout_until') || 0);
-      if (lockoutUntil > Date.now()) {
-        const remaining = Math.ceil((lockoutUntil - Date.now()) / 1000);
-        setLockoutSeconds(remaining);
-      }
-    } catch {}
-
+  const [isAdminUnlocked, setIsAdminUnlocked] = useState(() => {
     try {
       const sessionToken = sessionStorage.getItem('ecukur_admin_session_token');
       const sessionTime = Number(sessionStorage.getItem('ecukur_admin_session_time') || 0);
       const isSessionFresh = Date.now() - sessionTime < 15 * 60 * 1000; // 15 menit
 
       if (sessionToken === 'authenticated' && isSessionFresh) {
-        setIsAdminUnlocked(true);
         sessionStorage.setItem('ecukur_admin_session_time', String(Date.now()));
-        return;
+        return true;
       }
     } catch {}
 
-    // Cek apakah user saat ini login dengan email terverifikasi admin
     if (authUser?.email && ADMIN_WHITELIST_EMAILS.some((em) => em.toLowerCase() === authUser.email.toLowerCase())) {
-      setIsAdminUnlocked(true);
       try {
         sessionStorage.setItem('ecukur_admin_session_token', 'authenticated');
         sessionStorage.setItem('ecukur_admin_session_time', String(Date.now()));
       } catch {}
+      return true;
     }
-  }, [authUser?.email, ADMIN_WHITELIST_EMAILS]);
+    return false;
+  });
+  const [adminPasskey, setAdminPasskey] = useState('');
+  const [pinInput, setPinInput] = useState('');
+  const [authMode, setAuthMode] = useState('pin'); // 'pin' | 'passkey'
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState('');
+  const [authNotice, setAuthNotice] = useState('');
+  const [failedAttempts, setFailedAttempts] = useState(() => {
+    try {
+      return Number(sessionStorage.getItem('ecukur_admin_failed_attempts') || 0);
+    } catch {
+      return 0;
+    }
+  });
+  const [lockoutSeconds, setLockoutSeconds] = useState(() => {
+    try {
+      const lockoutUntil = Number(sessionStorage.getItem('ecukur_admin_lockout_until') || 0);
+      if (lockoutUntil > Date.now()) {
+        return Math.ceil((lockoutUntil - Date.now()) / 1000);
+      }
+    } catch {}
+    return 0;
+  });
+  const [isVerifying, setIsVerifying] = useState(false);
+
+  // 1. Cek Sesi Tersimpan saat Email Admin terdeteksi setelah mount
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      await Promise.resolve();
+      if (!ignore && !isAdminUnlocked && authUser?.email && ADMIN_WHITELIST_EMAILS.some((em) => em.toLowerCase() === authUser.email.toLowerCase())) {
+        setIsAdminUnlocked(true);
+        try {
+          sessionStorage.setItem('ecukur_admin_session_token', 'authenticated');
+          sessionStorage.setItem('ecukur_admin_session_time', String(Date.now()));
+        } catch {}
+      }
+    })();
+    return () => {
+      ignore = true;
+    };
+  }, [isAdminUnlocked, authUser?.email, ADMIN_WHITELIST_EMAILS]);
+
+  // Handler kunci portal sesi admin
+  const handleLockPortal = useCallback(() => {
+    try {
+      sessionStorage.removeItem('ecukur_admin_session_token');
+      sessionStorage.removeItem('ecukur_admin_session_time');
+    } catch {}
+    setIsAdminUnlocked(false);
+    setAdminPasskey('');
+    setPinInput('');
+    setAuthError('');
+    setAuthNotice('Portal berhasil dikunci secara aman.');
+  }, []);
 
   // 2. Timer Countdown saat Terkunci
   useEffect(() => {
@@ -165,10 +198,10 @@ export default function AdminMasterDashboard() {
       window.removeEventListener('keydown', resetInactivityTimer);
       window.removeEventListener('touchstart', resetInactivityTimer);
     };
-  }, [isAdminUnlocked]);
+  }, [isAdminUnlocked, handleLockPortal]);
 
   // 4. Verifikasi Security Passkey / PIN (Server API Verification + SHA-256 Hash Fallback)
-  const handleVerifyPasskey = async (e, explicitKey) => {
+  const handleVerifyPasskey = useCallback(async (e, explicitKey) => {
     e?.preventDefault();
     if (lockoutSeconds > 0 || isVerifying) return;
 
@@ -253,7 +286,7 @@ export default function AdminMasterDashboard() {
     } finally {
       setIsVerifying(false);
     }
-  };
+  }, [lockoutSeconds, isVerifying, authMode, pinInput, adminPasskey, failedAttempts]);
 
   const handlePinDigit = (digit) => {
     if (lockoutSeconds > 0 || isVerifying) return;
@@ -297,19 +330,7 @@ export default function AdminMasterDashboard() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isAdminUnlocked, authMode, pinInput, lockoutSeconds, isVerifying]);
-
-  const handleLockPortal = () => {
-    try {
-      sessionStorage.removeItem('ecukur_admin_session_token');
-      sessionStorage.removeItem('ecukur_admin_session_time');
-    } catch {}
-    setIsAdminUnlocked(false);
-    setAdminPasskey('');
-    setPinInput('');
-    setAuthError('');
-    setAuthNotice('Portal berhasil dikunci secara aman.');
-  };
+  }, [isAdminUnlocked, authMode, pinInput, lockoutSeconds, handleVerifyPasskey]);
 
   // Sync Supabase Barbers & Bookings on Mount + Realtime (HANYA KETIKA TEROTORISASI)
   useEffect(() => {
@@ -347,7 +368,7 @@ export default function AdminMasterDashboard() {
   const [webhookLogs, setWebhookLogs] = useState([]);
 
   // Fetch live webhook & payment logs from Supabase
-  const loadWebhookLogs = async () => {
+  const loadWebhookLogs = useCallback(async () => {
     if (!isSupabaseConfigured) return;
     try {
       const { data: qrisRows, error } = await supabase
@@ -386,11 +407,19 @@ export default function AdminMasterDashboard() {
         note: `${b.customerName} - ${b.serviceName}`
       })));
     }
-  };
+  }, [bookings]);
 
   useEffect(() => {
-    loadWebhookLogs();
-  }, [bookings]);
+    let active = true;
+    (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      loadWebhookLogs();
+    })();
+    return () => {
+      active = false;
+    };
+  }, [loadWebhookLogs]);
 
   // Global Platform Settings State
   const [platformName, setPlatformName] = useState('E-CUKUR Link-in-Bio');

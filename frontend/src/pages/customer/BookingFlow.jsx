@@ -23,6 +23,20 @@ const TIME_SLOTS = [
   '16:00', '16:30', '17:00', '17:30', '19:00', '19:30'
 ];
 
+const isBookingTimePast = (timeStr, selectedDateObj) => {
+  if (!timeStr || !selectedDateObj) return false;
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  const isToday = Boolean(selectedDateObj.isToday || selectedDateObj.id === todayIso);
+  if (!isToday) return false;
+
+  const [slotH, slotM] = timeStr.split(':').map(Number);
+  const currentH = now.getHours();
+  const currentM = now.getMinutes();
+
+  return slotH < currentH || (slotH === currentH && slotM <= currentM);
+};
+
 const generateUpcomingDates = () => {
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
@@ -89,9 +103,16 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
 
   const formatRupiah = (val) => `Rp ${Number(val || 0).toLocaleString('id-ID')}`;
 
+  const handleSelectDate = (d) => {
+    setSelectedDate(d);
+    if (selectedTime && isBookingTimePast(selectedTime, d)) {
+      setSelectedTime('');
+    }
+  };
+
   const handleNext = () => {
     if (step === 1 && !selectedService) return;
-    if (step === 2 && (!selectedDate || !selectedTime)) return;
+    if (step === 2 && (!selectedDate || !selectedTime || isBookingTimePast(selectedTime, selectedDate))) return;
     setStep((prev) => Math.min(prev + 1, 3));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -105,10 +126,29 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
     }
   };
 
+  const handlePhoneChange = (e) => {
+    let val = e.target.value.replace(/\D/g, '');
+    if (val.startsWith('628')) {
+      val = '08' + val.slice(3);
+    }
+    if (val.length > 13) {
+      val = val.slice(0, 13);
+    }
+    setCustomerPhone(val);
+  };
+
   const handleConfirm = (e) => {
     e.preventDefault();
-    if (!customerName.trim() || !customerPhone.trim()) {
+    const trimmedName = customerName.trim();
+    const trimmedPhone = customerPhone.trim();
+
+    if (!trimmedName || !trimmedPhone) {
       alert('Silakan lengkapi nama dan nomor WhatsApp Anda.');
+      return;
+    }
+
+    if (!/^08[0-9]{8,11}$/.test(trimmedPhone)) {
+      alert('Nomor WhatsApp tidak valid. Nomor wajib diawali 08 dan memiliki panjang 10–13 angka (maksimal 13 digit).');
       return;
     }
 
@@ -116,8 +156,8 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
 
     setTimeout(async () => {
       const created = await addBooking({
-        customerName: customerName.trim(),
-        customerPhone: customerPhone.trim(),
+        customerName: trimmedName,
+        customerPhone: trimmedPhone,
         note: customerNote.trim() || '-',
         barberName: selectedBarber || 'Bebas (Capster Tersedia)',
         serviceId: selectedService?.id,
@@ -429,7 +469,7 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
                           <button
                             key={d.id}
                             type="button"
-                            onClick={() => setSelectedDate(d)}
+                            onClick={() => handleSelectDate(d)}
                             className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
                               isSelected
                                 ? 'border-[#285844] bg-[#285844] text-white shadow-xs'
@@ -460,16 +500,20 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
 
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
                       {TIME_SLOTS.map((time) => {
+                        const isPast = isBookingTimePast(time, selectedDate);
                         const isSelected = selectedTime === time;
                         return (
                           <button
                             key={time}
                             type="button"
-                            onClick={() => setSelectedTime(time)}
-                            className={`py-3 px-2 rounded-xl border text-center font-mono text-xs font-bold transition-all cursor-pointer ${
-                              isSelected
+                            disabled={isPast}
+                            onClick={() => !isPast && setSelectedTime(time)}
+                            className={`py-3 px-2 rounded-xl border text-center font-mono text-xs font-bold transition-all ${
+                              isPast
+                                ? 'border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed line-through opacity-60'
+                                : isSelected
                                 ? 'border-[#285844] bg-[#285844] text-white shadow-xs'
-                                : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50'
+                                : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50 cursor-pointer'
                             }`}
                           >
                             {time} WIB
@@ -477,6 +521,11 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
                         );
                       })}
                     </div>
+                    {selectedDate?.isToday && (
+                      <p className="text-[11px] text-neutral-400 mt-1">
+                        * Jam yang dicoret telah terlewat dan tidak dapat dipilih.
+                      </p>
+                    )}
                   </div>
 
                   {/* Nav Buttons */}
@@ -491,7 +540,7 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
                     <button
                       type="button"
                       onClick={handleNext}
-                      disabled={!selectedDate || !selectedTime}
+                      disabled={!selectedDate || !selectedTime || isBookingTimePast(selectedTime, selectedDate)}
                       className="px-8 py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer active:scale-98"
                     >
                       <span>Lanjut Konfirmasi</span>
@@ -537,17 +586,33 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
                       </div>
 
                       <div className="space-y-1.5">
-                        <label className="text-xs font-bold text-neutral-700">
-                          Nomor WhatsApp *
-                        </label>
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-neutral-700">
+                            Nomor WhatsApp *
+                          </label>
+                          <span className="text-[10px] text-neutral-400 font-mono">
+                            {customerPhone.length}/13 digit
+                          </span>
+                        </div>
                         <input
                           type="tel"
                           required
+                          maxLength={13}
                           value={customerPhone}
-                          onChange={(e) => setCustomerPhone(e.target.value)}
-                          placeholder="0812-xxxx-xxxx"
-                          className="w-full bg-white border border-neutral-200 focus:border-[#285844] rounded-xl p-3 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors shadow-2xs"
+                          onChange={handlePhoneChange}
+                          placeholder="081234567890"
+                          className={`w-full bg-white border rounded-xl p-3 text-xs font-mono text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors shadow-2xs ${
+                            customerPhone && !customerPhone.startsWith('08')
+                              ? 'border-red-400 focus:border-red-500 bg-red-50/20'
+                              : 'border-neutral-200 focus:border-[#285844]'
+                          }`}
                         />
+                        {customerPhone && !customerPhone.startsWith('08') && (
+                          <p className="text-[11px] text-red-600">Nomor WhatsApp wajib diawali 08.</p>
+                        )}
+                        {customerPhone && customerPhone.startsWith('08') && customerPhone.length < 10 && (
+                          <p className="text-[11px] text-amber-600">Nomor terlalu pendek (minimal 10 digit, maks 13 digit).</p>
+                        )}
                       </div>
                     </div>
 
@@ -722,7 +787,7 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
                 <button
                   type="button"
                   onClick={handleNext}
-                  disabled={step === 1 ? !selectedService : (!selectedDate || !selectedTime)}
+                  disabled={step === 1 ? !selectedService : (!selectedDate || !selectedTime || isBookingTimePast(selectedTime, selectedDate))}
                   className="w-full py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-xs disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                 >
                   <span>{step === 1 ? 'Lanjut ke Jadwal' : 'Lanjut ke Konfirmasi'}</span>

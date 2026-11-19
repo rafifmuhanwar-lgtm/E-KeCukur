@@ -1154,7 +1154,30 @@ export const useStore = create((set, get) => ({
           p_ticket_token: ticketToken
         };
         if (booking.capsterId) rpcParams.p_capster_id = String(booking.capsterId);
-        const { data, error } = await supabase.rpc(rpcName, rpcParams);
+        let { data, error } = await supabase.rpc(rpcName, rpcParams);
+
+        // Jika fungsi create_guest_booking_with_capster belum ada di DB Supabase (PGRST202),
+        // otomatis fallback ke create_guest_booking_with_ticket agar booking tidak gagal!
+        if (error && error.code === 'PGRST202' && rpcName === 'create_guest_booking_with_capster') {
+          console.warn('Fungsi create_guest_booking_with_capster belum di-migrasi di DB, fallback ke create_guest_booking_with_ticket');
+          const fallbackParams = { ...rpcParams };
+          delete fallbackParams.p_capster_id;
+          const fallbackRes = await supabase.rpc('create_guest_booking_with_ticket', fallbackParams);
+          data = fallbackRes.data;
+          error = fallbackRes.error;
+
+          if (data && (booking.capsterId || booking.capsterName)) {
+            supabase
+              .from('bookings')
+              .update({
+                capster_id: booking.capsterId ? String(booking.capsterId) : null,
+                capster_name: booking.capsterName || null
+              })
+              .eq('id', data)
+              .then(() => {})
+              .catch(() => {});
+          }
+        }
 
         if (error) return { success: false, error: error.message };
         if (!data) return { success: false, error: 'Database tidak mengembalikan ID booking.' };

@@ -247,53 +247,12 @@ export async function checkQrisPaymentStatus(referenceId) {
 }
 
 
-/**
- * Simulasi webhook pembayaran (untuk testing dev tanpa uang asli)
- */
-export async function simulateQrisPayment(referenceId, amount) {
-  // Tandai lokal dulu agar instan di client
-  const local = getLocalPayment(referenceId) || {};
-  local.status = 'PAID';
-  local.paidAt = new Date().toISOString();
-  saveLocalPayment(local);
-
-  // Jika tagihan lokal, update Supabase jika ada & selesai
-  if (referenceId?.startsWith('LOCAL-')) {
-    try {
-      if (isSupabaseConfigured && supabase) {
-        await supabase
-          .from('qris_payments')
-          .update({ status: 'PAID', paid_at: local.paidAt })
-          .eq('reference_id', referenceId);
-      }
-    } catch {}
-    return {
-      success: true,
-      status: 'PAID',
-      message: 'Simulasi pembayaran lokal berhasil'
-    };
-  }
-
-  // Jika tagihan server, panggil endpoint simulate
-  try {
-    const res = await fetch(`${API_BASE}/simulate`, {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ referenceId, amount: Number(amount) || 0 })
-    });
-    if (res.ok) {
-      return await res.json();
-    }
-  } catch (err) {
-    console.error(err);
-}
-
+// Endpoint simulasi dinonaktifkan untuk mode produksi
+export async function simulateQrisPayment() {
   return {
-    success: true,
-    status: 'PAID',
-    message: 'Simulasi pembayaran fallback berhasil'
+    success: false,
+    status: 'FORBIDDEN',
+    message: 'Fitur simulasi pembayaran telah dinonaktifkan di lingkungan produksi.'
   };
 }
 

@@ -17,7 +17,7 @@ import {
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 
 // Daftar tabel utama di Supabase E-CUKUR
-export const KNOWN_TABLES = [
+const KNOWN_TABLES = [
   { id: 'barbers', name: 'Barbers & Studio', desc: 'Profil barber, capster, paket langganan, dan alamat bio' },
   { id: 'bookings', name: 'Bookings & Reservasi', desc: 'Data reservasi sesi cukur, jam, status, dan pembayaran' },
   { id: 'services', name: 'Katalog Layanan', desc: 'Daftar layanan potong, cuci, styling, harga, & durasi' },
@@ -27,13 +27,10 @@ export const KNOWN_TABLES = [
 
 export default function SupabaseStudio({ onDataMutated }) {
   const [selectedTable, setSelectedTable] = useState('barbers');
-  const [customTableName, setCustomTableName] = useState('');
   const [rows, setRows] = useState([]);
   const [tableCounts, setTableCounts] = useState({});
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [sortColumn, setSortColumn] = useState('created_at');
-  const [sortDirection, setSortDirection] = useState('desc');
 
   // Modals state
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
@@ -92,11 +89,27 @@ export default function SupabaseStudio({ onDataMutated }) {
   }, [selectedTable]);
 
   useEffect(() => {
-    fetchCounts();
+    let active = true;
+    (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      fetchCounts();
+    })();
+    return () => {
+      active = false;
+    };
   }, [fetchCounts]);
 
   useEffect(() => {
-    fetchTableData(selectedTable);
+    let active = true;
+    (async () => {
+      await Promise.resolve();
+      if (!active) return;
+      fetchTableData(selectedTable);
+    })();
+    return () => {
+      active = false;
+    };
   }, [selectedTable, fetchTableData]);
 
   // Kolom-kolom yang terdeteksi
@@ -122,7 +135,7 @@ export default function SupabaseStudio({ onDataMutated }) {
     if (!searchQuery.trim()) return rows;
     const q = searchQuery.toLowerCase().trim();
     return rows.filter((row) => {
-      return Object.entries(row || {}).some(([k, val]) => {
+      return Object.entries(row || {}).some(([, val]) => {
         if (val === null || val === undefined) return false;
         if (typeof val === 'object') {
           return JSON.stringify(val).toLowerCase().includes(q);
@@ -183,7 +196,7 @@ export default function SupabaseStudio({ onDataMutated }) {
 
     try {
       setLoading(true);
-      const { data, error } = await supabase.from(selectedTable).insert([payload]).select();
+      const { error } = await supabase.from(selectedTable).insert([payload]).select();
       if (error) throw error;
 
       showToast(`Sukses menambahkan baris baru ke tabel "${selectedTable}"!`);
