@@ -138,7 +138,7 @@ export async function createQrisPayment({
       }
     }
   } catch (err) {
-    // Backend offline / network timeout / proxy error -> Gunakan fallback lokal
+    console.error(err);
   }
 
   // 2. Fallback Otomatis: Buat tagihan QRIS dinamis di browser secara instan
@@ -240,6 +240,8 @@ export async function checkQrisPaymentStatus(referenceId) {
     }
     return { success: true, status: 'PENDING' };
   } catch (err) {
+    console.error(err);
+
     return { success: false, error: err.message, status: 'PENDING' };
   }
 }
@@ -284,7 +286,9 @@ export async function simulateQrisPayment(referenceId, amount) {
     if (res.ok) {
       return await res.json();
     }
-  } catch (err) {}
+  } catch (err) {
+    console.error(err);
+}
 
   return {
     success: true,

@@ -353,6 +353,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [isBookingOpen, setIsBookingOpen] = useState(false);
   const [bookingStep, setBookingStep] = useState('form'); // 'form' | 'qris' | 'success'
   const [selectedService, setSelectedService] = useState(null);
+  const [isCapsterLocked, setIsCapsterLocked] = useState(false);
+  const [isServiceLocked, setIsServiceLocked] = useState(false);
   const [todayIso, setTodayIso] = useState(() => getJakartaDateKey());
   const [selectedDate, setSelectedDate] = useState(() => getJakartaDateKey());
   const [calendarMonth, setCalendarMonth] = useState(() => getJakartaDateKey().slice(0, 7));
@@ -647,6 +649,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     setSelectedService(service || activeServices[0]);
     const firstAvailableCapster = teamMembers.find((member) => getCapsterStatus(member) === 'AVAILABLE');
     setSelectedCapsterId(capsterId || firstAvailableCapster?.id || '');
+    // Lock capster jika dipilih dari Tab Capster (capsterId dikirim)
+    setIsCapsterLocked(!!capsterId);
+    // Lock layanan jika dipilih dari Tab Layanan (service dikirim tanpa capsterId)
+    setIsServiceLocked(!!service && !capsterId);
     setBookingSuccessData(null);
     setBookingQrisData(null);
     setBookingStep('form');
@@ -1882,14 +1888,16 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   
                   {/* Select service dropdown / pill */}
                   <div>
-                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Layanan Dipilih:</label>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Layanan Dipilih:{isServiceLocked && <span className="ml-1 text-[10px] text-emerald-700 font-bold">(Terkunci)</span>}</label>
                     <select
                       value={selectedService?.id || activeServices[0].id}
                       onChange={(e) => {
+                        if (isServiceLocked) return;
                         const s = activeServices.find(srv => srv.id === e.target.value);
                         setSelectedService(s || activeServices[0]);
                       }}
-                      className="w-full text-xs font-semibold p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844] text-[#171717] cursor-pointer"
+                      disabled={isServiceLocked}
+                      className={`w-full text-xs font-semibold p-3 border rounded-xl outline-none text-[#171717] ${isServiceLocked ? 'bg-neutral-100 border-neutral-200 cursor-not-allowed opacity-70' : 'bg-neutral-50 border-neutral-300 cursor-pointer focus:border-[#285844]'}`}
                     >
                       {activeServices.map((srv) => (
                         <option key={srv.id} value={srv.id}>
@@ -1901,11 +1909,15 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
                   {teamBookingEnabled && (
                     <div>
-                      <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Pilih Capster:</label>
+                      <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Pilih Capster:{isCapsterLocked && <span className="ml-1 text-[10px] text-emerald-700 font-bold">(Terkunci)</span>}</label>
                       <select
                         value={selectedCapsterId}
-                        onChange={(e) => setSelectedCapsterId(e.target.value)}
-                        className="w-full text-xs font-semibold p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844] text-[#171717] cursor-pointer"
+                        onChange={(e) => {
+                          if (isCapsterLocked) return;
+                          setSelectedCapsterId(e.target.value);
+                        }}
+                        disabled={isCapsterLocked}
+                        className={`w-full text-xs font-semibold p-3 border rounded-xl outline-none text-[#171717] ${isCapsterLocked ? 'bg-neutral-100 border-neutral-200 cursor-not-allowed opacity-70' : 'bg-neutral-50 border-neutral-300 cursor-pointer focus:border-[#285844]'}`}
                       >
                         <option value="">Pilih capster yang sedang free</option>
                         {teamMembers.map((member) => {

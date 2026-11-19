@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -45,18 +45,28 @@ const UPCOMING_DATES = generateUpcomingDates();
 export default function BookingFlow() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const initialBarberName = searchParams.get('barber') || '';
+  const barbers   = useStore((s) => s.barbers   || []);
+  const services  = useStore((s) => s.services  || []);
+  const addBooking = useStore((s) => s.addBooking);
 
-  const barbers = useStore((state) => state.barbers || []);
-  const services = useStore((state) => state.services || []);
-  const addBooking = useStore((state) => state.addBooking);
+  // ID capster dari query‑string (jika ada)
+  const barberIdFromUrl = searchParams.get('barber');
+
+  // Capster yang terkunci – dihitung setelah `barbers` tersedia
+  const lockedBarber = useMemo(() => {
+    if (!barberIdFromUrl) return null;
+    return barbers.find((b) => b.id === barberIdFromUrl) || null;
+  }, [barberIdFromUrl, barbers]);
+  const isBarberLocked = !!lockedBarber;
 
   // Steps: 1 = Services, 2 = Date & Time, 3 = Confirmation & Form
   const [step, setStep] = useState(1);
 
   // Selections
   const [selectedService, setSelectedService] = useState(null);
-  const [selectedBarber, setSelectedBarber] = useState(initialBarberName || 'Bebas (Capster Tersedia)');
+  // Determine whether a capster is locked via URL query
+const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarber.name : 'Bebas (Capster Tersedia)');
+
   const [selectedDate, setSelectedDate] = useState(UPCOMING_DATES[0]);
   const [selectedTime, setSelectedTime] = useState('');
   const [customerName, setCustomerName] = useState('');
@@ -335,6 +345,17 @@ export default function BookingFlow() {
                   className="space-y-8"
                 >
                   {/* Capster Selection */}
+{(isBarberLocked && lockedBarber) ? (
+  <div className="text-center mb-4">
+    {lockedBarber.photo && (
+      <div className="flex justify-center mb-2">
+        <img src={lockedBarber.photo} alt={lockedBarber.name} className="w-20 h-20 rounded-full object-cover border-2 border-[#285844]" />
+      </div>
+    )}
+    <span className="font-medium">Capster dipilih:</span>{' '}
+    <span className="font-bold">{lockedBarber.name}</span>
+  </div>
+) : null}
                   <div className="space-y-3.5">
                     <div className="border-b border-neutral-200 pb-3">
                       <h2 className="font-display text-lg sm:text-xl font-bold text-neutral-900">

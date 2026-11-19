@@ -145,6 +145,7 @@ export default async function handler(req, res) {
         payhookStatus: 'NOT VERIFIED'
       });
     } catch (error) {
+    console.error(error);
       console.error('[Payment monitoring] Health query failed.');
       return res.status(200).json({
         ok: true,
@@ -253,6 +254,7 @@ export default async function handler(req, res) {
       items: data || []
     });
   } catch (error) {
+    console.error(error);
     return sendDatabaseError(res, error);
   }
 }
