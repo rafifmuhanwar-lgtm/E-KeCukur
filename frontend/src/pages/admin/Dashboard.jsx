@@ -626,6 +626,15 @@ export default function AdminMasterDashboard() {
       const target = barbers.find((b) => b.id === barberId || b.slug === barberId);
       const profileType = newPlan === 'capster' ? 'capster' : 'barber';
 
+      // 1. Simpan ke local cache langsung agar tetap tersimpan di localhost & browser
+      try {
+        if (target?.id) localStorage.setItem(`ecukur_plan_${target.id}`, newPlan);
+        if (target?.slug) localStorage.setItem(`ecukur_plan_${target.slug}`, newPlan);
+        if (barberId) localStorage.setItem(`ecukur_plan_${barberId}`, newPlan);
+        if (target?.user_id) localStorage.setItem(`ecukur_user_plan_${target.user_id}`, newPlan);
+        if (target?.email) localStorage.setItem(`ecukur_user_plan_${target.email.toLowerCase()}`, newPlan);
+      } catch {}
+
       const updateResult = await updateBarber(barberId, {
         plan: newPlan,
         profileType: profileType,
@@ -669,7 +678,18 @@ export default function AdminMasterDashboard() {
       const isFree = newPlan === 'free';
       const targetRole = isFree ? 'CUSTOMER' : 'BARBER';
 
-      // 1. Update role di tabel users Supabase (dengan error handling yang aman)
+      // 1. Simpan ke local cache langsung untuk akun pengguna ini
+      try {
+        localStorage.setItem(`ecukur_user_plan_${user.id}`, newPlan);
+        if (user.email) localStorage.setItem(`ecukur_user_plan_${user.email.toLowerCase()}`, newPlan);
+      } catch {}
+
+      // Update state registeredUsers lokal secara seketika (optimistic)
+      setRegisteredUsers((prev) =>
+        prev.map((u) => (u.id === user.id ? { ...u, role: targetRole, plan: newPlan } : u))
+      );
+
+      // 2. Update role di tabel users Supabase (dengan error handling yang aman)
       if (isSupabaseConfigured) {
         try {
           await supabase
@@ -681,7 +701,7 @@ export default function AdminMasterDashboard() {
         }
       }
 
-      // 2. Cek apakah pengguna sudah memiliki profil di tabel barbers
+      // 3. Cek apakah pengguna sudah memiliki profil di tabel barbers
       const existingBarber = barbers.find(
         (b) => b.user_id === user.id || (user.email && b.email?.toLowerCase() === user.email.toLowerCase())
       );
@@ -689,6 +709,11 @@ export default function AdminMasterDashboard() {
       const profileType = newPlan === 'capster' ? 'capster' : 'barber';
 
       if (existingBarber) {
+        try {
+          if (existingBarber.id) localStorage.setItem(`ecukur_plan_${existingBarber.id}`, newPlan);
+          if (existingBarber.slug) localStorage.setItem(`ecukur_plan_${existingBarber.slug}`, newPlan);
+        } catch {}
+
         await updateBarber(existingBarber.id, {
           plan: newPlan,
           profileType: profileType,
@@ -707,6 +732,10 @@ export default function AdminMasterDashboard() {
         if (barbers.some((b) => b.slug === finalSlug)) {
           finalSlug = `${finalSlug}-${user.id.slice(0, 4)}`;
         }
+
+        try {
+          localStorage.setItem(`ecukur_plan_${finalSlug}`, newPlan);
+        } catch {}
 
         const newBarberRow = {
           user_id: user.id,
@@ -1680,7 +1709,7 @@ export default function AdminMasterDashboard() {
                           <div className="flex items-center gap-1.5">
                             <h4 className="font-bold text-xs text-neutral-900 truncate">{barber.name}</h4>
                             <select
-                              value={barber?.plan || 'free'}
+                              value={barber?.plan || (typeof localStorage !== 'undefined' ? (localStorage.getItem(`ecukur_plan_${barber?.id}`) || localStorage.getItem(`ecukur_plan_${barber?.slug}`)) : null) || 'free'}
                               onChange={(e) => handleChangeBarberPlan(barber.id, e.target.value)}
                               className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase cursor-pointer border outline-none ${
                                 barber?.plan === 'barber' ? 'bg-amber-100 text-amber-900 border-amber-300' :
@@ -1893,7 +1922,10 @@ export default function AdminMasterDashboard() {
                             const linkedBarber = barbers.find(
                               (b) => b.user_id === u.id || (u.email && b.email?.toLowerCase() === u.email.toLowerCase())
                             );
-                            const currentPlan = linkedBarber?.plan || (String(u.role).toUpperCase() === 'BARBER' ? 'barber' : 'free');
+                            const directUserPlan = typeof localStorage !== 'undefined'
+                              ? (localStorage.getItem(`ecukur_user_plan_${u.id}`) || (u.email && localStorage.getItem(`ecukur_user_plan_${u.email.toLowerCase()}`)))
+                              : null;
+                            const currentPlan = u.plan || directUserPlan || linkedBarber?.plan || (String(u.role).toUpperCase() === 'BARBER' ? 'barber' : 'free');
 
                             return (
                               <tr key={u.id} className="hover:bg-neutral-50/70 transition-colors">
@@ -2054,7 +2086,10 @@ export default function AdminMasterDashboard() {
                         ) : (
                           filteredBarbers.map((b) => {
                             const barberBookingsCount = bookings.filter(x => x.barberId === b.id || x.barberName === b.name).length;
-                            const currentPlan = b?.plan || 'free';
+                            const cachedPlan = typeof localStorage !== 'undefined'
+                              ? (localStorage.getItem(`ecukur_plan_${b.id}`) || localStorage.getItem(`ecukur_plan_${b.slug}`))
+                              : null;
+                            const currentPlan = b?.plan || cachedPlan || 'free';
 
                             return (
                               <tr key={b.id} className="hover:bg-neutral-50/70 transition-colors">

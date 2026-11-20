@@ -178,6 +178,10 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
         if (row.tip_balance === undefined && cached.tipBalance !== undefined) barberObj.tipBalance = cached.tipBalance;
         if (!row.plan && !row.features?.plan && cached.plan) barberObj.plan = cached.plan;
       }
+      const directPlan = localStorage.getItem(`ecukur_plan_${row.id}`) || localStorage.getItem(`ecukur_plan_${slug}`);
+      if (directPlan && !row.plan && !row.features?.plan) {
+        barberObj.plan = directPlan;
+      }
     }
   } catch {}
 
@@ -551,7 +555,16 @@ export const useStore = create((set, get) => ({
 
       if (!error && Array.isArray(barberRows) && barberRows.length > 0) {
         const services = get().services;
-        const mappedBarbers = barberRows.map(row => mapSupabaseBarber(row, services));
+        const currentBarbers = get().barbers || [];
+        const mappedBarbers = barberRows.map(row => {
+          const mapped = mapSupabaseBarber(row, services);
+          const existing = currentBarbers.find(b => b.id === row.id || b.slug === row.slug);
+          // Pertahankan plan lokal jika row Supabase belum menyimpan karena RLS policy
+          if (existing && existing.plan && (!row.plan && !row.features?.plan)) {
+            mapped.plan = existing.plan;
+          }
+          return mapped;
+        });
         
         set({ barbers: mappedBarbers });
 
@@ -1116,6 +1129,11 @@ export const useStore = create((set, get) => ({
           if (target.slug) localStorage.setItem(`ecukur_barber_cache_${target.slug}`, JSON.stringify(target));
           if (target.slug && updates.bannerImage) localStorage.setItem(`ecukur_banner_${target.slug}`, updates.bannerImage);
           if (target.id && updates.bannerImage) localStorage.setItem(`ecukur_banner_${target.id}`, updates.bannerImage);
+          if (updates.plan) {
+            if (target.id) localStorage.setItem(`ecukur_plan_${target.id}`, updates.plan);
+            if (target.slug) localStorage.setItem(`ecukur_plan_${target.slug}`, updates.plan);
+            if (barberId) localStorage.setItem(`ecukur_plan_${barberId}`, updates.plan);
+          }
           localStorage.setItem('ecukur_last_active_slug', target.slug || target.id);
           window.dispatchEvent(new Event('storage'));
         }
