@@ -27,6 +27,8 @@ ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS instagram TEXT;
 ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS tiktok TEXT;
 ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS profile_type TEXT DEFAULT 'barber';
 ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS segment TEXT DEFAULT 'capster';
+ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS plan TEXT DEFAULT 'free';
+ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS account_status TEXT DEFAULT 'ACTIVE';
 ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS features JSONB DEFAULT '{"booking":true,"services":true,"lookbook":true,"team":false,"location":true,"tipping":true}'::jsonb;
 ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS tipping_config JSONB;
 ALTER TABLE public.barbers ADD COLUMN IF NOT EXISTS tip_balance NUMERIC DEFAULT 0;

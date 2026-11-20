@@ -157,7 +157,8 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
       accountNumber: '',
       accountHolder: ''
     },
-    plan: row.plan || 'free',
+    plan: row.plan || row.features?.plan || (row.profile_type === 'capster' ? 'capster' : (row.features?.team ? 'barber' : 'free')),
+    accountStatus: row.account_status || 'ACTIVE',
     stats: {
       views: 0,
       whatsappClicks: 0,
@@ -175,7 +176,7 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
         if (!row.features && cached.features) barberObj.features = cached.features;
         if (!row.tipping_config && cached.tippingConfig) barberObj.tippingConfig = cached.tippingConfig;
         if (row.tip_balance === undefined && cached.tipBalance !== undefined) barberObj.tipBalance = cached.tipBalance;
-        if (!row.plan && cached.plan) barberObj.plan = cached.plan;
+        if (!row.plan && !row.features?.plan && cached.plan) barberObj.plan = cached.plan;
       }
     }
   } catch {}
@@ -190,21 +191,40 @@ async function saveBarberPayloadToSupabase(barberId, payload) {
 
   let toSend = { ...payload };
   let lastError = null;
-  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(barberId));
+
+  // Temukan target di store untuk mendapatkan UUID dan slug yang valid
+  let target = null;
+  try {
+    const state = useStore.getState();
+    target = state?.barbers?.find((b) => b.id === barberId || b.slug === barberId) || state?.activeBarber;
+  } catch {}
+
+  const realId = target?.id || barberId;
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(realId));
+  const realSlug = target?.slug || (!isUUID ? barberId : null);
 
   for (let attempt = 0; attempt < 5; attempt++) {
     try {
       let query = supabase.from('barbers').update(toSend);
       if (isUUID) {
-        query = query.eq('id', barberId);
+        query = query.eq('id', realId);
+      } else if (realSlug) {
+        query = query.eq('slug', realSlug);
       } else {
-        query = query.eq('slug', barberId);
+        query = query.eq('id', barberId);
       }
 
-      const { error } = await query;
+      const { data, error } = await query.select();
 
       if (!error) {
-        return { success: true };
+        // Jika tidak ada baris yang ter-update dan dicoba via UUID, coba via slug jika ada
+        if (Array.isArray(data) && data.length === 0 && realSlug) {
+          const retrySlug = await supabase.from('barbers').update(toSend).eq('slug', realSlug).select();
+          if (!retrySlug.error && retrySlug.data?.length > 0) {
+            return { success: true, data: retrySlug.data };
+          }
+        }
+        return { success: true, data };
       }
       lastError = error.message;
 
@@ -1137,7 +1157,14 @@ export const useStore = create((set, get) => ({
     if (updates.services !== undefined) payload.services = updates.services;
     if (updates.bannerImage !== undefined) payload.banner_image = updates.bannerImage;
     if (updates.locationCity !== undefined) payload.location_city = updates.locationCity;
-    if (updates.plan !== undefined) payload.plan = updates.plan;
+    if (updates.plan !== undefined) {
+      payload.plan = updates.plan;
+      payload.features = {
+        ...(payload.features || updates.features || {}),
+        plan: updates.plan,
+        team: updates.plan === 'barber'
+      };
+    }
     if (updates.accountStatus !== undefined) payload.account_status = updates.accountStatus;
     if (updates.availabilityStatus !== undefined) payload.availability_status = updates.availabilityStatus;
 

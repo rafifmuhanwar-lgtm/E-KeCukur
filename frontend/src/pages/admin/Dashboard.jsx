@@ -625,27 +625,33 @@ export default function AdminMasterDashboard() {
       const target = barbers.find((b) => b.id === barberId || b.slug === barberId);
       const profileType = newPlan === 'capster' ? 'capster' : 'barber';
 
-      await updateBarber(barberId, {
+      const updateResult = await updateBarber(barberId, {
         plan: newPlan,
         profileType: profileType,
         features: {
           ...(target?.features || {}),
+          plan: newPlan,
           team: newPlan === 'barber'
         }
       });
 
-      // Jika akun terhubung ke user_id di tabel users, pastikan role-nya adalah BARBER
+      if (updateResult && updateResult.error && !updateResult.success) {
+        throw new Error(updateResult.error);
+      }
+
+      // Jika akun terhubung ke user_id di tabel users, pastikan role-nya disesuaikan
       if (isSupabaseConfigured && target?.user_id) {
+        const targetRole = newPlan === 'free' ? 'CUSTOMER' : 'BARBER';
         await supabase
           .from('users')
-          .update({ role: 'BARBER' })
+          .update({ role: targetRole })
           .eq('id', target.user_id)
           .catch(() => {});
       }
 
       showToast(`Status paket ${target?.name || ''} berhasil diubah menjadi ${newPlan.toUpperCase()}!`);
       if (typeof fetchBarbersFromSupabase === 'function') {
-        fetchBarbersFromSupabase();
+        await fetchBarbersFromSupabase();
       }
       void loadRegisteredUsers();
     } catch (err) {
@@ -659,13 +665,16 @@ export default function AdminMasterDashboard() {
       const isFree = newPlan === 'free';
       const targetRole = isFree ? 'CUSTOMER' : 'BARBER';
 
-      // 1. Update role di tabel users Supabase
+      // 1. Update role di tabel users Supabase (dengan error handling yang aman)
       if (isSupabaseConfigured) {
-        const { error: userError } = await supabase
-          .from('users')
-          .update({ role: targetRole })
-          .eq('id', user.id);
-        if (userError) throw userError;
+        try {
+          await supabase
+            .from('users')
+            .update({ role: targetRole })
+            .eq('id', user.id);
+        } catch (userError) {
+          console.warn('Update user role notice:', userError?.message);
+        }
       }
 
       // 2. Cek apakah pengguna sudah memiliki profil di tabel barbers
@@ -681,6 +690,7 @@ export default function AdminMasterDashboard() {
           profileType: profileType,
           features: {
             ...(existingBarber.features || {}),
+            plan: newPlan,
             team: newPlan === 'barber'
           }
         });
@@ -703,11 +713,25 @@ export default function AdminMasterDashboard() {
           profile_type: profileType,
           availability_status: 'AVAILABLE',
           account_status: 'ACTIVE',
+          features: {
+            booking: true,
+            services: true,
+            lookbook: true,
+            team: newPlan === 'barber',
+            location: true,
+            tipping: true,
+            plan: newPlan
+          },
           bio: `Profil resmi ${newPlan === 'capster' ? 'Capster' : 'Studio Barber'} terverifikasi oleh Admin E-Cukur.`
         };
 
         if (isSupabaseConfigured) {
-          const { error: insertError } = await supabase.from('barbers').insert(newBarberRow);
+          let { error: insertError } = await supabase.from('barbers').insert(newBarberRow);
+          if (insertError && (insertError.message?.includes('plan') || insertError.message?.includes('column'))) {
+            delete newBarberRow.plan;
+            const retry = await supabase.from('barbers').insert(newBarberRow);
+            insertError = retry.error;
+          }
           if (insertError) throw insertError;
         }
 
@@ -1068,7 +1092,7 @@ export default function AdminMasterDashboard() {
 
     if (isSupabaseConfigured) {
       try {
-        const { error } = await supabase.from('barbers').insert({
+        let insertPayload = {
           name: newBarberObj.name,
           slug: newBarberObj.slug,
           email: `${cleanSlug}@ecukur.biz.id`,
@@ -1076,13 +1100,22 @@ export default function AdminMasterDashboard() {
           bio: newBarberObj.bio,
           plan: newBarberPlan,
           profile_type: newBarberObj.profileType,
-          features: newBarberObj.features,
+          features: {
+            ...newBarberObj.features,
+            plan: newBarberPlan
+          },
           services: newBarberObj.services,
           tipping_config: newBarberObj.tippingConfig,
           location_city: newBarberObj.locationCity || null,
           account_status: 'ACTIVE',
           availability_status: 'AVAILABLE'
-        });
+        };
+        let { error } = await supabase.from('barbers').insert(insertPayload);
+        if (error && (error.message?.includes('plan') || error.message?.includes('column'))) {
+          delete insertPayload.plan;
+          const retry = await supabase.from('barbers').insert(insertPayload);
+          error = retry.error;
+        }
         if (error) throw error;
         if (typeof fetchBarbersFromSupabase === 'function') {
           await fetchBarbersFromSupabase();
