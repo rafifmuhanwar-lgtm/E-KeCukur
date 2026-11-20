@@ -1138,6 +1138,8 @@ export const useStore = create((set, get) => ({
     if (updates.bannerImage !== undefined) payload.banner_image = updates.bannerImage;
     if (updates.locationCity !== undefined) payload.location_city = updates.locationCity;
     if (updates.plan !== undefined) payload.plan = updates.plan;
+    if (updates.accountStatus !== undefined) payload.account_status = updates.accountStatus;
+    if (updates.availabilityStatus !== undefined) payload.availability_status = updates.availabilityStatus;
 
     return await saveBarberPayloadToSupabase(barberId, payload);
   },

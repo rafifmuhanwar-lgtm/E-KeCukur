@@ -460,11 +460,33 @@ export default function AdminMasterDashboard() {
     };
   }, [loadWebhookLogs]);
 
-  // Global Platform Settings State
-  const [platformName, setPlatformName] = useState('E-CUKUR Link-in-Bio');
-  const [broadcastMessage, setBroadcastMessage] = useState('');
-  const [isBroadcastActive, setIsBroadcastActive] = useState(false);
+  // Global Platform Settings State (tersimpan persisten di LocalStorage)
+  const [platformName, setPlatformName] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved) return JSON.parse(saved).platformName || 'E-CUKUR Link-in-Bio';
+    } catch {}
+    return 'E-CUKUR Link-in-Bio';
+  });
+  const [broadcastMessage, setBroadcastMessage] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved) return JSON.parse(saved).broadcastMessage || '';
+    } catch {}
+    return '';
+  });
+  const [isBroadcastActive, setIsBroadcastActive] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved) return Boolean(JSON.parse(saved).isBroadcastActive);
+    } catch {}
+    return false;
+  });
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Webhook Test Ping State
+  const [isPingingWebhook, setIsPingingWebhook] = useState(false);
+  const [pingResult, setPingResult] = useState(null);
 
   const showToast = (msg) => {
     setToastMessage(msg);
@@ -733,7 +755,37 @@ export default function AdminMasterDashboard() {
     }
   };
 
-  // ─── HANDLE UPDATE STATUS PENCAIRAN SALDO TIP ───
+  // ─── HANDLE SIMPAN PENGATURAN PLATFORM SECARA PERSISTEN ───
+  const handleSavePlatformSettings = () => {
+    const payload = {
+      platformName: platformName.trim() || 'E-CUKUR Link-in-Bio',
+      broadcastMessage: broadcastMessage.trim(),
+      isBroadcastActive,
+      updatedAt: new Date().toISOString()
+    };
+    try {
+      localStorage.setItem('ecukur_platform_settings', JSON.stringify(payload));
+      window.dispatchEvent(new Event('storage'));
+      showToast('Pengaturan platform & siaran pengumuman berhasil disimpan secara permanen!');
+    } catch (err) {
+      showToast('Gagal menyimpan: ' + err.message);
+    }
+  };
+
+  // ─── HANDLE RESET PENGATURAN KE DEFAULT ───
+  const handleResetPlatformSettings = () => {
+    if (!window.confirm('Kembalikan pengaturan platform ke nilai standar?')) return;
+    setPlatformName('E-CUKUR Link-in-Bio');
+    setBroadcastMessage('');
+    setIsBroadcastActive(false);
+    try {
+      localStorage.removeItem('ecukur_platform_settings');
+      window.dispatchEvent(new Event('storage'));
+      showToast('Pengaturan platform dikembalikan ke default.');
+    } catch {}
+  };
+
+  // ─── HANDLE UPDATE STATUS PENCAIRAN SALDO TIP (SELESAI) ───
   const handleMarkWithdrawalCompleted = async (withdrawalItem) => {
     try {
       const targetBarber = barbers.find(b => b.id === withdrawalItem.barberId || b.slug === withdrawalItem.barberId);
@@ -753,8 +805,96 @@ export default function AdminMasterDashboard() {
 
       await updateBarber(targetBarber.id, { withdrawalsHistory: updatedWds });
       showToast(`Dana ${formatRupiah(withdrawalItem.amount)} untuk ${withdrawalItem.barberName} berhasil ditandai sudah ditransfer!`);
+      if (typeof fetchBarbersFromSupabase === 'function') {
+        await fetchBarbersFromSupabase();
+      }
     } catch (err) {
       showToast('Gagal memperbarui status: ' + err.message);
+    }
+  };
+
+  // ─── HANDLE TOLAK PENCAIRAN SALDO TIP ───
+  const handleRejectWithdrawal = async (withdrawalItem) => {
+    const reason = window.prompt(`Alasan pembatalan penarikan dana ${withdrawalItem.barberName} (${formatRupiah(withdrawalItem.amount)}):`, 'Rekening tidak valid');
+    if (reason === null) return;
+
+    try {
+      const targetBarber = barbers.find(b => b.id === withdrawalItem.barberId || b.slug === withdrawalItem.barberId);
+      if (!targetBarber) return;
+
+      const currentWds = Array.isArray(targetBarber.withdrawalsHistory) ? [...targetBarber.withdrawalsHistory] : [];
+      const updatedWds = currentWds.map((w) => {
+        if (w.id === withdrawalItem.id || (w.date === withdrawalItem.date && w.amount === withdrawalItem.amount)) {
+          return {
+            ...w,
+            status: 'Ditolak / Dibatalkan',
+            rejectReason: reason,
+            rejectedAt: new Date().toISOString()
+          };
+        }
+        return w;
+      });
+
+      // Kembalikan saldo tip ke barber
+      const currentBal = Number(targetBarber.tipBalance || 0);
+      const refundedBal = currentBal + (Number(withdrawalItem.amount) || 0);
+
+      await updateBarber(targetBarber.id, { 
+        withdrawalsHistory: updatedWds,
+        tipBalance: refundedBal 
+      });
+      showToast(`Penarikan dana untuk ${withdrawalItem.barberName} dibatalkan dan saldo dikembalikan.`);
+      if (typeof fetchBarbersFromSupabase === 'function') {
+        await fetchBarbersFromSupabase();
+      }
+    } catch (err) {
+      showToast('Gagal memproses penolakan: ' + err.message);
+    }
+  };
+
+  // ─── HANDLE UPDATE STATUS PEMBAYARAN RESERVASI (LUNAS / BELUM LUNAS) ───
+  const handleTogglePaymentStatus = useCallback(async (booking) => {
+    const nextStatus = booking.paymentStatus === 'PAID' ? 'UNPAID' : 'PAID';
+    const timestamp = new Date().toISOString();
+    try {
+      useStore.setState((state) => ({
+        bookings: state.bookings.map((b) => b.id === booking.id ? { ...b, paymentStatus: nextStatus } : b)
+      }));
+
+      if (isSupabaseConfigured) {
+        const { error } = await supabase
+          .from('bookings')
+          .update({ 
+            payment_status: nextStatus,
+            updated_at: timestamp
+          })
+          .eq('id', booking.id);
+        if (error) throw error;
+      }
+
+      showToast(`Status pembayaran ${booking.id} diubah ke ${nextStatus === 'PAID' ? 'LUNAS (PAID)' : 'BELUM BAYAR (UNPAID)'}!`);
+      if (typeof fetchBookingsFromSupabase === 'function') {
+        await fetchBookingsFromSupabase();
+      }
+    } catch (err) {
+      showToast(`Gagal update pembayaran: ${err.message}`);
+    }
+  }, [fetchBookingsFromSupabase]);
+
+  // ─── HANDLE CUSTOM BOOKING STATUS CHANGE ───
+  const handleChangeBookingStatus = async (bookingId, newStatus) => {
+    try {
+      const result = await updateBookingStatus(bookingId, newStatus);
+      if (result?.success) {
+        showToast(`Status booking ${bookingId} diubah menjadi ${newStatus}!`);
+        if (typeof fetchBookingsFromSupabase === 'function') {
+          await fetchBookingsFromSupabase();
+        }
+      } else {
+        showToast(`Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
+      }
+    } catch (err) {
+      showToast(`Gagal: ${err.message}`);
     }
   };
 
@@ -765,7 +905,7 @@ export default function AdminMasterDashboard() {
       return;
     }
 
-    const headers = ['ID Booking', 'Tanggal', 'Jam', 'Pelanggan', 'No HP', 'Barber', 'Layanan', 'Tarif (Rp)', 'Metode Bayar', 'Status'];
+    const headers = ['ID Booking', 'Tanggal', 'Jam', 'Pelanggan', 'No HP', 'Barber', 'Layanan', 'Tarif (Rp)', 'Metode Bayar', 'Status Pembayaran', 'Status Booking'];
     const rows = bookings.map(b => [
       `"${b.id || ''}"`,
       `"${b.date || ''}"`,
@@ -776,6 +916,7 @@ export default function AdminMasterDashboard() {
       `"${b.serviceName || ''}"`,
       b.price || 0,
       `"${b.paymentMethod || 'Tunai'}"`,
+      `"${b.paymentStatus || 'UNPAID'}"`,
       `"${b.status || 'Menunggu'}"`
     ]);
 
@@ -787,24 +928,114 @@ export default function AdminMasterDashboard() {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    showToast('Laporan CSV berhasil diunduh!');
+    showToast('Laporan reservasi CSV berhasil diunduh!');
   };
 
-  // Handle Add Barber Manual by SuperAdmin
-  const handleCreateBarber = (e) => {
-    e.preventDefault();
-    if (!newBarberName.trim()) return;
+  // ─── EXPORT BARBERS TO CSV ───
+  const handleExportBarbersCsv = () => {
+    if (barbers.length === 0) {
+      showToast('Belum ada data barber untuk diekspor.');
+      return;
+    }
 
-    const slug = (newBarberSlug.trim() || newBarberName.toLowerCase().replace(/[^a-z0-9]/g, '')).slice(0, 30);
+    const headers = ['Nama Barber', 'Slug Bio Link', 'Email', 'Paket', 'Kota / Wilayah', 'Jumlah Menu', 'Total Booking', 'Saldo Tip (Rp)', 'Status Akun'];
+    const rows = barbers.map(b => {
+      const bCount = bookings.filter(x => x.barberId === b.id || x.barberName === b.name).length;
+      return [
+        `"${b.name || ''}"`,
+        `"/${b.slug || b.id}"`,
+        `"${b.email || ''}"`,
+        `"${(b.plan || 'free').toUpperCase()}"`,
+        `"${b.locationCity || '-'}"`,
+        (b.services || []).length,
+        bCount,
+        Number(b.tipBalance || 0),
+        `"${b.accountStatus || 'ACTIVE'}"`
+      ];
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `laporan_barber_ecukur_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast('Daftar barber CSV berhasil diunduh!');
+  };
+
+  // ─── TEST PING WEBHOOK PAYHOOK LISTENER ───
+  const handleTestWebhookPing = async () => {
+    setIsPingingWebhook(true);
+    setPingResult(null);
+    try {
+      const res = await fetch('/api/payment/qris/webhook', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': 'ecukur_qris_secret_2026'
+        },
+        body: JSON.stringify({ ping: true })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) {
+        setPingResult({
+          success: true,
+          status: res.status,
+          message: data.message || 'Koneksi Payhook QRIS Webhook Aktif & Terhubung!',
+          time: new Date().toLocaleTimeString('id-ID')
+        });
+        showToast('Webhook berhasil merespons (HTTP 200)!');
+      } else {
+        setPingResult({
+          success: false,
+          status: res.status,
+          message: data.message || data.error || 'Server webhook merespons kesalahan.',
+          time: new Date().toLocaleTimeString('id-ID')
+        });
+        showToast(`Webhook gagal (HTTP ${res.status}): ${data.message || ''}`);
+      }
+    } catch (err) {
+      setPingResult({
+        success: false,
+        status: 0,
+        message: 'Koneksi jaringan gagal: ' + err.message,
+        time: new Date().toLocaleTimeString('id-ID')
+      });
+      showToast('Ping gagal: ' + err.message);
+    } finally {
+      setIsPingingWebhook(false);
+    }
+  };
+
+  // ─── HANDLE ADD BARBER MANUAL OLEH SUPERADMIN ───
+  const handleCreateBarber = async (e) => {
+    e.preventDefault();
+    const cleanName = newBarberName.trim();
+    if (!cleanName) return;
+
+    let cleanSlug = (newBarberSlug.trim() || cleanName.toLowerCase().replace(/[^a-z0-9]/g, '')).slice(0, 30);
+    if (!cleanSlug) {
+      cleanSlug = `barber-${Date.now().toString(36)}`;
+    }
+
+    // Cek duplikasi slug
+    if (barbers.some(b => b.slug?.toLowerCase() === cleanSlug.toLowerCase())) {
+      showToast(`Username / slug "${cleanSlug}" sudah dipakai oleh barber lain. Gunakan slug lain.`);
+      return;
+    }
+
     const newBarberObj = {
       id: `barber-${Date.now()}`,
-      name: newBarberName.trim(),
-      slug: slug,
-      handle: `@${slug}`,
+      name: cleanName,
+      slug: cleanSlug,
+      handle: `@${cleanSlug}`,
       locationCity: newBarberCity.trim() || '',
       plan: newBarberPlan,
+      profileType: newBarberPlan === 'capster' ? 'capster' : 'barber',
       specialty: '',
-      bio: 'Profil resmi terverifikasi oleh Admin E-Cukur.',
+      bio: `Profil resmi ${newBarberPlan === 'capster' ? 'Capster' : 'Studio Barber'} terverifikasi oleh Admin E-Cukur.`,
       photo: '',
       bannerImage: '',
       status: 'AVAILABLE',
@@ -822,7 +1053,7 @@ export default function AdminMasterDashboard() {
         team: newBarberPlan === 'barber'
       },
       tippingConfig: {
-        title: `Traktir Kopi ${newBarberName.trim()}`,
+        title: `Traktir Kopi ${cleanName}`,
         presets: [
           { amount: 10000, label: 'Kopi Hitam', price: '10K' },
           { amount: 25000, label: 'Kopi Susu', price: '25K' },
@@ -836,16 +1067,29 @@ export default function AdminMasterDashboard() {
     }));
 
     if (isSupabaseConfigured) {
-      supabase.from('barbers').insert({
-        name: newBarberObj.name,
-        slug: newBarberObj.slug,
-        email: `${slug}@ecukur.biz.id`,
-        specialty: '',
-        bio: newBarberObj.bio,
-        plan: newBarberPlan,
-        location_city: newBarberObj.locationCity || null,
-        account_status: 'ACTIVE'
-      }).then(() => {}).catch(() => {});
+      try {
+        const { error } = await supabase.from('barbers').insert({
+          name: newBarberObj.name,
+          slug: newBarberObj.slug,
+          email: `${cleanSlug}@ecukur.biz.id`,
+          specialty: '',
+          bio: newBarberObj.bio,
+          plan: newBarberPlan,
+          profile_type: newBarberObj.profileType,
+          features: newBarberObj.features,
+          services: newBarberObj.services,
+          tipping_config: newBarberObj.tippingConfig,
+          location_city: newBarberObj.locationCity || null,
+          account_status: 'ACTIVE',
+          availability_status: 'AVAILABLE'
+        });
+        if (error) throw error;
+        if (typeof fetchBarbersFromSupabase === 'function') {
+          await fetchBarbersFromSupabase();
+        }
+      } catch (err) {
+        showToast('Gagal menyimpan ke database Supabase: ' + err.message);
+      }
     }
 
     setIsAddBarberModalOpen(false);
@@ -1724,14 +1968,26 @@ export default function AdminMasterDashboard() {
                     </select>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setIsAddBarberModalOpen(true)}
-                    className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Tambah Barber Baru</span>
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={handleExportBarbersCsv}
+                      className="px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"
+                      title="Ekspor daftar barber ke CSV"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>Ekspor CSV</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAddBarberModalOpen(true)}
+                      className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Tambah Barber Baru</span>
+                    </button>
+                  </div>
                 </div>
 
                 {/* Table of Barbers */}
@@ -1991,23 +2247,42 @@ export default function AdminMasterDashboard() {
                           </td>
 
                           <td className="py-3.5 px-4 font-mono">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold ${
-                              b.paymentMethod === 'QRIS' ? 'bg-blue-50 text-blue-800 border border-blue-200' : 'bg-neutral-100 text-neutral-700'
-                            }`}>
-                              {b.paymentMethod || 'Tunai'}
-                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleTogglePaymentStatus(b)}
+                              className={`px-2 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all border flex items-center gap-1 ${
+                                b.paymentStatus === 'PAID'
+                                  ? 'bg-emerald-100 text-emerald-900 border-emerald-300 hover:bg-emerald-200'
+                                  : 'bg-amber-100 text-amber-900 border-amber-300 hover:bg-amber-200'
+                              }`}
+                              title="Klik untuk ubah status pembayaran (PAID / UNPAID)"
+                            >
+                              <span>{b.paymentMethod || 'Tunai'}</span>
+                              <span>•</span>
+                              <span>{b.paymentStatus === 'PAID' ? 'LUNAS' : 'BELUM'}</span>
+                            </button>
                           </td>
 
                           <td className="py-3.5 px-4">
-                            <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                              b.status === 'Terkonfirmasi' 
-                                ? 'bg-emerald-50 text-emerald-800' 
-                                : b.status === 'Menunggu' 
-                                  ? 'bg-amber-50 text-amber-800' 
-                                  : 'bg-neutral-100 text-neutral-600'
-                            }`}>
-                              {b.status}
-                            </span>
+                            <select
+                              value={b.status || 'Menunggu'}
+                              onChange={(e) => handleChangeBookingStatus(b.id, e.target.value)}
+                              className={`px-2 py-1 rounded-lg text-[10.5px] font-bold cursor-pointer border outline-none ${
+                                b.status === 'Terkonfirmasi'
+                                  ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                                  : b.status === 'Menunggu'
+                                    ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                    : b.status === 'Selesai'
+                                      ? 'bg-blue-50 text-blue-800 border-blue-200'
+                                      : 'bg-rose-50 text-rose-800 border-rose-200'
+                              }`}
+                              title="Ubah status reservasi"
+                            >
+                              <option value="Menunggu">Menunggu</option>
+                              <option value="Terkonfirmasi">Terkonfirmasi</option>
+                              <option value="Selesai">Selesai</option>
+                              <option value="Dibatalkan">Dibatalkan</option>
+                            </select>
                           </td>
 
                           <td className="py-3.5 px-4 text-right">
@@ -2015,12 +2290,7 @@ export default function AdminMasterDashboard() {
                               {b.status === 'Menunggu' && (
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    const result = await updateBookingStatus(b.id, 'Terkonfirmasi');
-                                    showToast(result?.success
-                                      ? `Booking ${b.id} dikonfirmasi!`
-                                      : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
-                                  }}
+                                  onClick={() => handleChangeBookingStatus(b.id, 'Terkonfirmasi')}
                                   className="px-2.5 py-1 bg-[#285844] hover:bg-[#1E4334] text-white rounded-lg text-[10.5px] font-semibold cursor-pointer"
                                 >
                                   Konfirmasi
@@ -2030,12 +2300,7 @@ export default function AdminMasterDashboard() {
                               {b.status === 'Terkonfirmasi' && (
                                 <button
                                   type="button"
-                                  onClick={async () => {
-                                    const result = await updateBookingStatus(b.id, 'Selesai');
-                                    showToast(result?.success
-                                      ? `Booking ${b.id} selesai!`
-                                      : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
-                                  }}
+                                  onClick={() => handleChangeBookingStatus(b.id, 'Selesai')}
                                   className="px-2.5 py-1 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-lg text-[10.5px] font-semibold cursor-pointer"
                                 >
                                   Selesai
@@ -2157,6 +2422,35 @@ export default function AdminMasterDashboard() {
                   Header Name: X-API-KEY | Header Value: [Nilai QRIS_WEBHOOK_SECRET di Vercel]
                 </code>
               </div>
+
+              {/* Uji Coba Ping Webhook Langsung */}
+              <div className="pt-2 border-t border-neutral-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <span className="text-xs font-bold text-neutral-900 block">Diagnostik Webhook Serverless:</span>
+                  <p className="text-[11px] text-neutral-500">Kirim sinyal uji coba langsung ke endpoint webhook untuk memastikan server aktif.</p>
+                </div>
+                <button
+                  type="button"
+                  disabled={isPingingWebhook}
+                  onClick={handleTestWebhookPing}
+                  className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow-2xs disabled:opacity-50 shrink-0"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isPingingWebhook ? 'animate-spin' : ''}`} />
+                  <span>{isPingingWebhook ? 'Menguji...' : 'Uji Coba Ping Webhook'}</span>
+                </button>
+              </div>
+
+              {pingResult && (
+                <div className={`p-3 rounded-xl border text-xs flex items-center justify-between gap-2 ${
+                  pingResult.success ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-rose-50 border-rose-200 text-rose-900'
+                }`}>
+                  <div className="flex items-center gap-2">
+                    {pingResult.success ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />}
+                    <span><strong>{pingResult.success ? 'Berhasil' : 'Gagal'}:</strong> {pingResult.message}</span>
+                  </div>
+                  <span className="font-mono text-[10px] text-neutral-400 shrink-0">{pingResult.time}</span>
+                </div>
+              )}
 
             </div>
 
@@ -2383,24 +2677,40 @@ export default function AdminMasterDashboard() {
                               <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
                                 isCompleted 
                                   ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' 
-                                  : 'bg-amber-50 text-amber-800 border border-amber-200'
+                                  : w.status === 'Ditolak / Dibatalkan'
+                                    ? 'bg-rose-50 text-rose-800 border border-rose-200'
+                                    : 'bg-amber-50 text-amber-800 border border-amber-200'
                               }`}>
-                                {isCompleted ? 'Sudah Ditransfer' : 'Menunggu Transfer'}
+                                {isCompleted ? 'Sudah Ditransfer' : w.status === 'Ditolak / Dibatalkan' ? 'Ditolak' : 'Menunggu Transfer'}
                               </span>
                             </td>
                             <td className="py-3.5 px-4 text-right">
                               {isCompleted ? (
-                                <span className="text-[11px] text-neutral-400 font-mono">
+                                <span className="text-[11px] text-emerald-700 font-mono font-bold">
                                   Tuntas ✓
                                 </span>
+                              ) : w.status === 'Ditolak / Dibatalkan' ? (
+                                <span className="text-[11px] text-rose-600 font-mono italic">
+                                  {w.rejectReason || 'Dibatalkan'}
+                                </span>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => handleMarkWithdrawalCompleted(w)}
-                                  className="px-3 py-1.5 bg-[#285844] hover:bg-[#1E4334] text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
-                                >
-                                  Tandai Sudah Ditransfer
-                                </button>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleMarkWithdrawalCompleted(w)}
+                                    className="px-3 py-1.5 bg-[#285844] hover:bg-[#1E4334] text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
+                                  >
+                                    Transfer Selesai
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectWithdrawal(w)}
+                                    className="px-2.5 py-1.5 border border-red-200 text-red-600 hover:bg-red-50 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                                    title="Tolak permohonan penarikan dan kembalikan saldo ke barber"
+                                  >
+                                    Tolak
+                                  </button>
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -2478,11 +2788,19 @@ export default function AdminMasterDashboard() {
                 />
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="flex items-center justify-between pt-2 border-t border-neutral-100">
                 <button
                   type="button"
-                  onClick={() => showToast('Pengaturan platform berhasil disimpan!')}
-                  className="px-5 py-2.5 bg-[#171717] hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
+                  onClick={handleResetPlatformSettings}
+                  className="px-4 py-2 border border-neutral-200 text-neutral-600 hover:bg-neutral-100 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+                >
+                  Reset ke Default
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSavePlatformSettings}
+                  className="px-5 py-2.5 bg-[#171717] hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer transition-colors"
                 >
                   Simpan Pengaturan
                 </button>
