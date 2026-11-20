@@ -367,16 +367,17 @@ export default function AdminMasterDashboard() {
 
     let isSubscribed = true;
     if (isSupabaseConfigured) {
-      supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .then(({ data, error }) => {
+      void (async () => {
+        try {
+          const { data, error } = await supabase
+            .from('users')
+            .select('*')
+            .order('created_at', { ascending: false });
           if (isSubscribed && !error && Array.isArray(data)) {
             setRegisteredUsers(data);
           }
-        })
-        .catch(() => {});
+        } catch {}
+      })();
     }
 
     if (typeof subscribeToBookings === 'function') {
@@ -641,12 +642,15 @@ export default function AdminMasterDashboard() {
 
       // Jika akun terhubung ke user_id di tabel users, pastikan role-nya disesuaikan
       if (isSupabaseConfigured && target?.user_id) {
-        const targetRole = newPlan === 'free' ? 'CUSTOMER' : 'BARBER';
-        await supabase
-          .from('users')
-          .update({ role: targetRole })
-          .eq('id', target.user_id)
-          .catch(() => {});
+        try {
+          const targetRole = newPlan === 'free' ? 'CUSTOMER' : 'BARBER';
+          await supabase
+            .from('users')
+            .update({ role: targetRole })
+            .eq('id', target.user_id);
+        } catch (roleErr) {
+          console.warn('Update user role notice:', roleErr?.message);
+        }
       }
 
       showToast(`Status paket ${target?.name || ''} berhasil diubah menjadi ${newPlan.toUpperCase()}!`);
