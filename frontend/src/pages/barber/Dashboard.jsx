@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -51,6 +51,7 @@ import { compressImage } from '../../lib/imageUploader';
 import { getAppDomain } from '../../lib/domain';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import { getDynamicQrisImageUrl } from '../../lib/qrisPayment';
+import { DEFAULT_OPERATING_HOURS, generateTimeSlots, isSlotInBreakTime } from '../../lib/operatingHours';
 
 const computeWeeklyChartData = (bookingsList) => {
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -77,6 +78,58 @@ const computeWeeklyChartData = (bookingsList) => {
   return { last7, maxVal };
 };
 
+const PERIOD_OPTIONS = [
+  { id: 'today', label: 'Hari Ini (24 Jam)' },
+  { id: 'yesterday', label: 'Kemarin' },
+  { id: 'week', label: '1 Minggu' },
+  { id: 'month', label: '1 Bulan' },
+  { id: 'all', label: 'Semua Riwayat' }
+];
+
+const getRecordTimestamp = (record) => {
+  if (!record) return 0;
+  const raw = record.createdAt || record.dateIso || record.date || record.created_at;
+  if (!raw) return 0;
+  const t = new Date(raw).getTime();
+  return Number.isNaN(t) ? 0 : t;
+};
+
+const isRecordInPeriod = (record, period, referenceTimestamp = Date.now()) => {
+  if (!record || period === 'all') return true;
+  const targetTime = getRecordTimestamp(record);
+  if (!targetTime) return false;
+
+  const targetDate = new Date(targetTime);
+  const refDate = new Date(referenceTimestamp);
+
+  const getDayStr = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const targetDayStr = getDayStr(targetDate);
+  const todayStr = getDayStr(refDate);
+
+  if (period === 'today') {
+    const diff = referenceTimestamp - targetTime;
+    return targetDayStr === todayStr || (diff >= 0 && diff <= 24 * 60 * 60 * 1000);
+  }
+
+  if (period === 'yesterday') {
+    const yDate = new Date(refDate);
+    yDate.setDate(refDate.getDate() - 1);
+    return targetDayStr === getDayStr(yDate);
+  }
+
+  if (period === 'week') {
+    const diff = referenceTimestamp - targetTime;
+    return diff >= 0 && diff <= 7 * 24 * 60 * 60 * 1000;
+  }
+
+  if (period === 'month') {
+    const diff = referenceTimestamp - targetTime;
+    return diff >= 0 && diff <= 30 * 24 * 60 * 60 * 1000;
+  }
+
+  return true;
+};
+
 export default function BarberDashboard() {
   const appDomain = getAppDomain();
   const navigate = useNavigate();
@@ -96,6 +149,7 @@ export default function BarberDashboard() {
   const toggleBarberCustomLink = useStore((state) => state.toggleBarberCustomLink);
   const addBarberTeamMember = useStore((state) => state.addBarberTeamMember);
   const deleteBarberTeamMember = useStore((state) => state.deleteBarberTeamMember);
+  const updateBarberTeamMember = useStore((state) => state.updateBarberTeamMember);
   const updateBarberTippingConfig = useStore((state) => state.updateBarberTippingConfig);
   const requestBarberWithdrawal = useStore((state) => state.requestBarberWithdrawal);
   const bookings = useStore((state) => state.bookings);
@@ -277,6 +331,21 @@ export default function BarberDashboard() {
     return Array.isArray(barber?.tipsHistory) ? barber.tipsHistory : [];
   }, [barber]);
 
+  // Notifikasi tip baru dalam 24 jam terakhir (otomatis refresh/hilang setiap 24 jam ganti hari)
+  const recentTipsCount = React.useMemo(() => {
+    const now = nowTimestamp;
+    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+
+    return tipsList.filter((t) => {
+      if (!t) return false;
+      const rawDate = t.date || t.createdAt;
+      if (!rawDate) return false;
+      const tipTime = new Date(rawDate).getTime();
+      if (Number.isNaN(tipTime)) return false;
+      return (now - tipTime) <= twentyFourHoursMs && (now - tipTime) >= 0;
+    }).length;
+  }, [tipsList, nowTimestamp]);
+
   const totalTipRevenue = React.useMemo(() => {
     return tipsList.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
   }, [tipsList]);
@@ -319,6 +388,49 @@ export default function BarberDashboard() {
 
   // Active Main Tab
   const [activeTab, setActiveTab] = useState(queryTab || 'profile');
+
+  // Filter Periode Riwayat Tip Kopi & Statistik (today, yesterday, week, month, all)
+  const [tipsFilterPeriod, setTipsFilterPeriod] = useState('today');
+  const [statsFilterPeriod, setStatsFilterPeriod] = useState('today');
+
+  // Filtered Tip List untuk Tab Tip Kopi
+  const filteredTipsList = React.useMemo(() => {
+    return tipsList.filter(t => isRecordInPeriod(t, tipsFilterPeriod, nowTimestamp));
+  }, [tipsList, tipsFilterPeriod, nowTimestamp]);
+
+  const filteredTipsTotal = React.useMemo(() => {
+    return filteredTipsList.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  }, [filteredTipsList]);
+
+  // Filtered Statistik & Finansial untuk Tab Statistik
+  const statsBookings = React.useMemo(() => {
+    return barberBookings.filter(b => isRecordInPeriod(b, statsFilterPeriod, nowTimestamp));
+  }, [barberBookings, statsFilterPeriod, nowTimestamp]);
+
+  const statsPaidBookings = React.useMemo(() => {
+    return statsBookings.filter(b => 
+      b.paymentStatus === 'PAID' || 
+      b.status === 'Terkonfirmasi' || 
+      b.status === 'Selesai' || 
+      b.status === 'Sudah Bayar' || 
+      b.status === 'CONFIRMED' || 
+      b.status === 'COMPLETED'
+    );
+  }, [statsBookings]);
+
+  const statsTipsList = React.useMemo(() => {
+    return tipsList.filter(t => isRecordInPeriod(t, statsFilterPeriod, nowTimestamp));
+  }, [tipsList, statsFilterPeriod, nowTimestamp]);
+
+  const statsBookingRevenue = React.useMemo(() => {
+    return statsPaidBookings.reduce((sum, b) => sum + (Number(b.price) || 0), 0);
+  }, [statsPaidBookings]);
+
+  const statsTipRevenue = React.useMemo(() => {
+    return statsTipsList.reduce((acc, t) => acc + (Number(t.amount) || 0), 0);
+  }, [statsTipsList]);
+
+  const statsCombinedRevenue = statsBookingRevenue + statsTipRevenue;
   
   // Mobile drawer toggle for phone preview
   const [showMobilePreview, setShowMobilePreview] = useState(false);
@@ -329,6 +441,76 @@ export default function BarberDashboard() {
     setToastMsg(msg);
     setTimeout(() => setToastMsg(''), 2400);
   };
+
+  // Operating Hours State
+  const [openTimeInput, setOpenTimeInput] = useState('');
+  const [closeTimeInput, setCloseTimeInput] = useState('');
+  const [slotIntervalInput, setSlotIntervalInput] = useState(0);
+  const [bufferMinutesInput, setBufferMinutesInput] = useState(null);
+  const [breakEnabledInput, setBreakEnabledInput] = useState(null);
+  const [breakStartInput, setBreakStartInput] = useState('');
+  const [breakEndInput, setBreakEndInput] = useState('');
+  const [breakFridayStartInput, setBreakFridayStartInput] = useState('');
+  const [breakFridayEndInput, setBreakFridayEndInput] = useState('');
+  const [isSavingHours, setIsSavingHours] = useState(false);
+
+  const barberHours = barber?.features?.operatingHours;
+  const effectiveOpenTime = openTimeInput || barberHours?.open || DEFAULT_OPERATING_HOURS.open;
+  const effectiveCloseTime = closeTimeInput || barberHours?.close || DEFAULT_OPERATING_HOURS.close;
+  const effectiveSlotInterval = slotIntervalInput || Number(barberHours?.slotInterval) || DEFAULT_OPERATING_HOURS.slotInterval;
+  const effectiveBufferMinutes = bufferMinutesInput !== null ? bufferMinutesInput : (Number(barberHours?.bufferMinutes) || 0);
+  const effectiveBreakEnabled = breakEnabledInput !== null ? breakEnabledInput : (barberHours?.breakTime?.enabled ?? false);
+  const effectiveBreakStart = breakStartInput || barberHours?.breakTime?.start || DEFAULT_OPERATING_HOURS.breakTime.start;
+  const effectiveBreakEnd = breakEndInput || barberHours?.breakTime?.end || DEFAULT_OPERATING_HOURS.breakTime.end;
+  const effectiveBreakFridayStart = breakFridayStartInput || barberHours?.breakTime?.fridayStart || DEFAULT_OPERATING_HOURS.breakTime.fridayStart;
+  const effectiveBreakFridayEnd = breakFridayEndInput || barberHours?.breakTime?.fridayEnd || DEFAULT_OPERATING_HOURS.breakTime.fridayEnd;
+
+  const handleSaveOperatingHours = async () => {
+    if (!barber?.id) return;
+    setIsSavingHours(true);
+    const newHours = {
+      open: effectiveOpenTime,
+      close: effectiveCloseTime,
+      slotInterval: effectiveSlotInterval,
+      bufferMinutes: effectiveBufferMinutes,
+      breakTime: {
+        enabled: effectiveBreakEnabled,
+        start: effectiveBreakStart,
+        end: effectiveBreakEnd,
+        fridayStart: effectiveBreakFridayStart,
+        fridayEnd: effectiveBreakFridayEnd
+      }
+    };
+    const updatedFeatures = {
+      ...(barber?.features || {}),
+      operatingHours: newHours
+    };
+    const res = await updateBarber(barber.id, { features: updatedFeatures });
+    setIsSavingHours(false);
+    if (res?.success) {
+      showToast('🎉 Jam operasional & istirahat studio berhasil disimpan!');
+    } else {
+      showToast('Gagal menyimpan jam operasional: ' + (res?.error || 'terjadi kesalahan'));
+    }
+  };
+
+  const previewHoursConfig = useMemo(() => ({
+    open: effectiveOpenTime,
+    close: effectiveCloseTime,
+    slotInterval: effectiveSlotInterval,
+    bufferMinutes: effectiveBufferMinutes,
+    breakTime: {
+      enabled: effectiveBreakEnabled,
+      start: effectiveBreakStart,
+      end: effectiveBreakEnd,
+      fridayStart: effectiveBreakFridayStart,
+      fridayEnd: effectiveBreakFridayEnd
+    }
+  }), [effectiveOpenTime, effectiveCloseTime, effectiveSlotInterval, effectiveBufferMinutes, effectiveBreakEnabled, effectiveBreakStart, effectiveBreakEnd, effectiveBreakFridayStart, effectiveBreakFridayEnd]);
+
+  const previewSlots = useMemo(() => {
+    return generateTimeSlots(previewHoursConfig);
+  }, [previewHoursConfig]);
 
   // Modals state
   const [isAddServiceOpen, setIsAddServiceOpen] = useState(false);
@@ -667,7 +849,7 @@ export default function BarberDashboard() {
 
   const handleAddPreset = () => {
     const newPresets = [...(tippingConfig.presets || [])];
-    const newId = `p-${Date.now()}`;
+    const newId = `p-${newPresets.length + 1}-${barber?.id || 'preset'}`;
     newPresets.push({
       id: newId,
       amount: 5000,
@@ -1259,14 +1441,19 @@ export default function BarberDashboard() {
         {/* Brand & Barber Name */}
         <div className="flex items-center gap-1.5 sm:gap-2.5 min-w-0">
           <Link to="/" className="flex items-center shrink-0 group py-0.5" title="Beranda E Cukur">
-            <Logo variant="compact" size="sm" />
+            <div className="sm:hidden">
+              <Logo variant="mark" size="sm" />
+            </div>
+            <div className="hidden sm:block">
+              <Logo variant="compact" size="sm" />
+            </div>
           </Link>
 
-          <span className="text-neutral-300 hidden xs:inline shrink-0">/</span>
+          <span className="text-neutral-300 shrink-0 text-xs">/</span>
 
           <div className="flex items-center gap-1.5 min-w-0">
             <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-            <span className="font-bold text-xs text-[#171717] truncate max-w-[80px] xs:max-w-[110px] sm:max-w-[180px] whitespace-nowrap">
+            <span className="font-bold text-xs text-[#171717] truncate max-w-[85px] xs:max-w-[120px] sm:max-w-[180px] whitespace-nowrap">
               {barber.name}
             </span>
             <span className="text-neutral-400 font-mono text-[11px] hidden md:inline truncate">
@@ -1276,7 +1463,7 @@ export default function BarberDashboard() {
         </div>
 
         {/* Action Controls & Bio Link Quick Access */}
-        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
           {/* Quick Bio URL copy */}
           <div className="hidden md:flex items-center gap-1.5 px-3 py-1 bg-neutral-50 border border-neutral-200 rounded-lg text-xs font-mono">
             <span className="text-neutral-500">{appDomain}/<strong>{barber.slug || barber.id}</strong></span>
@@ -1289,7 +1476,7 @@ export default function BarberDashboard() {
             </button>
           </div>
 
-          {/* Open Public Bio */}
+          {/* Chat Konsultasi */}
           <button
             type="button"
             onClick={() => navigate('/barber/messages')}
@@ -1308,24 +1495,23 @@ export default function BarberDashboard() {
             )}
           </button>
 
-          {/* Open Public Bio */}
+          {/* Open Public Bio (di layar desktop/tablet) */}
           <a
             href={publicUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-700 hover:text-black border border-neutral-200 hover:border-neutral-300 transition-colors whitespace-nowrap shrink-0"
+            className="hidden sm:inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-semibold text-neutral-700 hover:text-black border border-neutral-200 hover:border-neutral-300 transition-colors whitespace-nowrap shrink-0"
             title="Buka Link Bio di Tab Baru"
           >
             <ExternalLink className="w-3.5 h-3.5 shrink-0 text-neutral-500" />
-            <span className="hidden sm:inline">Buka Link Bio</span>
-            <span className="sm:hidden text-[11px]">Bio</span>
+            <span>Buka Link Bio</span>
           </a>
 
           {/* Plan Badge & Upgrade Trigger */}
           <button
             type="button"
             onClick={() => setIsUpgradeModalOpen(true)}
-            className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 shadow-2xs ${
+            className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer shrink-0 shadow-2xs ${
               isBarberPlan
                 ? 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
                 : isCapsterPlan
@@ -1350,7 +1536,7 @@ export default function BarberDashboard() {
               <>
                 <span className="w-2 h-2 rounded-full bg-neutral-400 shrink-0" />
                 <span>Free</span>
-                <span className="text-[10px] bg-[#285844] text-white px-1.5 py-0.2 rounded font-semibold">Upgrade</span>
+                <span className="text-[10px] bg-[#285844] text-white px-1.5 py-0.2 rounded font-semibold hidden xs:inline">Upgrade</span>
               </>
             )}
           </button>
@@ -1358,11 +1544,11 @@ export default function BarberDashboard() {
           {/* Mobile Preview Button Toggle */}
           <button
             onClick={() => setShowMobilePreview(!showMobilePreview)}
-            className="lg:hidden flex items-center gap-1 px-2.5 py-1.5 bg-[#171717] text-white rounded-lg text-xs font-medium cursor-pointer whitespace-nowrap shrink-0 active:scale-95 transition-transform"
+            className="lg:hidden flex items-center gap-1 px-2 sm:px-2.5 py-1.5 bg-[#171717] text-white rounded-lg text-[11px] sm:text-xs font-medium cursor-pointer whitespace-nowrap shrink-0 active:scale-95 transition-transform"
             title="Lihat Pratinjau Tampilan HP"
           >
             <Smartphone className="w-3.5 h-3.5 shrink-0" />
-            <span className="text-[11px] sm:text-xs">Preview</span>
+            <span>Preview</span>
           </button>
 
           {/* Logout */}
@@ -1373,7 +1559,7 @@ export default function BarberDashboard() {
               showToast('Berhasil keluar dari akun');
               navigate('/login');
             }} 
-            className="flex items-center justify-center w-8 h-8 text-neutral-400 hover:text-red-600 rounded-lg hover:bg-neutral-100 transition-colors cursor-pointer shrink-0"
+            className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 text-neutral-400 hover:text-red-600 rounded-lg hover:bg-neutral-100 transition-colors cursor-pointer shrink-0"
             title="Keluar dari Akun"
             aria-label="Logout"
           >
@@ -1398,7 +1584,7 @@ export default function BarberDashboard() {
               { id: 'services', label: 'Menu Layanan', icon: Scissors, show: barber.features?.services !== false },
               { id: 'team', label: 'Tim Capster', icon: Users, show: barber.features?.team === true, badge: (barber.teamMembers || []).length },
               { id: 'bookings', label: 'Reservasi', icon: Calendar, badge: barberBookings.filter(b => b.status === 'Menunggu').length, show: barber.features?.booking !== false },
-              { id: 'tipping', label: 'Tip Kopi', icon: Coffee, show: barber.features?.tipping !== false, badge: (barber.tipsHistory || []).length || null },
+              { id: 'tipping', label: 'Tip Kopi', icon: Coffee, show: barber.features?.tipping !== false, badge: recentTipsCount || null },
               { id: 'lookbook', label: 'Portofolio', icon: Eye, show: barber.features?.lookbook !== false },
               { id: 'links', label: 'Tautan', icon: Globe },
               { id: 'design', label: 'Tema', icon: Palette },
@@ -1784,12 +1970,14 @@ export default function BarberDashboard() {
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-2">
                     {(barber.teamMembers || []).map((m) => {
-                      const isCutting = String(m.status || 'AVAILABLE').toUpperCase() === 'CUTTING';
+                      const capsterStatus = String(m.status || 'AVAILABLE').toUpperCase();
+                      const isCutting = capsterStatus === 'CUTTING' || capsterStatus === 'IN_SERVICE';
+                      const isOff = capsterStatus === 'OFF';
                       const activeBookingsCount = getCapsterActiveBookings(m.id, m.name).length;
 
                       return (
                         <div key={m.id} className={`p-4 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
-                          isCutting ? 'bg-amber-50/40 border-amber-200' : 'bg-neutral-50/50 border-neutral-200'
+                          isOff ? 'bg-neutral-100/70 border-neutral-300' : isCutting ? 'bg-amber-50/40 border-amber-200' : 'bg-neutral-50/50 border-neutral-200'
                         }`}>
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-center gap-3 min-w-0">
@@ -1802,16 +1990,20 @@ export default function BarberDashboard() {
                                   </div>
                                 )}
                                 <span className={`absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white ${
-                                  isCutting ? 'bg-amber-500' : 'bg-emerald-500'
+                                  isOff ? 'bg-neutral-400' : isCutting ? 'bg-amber-500' : 'bg-emerald-500'
                                 }`} />
                               </div>
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1.5 flex-wrap">
                                   <h4 className="font-display font-bold text-sm text-[#171717] truncate">{m.name}</h4>
                                   <span className={`text-[9.5px] font-bold px-1.5 py-0.5 rounded-full ${
-                                    isCutting ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+                                    isOff 
+                                      ? 'bg-neutral-200 text-neutral-700' 
+                                      : isCutting 
+                                      ? 'bg-amber-100 text-amber-800' 
+                                      : 'bg-emerald-100 text-emerald-800'
                                   }`}>
-                                    {isCutting ? 'Sedang Cukur' : 'Free'}
+                                    {isOff ? '🏖️ Libur' : isCutting ? 'Sedang Cukur' : 'Free'}
                                   </span>
                                 </div>
                                 <p className="text-[11px] text-neutral-500 truncate">{m.specialty || 'Capster Professional'}</p>
@@ -1835,7 +2027,11 @@ export default function BarberDashboard() {
                           {/* Sedang melayani info & Action button */}
                           <div className="pt-2 border-t border-neutral-200/60 flex items-center justify-between gap-2 flex-wrap">
                             <div className="text-[11px] text-neutral-600 min-w-0">
-                              {isCutting ? (
+                              {isOff ? (
+                                <span className="text-[10.5px] text-neutral-400 font-medium italic">
+                                  🏖️ Sedang libur / off hari ini
+                                </span>
+                              ) : isCutting ? (
                                 <span className="flex items-center gap-1 text-amber-900 font-medium truncate">
                                   <Scissors className="w-3.5 h-3.5 text-amber-700 shrink-0" />
                                   <span>Melayani: <strong>{m.activeCustomerName || 'Pelanggan'}</strong></span>
@@ -1847,22 +2043,48 @@ export default function BarberDashboard() {
                               )}
                             </div>
 
-                            <button
-                              type="button"
-                              onClick={() => handleToggleCapsterStatus(m)}
-                              disabled={updatingCapsterId === m.id}
-                              className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-50 cursor-pointer active:scale-95 ${
-                                isCutting
-                                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
-                                  : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-xs'
-                              }`}
-                            >
-                              {updatingCapsterId === m.id
-                                ? 'Menyimpan...'
-                                : isCutting
-                                ? 'Selesai Cukur · Set Free'
-                                : 'Mulai Cukur'}
-                            </button>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {/* Tombol Toggle Status Libur */}
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const nextStatus = isOff ? 'AVAILABLE' : 'OFF';
+                                  setUpdatingCapsterId(m.id);
+                                  await updateBarberTeamMember(barber.id, m.id, { status: nextStatus });
+                                  setUpdatingCapsterId(null);
+                                  showToast(nextStatus === 'OFF' ? `🏖️ ${m.name} diubah menjadi Libur / Off` : `🟢 ${m.name} kini kembali Aktif / Free`);
+                                }}
+                                disabled={updatingCapsterId === m.id || isCutting}
+                                className={`px-2.5 py-1.5 rounded-lg text-[10.5px] font-semibold border transition-all cursor-pointer ${
+                                  isOff
+                                    ? 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-300'
+                                    : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-600 border-neutral-300'
+                                }`}
+                                title={isCutting ? 'Selesaikan cukur dulu sebelum libur' : isOff ? 'Aktifkan capster masuk kerja' : 'Set capster libur hari ini'}
+                              >
+                                {isOff ? 'Masuk Kerja' : 'Set Libur'}
+                              </button>
+
+                              {/* Tombol Mulai Cukur */}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleCapsterStatus(m)}
+                                disabled={updatingCapsterId === m.id || isOff}
+                                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-40 cursor-pointer active:scale-95 ${
+                                  isCutting
+                                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'
+                                    : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-xs'
+                                }`}
+                              >
+                                {updatingCapsterId === m.id
+                                  ? 'Menyimpan...'
+                                  : isCutting
+                                  ? 'Selesai Cukur · Set Free'
+                                  : isOff
+                                  ? 'Sedang Libur'
+                                  : 'Mulai Cukur'}
+                              </button>
+                            </div>
                           </div>
                         </div>
                       );
@@ -2253,6 +2475,185 @@ export default function BarberDashboard() {
                     placeholder="e.g. Jl. Sudirman No. 12 / Ruko Grand Mall Blok A"
                     className="w-full text-sm font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
                   />
+                </div>
+              </div>
+
+              {/* Jam Operasional Studio & Interval Booking */}
+              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-5">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
+                  <div>
+                    <h2 className="font-display font-bold text-base text-[#171717] flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-[#285844]" />
+                      <span>Jam Operasional & Interval Slot Booking</span>
+                    </h2>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Atur jam buka, jam tutup, dan pembagian slot waktu yang akan muncul di form booking pelanggan.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleSaveOperatingHours}
+                    disabled={isSavingHours}
+                    className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
+                  >
+                    <Save className="w-3.5 h-3.5" />
+                    <span>{isSavingHours ? 'Menyimpan...' : 'Simpan Jam'}</span>
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Jam Buka Studio</label>
+                    <input
+                      type="time"
+                      value={effectiveOpenTime}
+                      onChange={(e) => setOpenTimeInput(e.target.value)}
+                      className="w-full text-xs font-mono font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Jam Tutup Studio</label>
+                    <input
+                      type="time"
+                      value={effectiveCloseTime}
+                      onChange={(e) => setCloseTimeInput(e.target.value)}
+                      className="w-full text-xs font-mono font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Interval Tiap Slot</label>
+                    <select
+                      value={effectiveSlotInterval}
+                      onChange={(e) => setSlotIntervalInput(Number(e.target.value))}
+                      className="w-full text-xs font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844] cursor-pointer"
+                    >
+                      <option value={30}>30 Menit (09:00, 09:30, ...)</option>
+                      <option value={45}>45 Menit (09:00, 09:45, ...)</option>
+                      <option value={60}>60 Menit / 1 Jam (09:00, 10:00, ...)</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Jeda Antar Tamu (Buffer)</label>
+                    <select
+                      value={effectiveBufferMinutes}
+                      onChange={(e) => setBufferMinutesInput(Number(e.target.value))}
+                      className="w-full text-xs font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844] cursor-pointer"
+                    >
+                      <option value={0}>0 Menit (Langsung Nyambung)</option>
+                      <option value={5}>5 Menit (Bersih-bersih Kilat)</option>
+                      <option value={10}>10 Menit (Steril & Persiapan)</option>
+                      <option value={15}>15 Menit (Istirahat & Sanitasi)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Sub-Card: Jam Istirahat Studio & Salat Jumat */}
+                <div className="p-4 rounded-xl border border-neutral-200 bg-neutral-50/70 space-y-3.5">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <h3 className="text-xs font-bold text-neutral-900 flex items-center gap-1.5">
+                        <span>☕ Waktu Istirahat Studio (Break Time & Jumat)</span>
+                      </h3>
+                      <p className="text-[11px] text-neutral-500 mt-0.5">
+                        Otomatis kunci slot jam makan siang atau salat Jumat agar tidak bisa dibooking pelanggan.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setBreakEnabledInput(!effectiveBreakEnabled)}
+                      className={`w-11 h-6 rounded-full transition-colors relative cursor-pointer shrink-0 ${
+                        effectiveBreakEnabled ? 'bg-[#285844]' : 'bg-neutral-300'
+                      }`}
+                      title={effectiveBreakEnabled ? 'Klik untuk mematikan jam istirahat' : 'Klik untuk mengaktifkan jam istirahat'}
+                    >
+                      <span className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-transform ${
+                        effectiveBreakEnabled ? 'right-1' : 'left-1'
+                      }`} />
+                    </button>
+                  </div>
+
+                  {effectiveBreakEnabled && (
+                    <div className="pt-2 grid grid-cols-1 sm:grid-cols-2 gap-4 border-t border-neutral-200/80">
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-bold text-neutral-700 block">Istirahat Siang Reguler (Senin - Kamis, Sabtu, Minggu)</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[10px] text-neutral-500 block mb-1">Mulai:</span>
+                            <input
+                              type="time"
+                              value={effectiveBreakStart}
+                              onChange={(e) => setBreakStartInput(e.target.value)}
+                              className="w-full text-xs font-mono font-medium p-2 bg-white border border-neutral-300 rounded-lg outline-none focus:border-[#285844]"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-neutral-500 block mb-1">Selesai:</span>
+                            <input
+                              type="time"
+                              value={effectiveBreakEnd}
+                              onChange={(e) => setBreakEndInput(e.target.value)}
+                              className="w-full text-xs font-mono font-medium p-2 bg-white border border-neutral-300 rounded-lg outline-none focus:border-[#285844]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <span className="text-[11px] font-bold text-emerald-900 block">Khusus Hari Jumat (Salat Jumat & Istirahat)</span>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <span className="text-[10px] text-neutral-500 block mb-1">Mulai:</span>
+                            <input
+                              type="time"
+                              value={effectiveBreakFridayStart}
+                              onChange={(e) => setBreakFridayStartInput(e.target.value)}
+                              className="w-full text-xs font-mono font-medium p-2 bg-white border border-neutral-300 rounded-lg outline-none focus:border-[#285844]"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-neutral-500 block mb-1">Selesai:</span>
+                            <input
+                              type="time"
+                              value={effectiveBreakFridayEnd}
+                              onChange={(e) => setBreakFridayEndInput(e.target.value)}
+                              className="w-full text-xs font-mono font-medium p-2 bg-white border border-neutral-300 rounded-lg outline-none focus:border-[#285844]"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Pratinjau Slot Waktu */}
+                <div className="bg-neutral-50 border border-neutral-200/90 rounded-xl p-3.5 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-neutral-600 font-semibold flex-wrap gap-2">
+                    <span>Pratinjau Slot Jam Booking ({previewSlots.length} slot per hari):</span>
+                    <span className="text-[11px] text-[#285844] font-mono">
+                      {effectiveOpenTime} – {effectiveCloseTime} WIB (Tiap {effectiveSlotInterval}m, Jeda {effectiveBufferMinutes}m)
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto pt-1">
+                    {previewSlots.map((slot) => {
+                      const isBreak = effectiveBreakEnabled && isSlotInBreakTime(slot, effectiveSlotInterval, previewHoursConfig, 'Senin');
+                      return (
+                        <span 
+                          key={slot} 
+                          className={`px-2 py-1 border text-[11px] font-mono rounded-lg shadow-3xs flex items-center gap-1 ${
+                            isBreak 
+                              ? 'bg-amber-50 border-amber-300 text-amber-800 line-through opacity-75' 
+                              : 'bg-white border-neutral-200 text-neutral-800'
+                          }`}
+                        >
+                          {slot}
+                          {isBreak && <span className="no-underline text-[9px] text-amber-700">☕</span>}
+                        </span>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 
@@ -2649,7 +3050,7 @@ export default function BarberDashboard() {
 
               {/* 3. RIWAYAT TRANSAKSI TIP MASUK */}
               <div className="bg-white p-5 sm:p-6 rounded-2xl border border-neutral-200 shadow-2xs space-y-4">
-                <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 border-b border-neutral-100 pb-3">
                   <div>
                     <h3 className="font-display font-bold text-sm text-[#171717] flex items-center gap-2">
                       <Receipt className="w-4 h-4 text-neutral-700" />
@@ -2659,18 +3060,63 @@ export default function BarberDashboard() {
                       Daftar seluruh apresiasi tip kopi yang dikirimkan pelanggan melalui link bio kamu.
                     </p>
                   </div>
-                  <span className="text-xs font-mono font-semibold px-2.5 py-1 bg-neutral-100 text-neutral-700 rounded-lg">
-                    {tipsList.length} Transaksi
-                  </span>
+
+                  {/* Filter Periode Waktu Tip Kopi */}
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="p-1 bg-neutral-100 rounded-xl flex items-center gap-1 overflow-x-auto hide-scrollbar">
+                      {PERIOD_OPTIONS.map((p) => {
+                        const isSelected = tipsFilterPeriod === p.id;
+                        return (
+                          <button
+                            key={p.id}
+                            type="button"
+                            onClick={() => setTipsFilterPeriod(p.id)}
+                            className={`px-2.5 py-1 text-[11px] font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
+                              isSelected
+                                ? 'bg-white text-neutral-900 shadow-2xs'
+                                : 'text-neutral-500 hover:text-neutral-900'
+                            }`}
+                          >
+                            {p.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
 
-                {tipsList.length === 0 ? (
+                {/* Sub-header Banner Ringkasan Periode Terpilih */}
+                <div className="flex items-center justify-between text-xs text-neutral-600 bg-neutral-50 border border-neutral-200/80 rounded-xl px-3.5 py-2.5 flex-wrap gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-neutral-900">
+                      Periode: {PERIOD_OPTIONS.find(p => p.id === tipsFilterPeriod)?.label}
+                    </span>
+                    <span className="text-neutral-300">•</span>
+                    <span>{filteredTipsList.length} transaksi</span>
+                  </div>
+                  <div className="font-mono font-bold text-emerald-800">
+                    Total: {formatRupiah(filteredTipsTotal)}
+                  </div>
+                </div>
+
+                {filteredTipsList.length === 0 ? (
                   <div className="py-10 text-center text-neutral-400">
                     <Coffee className="w-6 h-6 mx-auto mb-2 opacity-40 text-neutral-500" />
-                    <p className="text-xs font-medium text-neutral-600">Belum ada tip yang masuk</p>
-                    <p className="text-[11px] text-neutral-400 mt-0.5">
-                      Tip dari pelanggan akan otomatis tercatat di sini dan di menu Statistik.
+                    <p className="text-xs font-medium text-neutral-600">
+                      Belum ada tip yang masuk untuk periode {PERIOD_OPTIONS.find(p => p.id === tipsFilterPeriod)?.label}
                     </p>
+                    <p className="text-[11px] text-neutral-400 mt-0.5">
+                      Data otomatis ter-refresh setiap pergantian hari.
+                    </p>
+                    {tipsFilterPeriod !== 'all' && tipsList.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setTipsFilterPeriod('all')}
+                        className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#285844] hover:underline cursor-pointer"
+                      >
+                        Lihat Semua Riwayat Tip ({tipsList.length} Transaksi) →
+                      </button>
+                    )}
                   </div>
                 ) : (
                   <div className="overflow-x-auto">
@@ -2685,7 +3131,7 @@ export default function BarberDashboard() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-neutral-100">
-                        {tipsList.map((tip) => (
+                        {filteredTipsList.map((tip) => (
                           <tr key={tip.id} className="hover:bg-neutral-50/70 transition-colors">
                             <td className="py-3 px-3 font-semibold text-neutral-900">
                               {tip.customerName || 'Pelanggan'}
@@ -3180,6 +3626,39 @@ export default function BarberDashboard() {
                 </div>
               </div>
 
+              {/* Segmented Filter Periode Waktu Laporan Statistik */}
+              <div className="bg-white p-3 rounded-2xl border border-neutral-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 text-xs">
+                  <span className="font-bold text-neutral-900 flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-[#285844]" />
+                    <span>Filter Laporan:</span>
+                  </span>
+                  <span className="text-neutral-400">•</span>
+                  <span className="font-semibold text-emerald-800">
+                    {PERIOD_OPTIONS.find(p => p.id === statsFilterPeriod)?.label}
+                  </span>
+                </div>
+                <div className="p-1 bg-neutral-100 rounded-xl flex items-center gap-1 overflow-x-auto hide-scrollbar">
+                  {PERIOD_OPTIONS.map((p) => {
+                    const isSelected = statsFilterPeriod === p.id;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => setStatsFilterPeriod(p.id)}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all whitespace-nowrap cursor-pointer ${
+                          isSelected
+                            ? 'bg-white text-neutral-900 shadow-2xs'
+                            : 'text-neutral-500 hover:text-neutral-900'
+                        }`}
+                      >
+                        {p.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               {/* 1. HERO CARD: SALDO DOMPET & TOTAL OMSET (ELEGANT LIGHT FINTECH THEME) */}
               <div className="bg-white p-6 sm:p-7 rounded-2xl border border-neutral-200/90 shadow-sm relative overflow-hidden space-y-6">
                 {/* Top Subtle Brand Gradient Line */}
@@ -3207,6 +3686,10 @@ export default function BarberDashboard() {
                     <p className="text-xs text-neutral-500">
                       Total omset masuk dikurangi penarikan yang sudah dicairkan ke rekening kamu.
                     </p>
+                    <div className="pt-1 flex items-center gap-2 text-xs">
+                      <span className="font-semibold text-neutral-700">Omset Periode ({PERIOD_OPTIONS.find(p => p.id === statsFilterPeriod)?.label}):</span>
+                      <span className="font-mono font-bold text-emerald-800">{formatRupiah(statsCombinedRevenue)}</span>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2.5 sm:justify-end shrink-0">
@@ -3238,14 +3721,14 @@ export default function BarberDashboard() {
                         <span>Omset Booking</span>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100/80 text-emerald-800">
-                        Layanan
+                        {PERIOD_OPTIONS.find(p => p.id === statsFilterPeriod)?.label}
                       </span>
                     </div>
                     <div className="font-display font-extrabold text-xl text-[#171717]">
-                      {formatRupiah(totalBookingRevenue)}
+                      {formatRupiah(statsBookingRevenue)}
                     </div>
                     <span className="text-[11px] text-emerald-700/80 font-medium mt-1 block">
-                      {paidBookings.length} booking terbayar QRIS
+                      {statsPaidBookings.length} booking terbayar QRIS
                     </span>
                   </div>
 
@@ -3259,14 +3742,14 @@ export default function BarberDashboard() {
                         <span>Total Tip Kopi</span>
                       </div>
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100/80 text-amber-800">
-                        Sawer
+                        {PERIOD_OPTIONS.find(p => p.id === statsFilterPeriod)?.label}
                       </span>
                     </div>
                     <div className="font-display font-extrabold text-xl text-amber-900">
-                      {formatRupiah(totalTipRevenue)}
+                      {formatRupiah(statsTipRevenue)}
                     </div>
                     <span className="text-[11px] text-amber-700/80 font-medium mt-1 block">
-                      {tipsList.length} apresiasi pelanggan
+                      {statsTipsList.length} apresiasi pelanggan
                     </span>
                   </div>
 
@@ -3439,31 +3922,31 @@ export default function BarberDashboard() {
                 <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 hover:border-neutral-300 shadow-2xs hover:shadow-xs transition-all space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold">
-                      Total Reservasi
+                      Total Reservasi ({PERIOD_OPTIONS.find(p => p.id === statsFilterPeriod)?.label})
                     </span>
                     <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center">
                       <Calendar className="w-3.5 h-3.5 text-[#285844]" />
                     </span>
                   </div>
                   <div className="font-display font-extrabold text-3xl text-[#171717]">
-                    {barberBookings.length}
+                    {statsBookings.length}
                   </div>
                   <span className="text-[11px] text-neutral-500 font-medium block">
-                    <span className="text-emerald-700 font-bold">{paidBookings.length}</span> terbayar • {barberBookings.length - paidBookings.length} menunggu
+                    <span className="text-emerald-700 font-bold">{statsPaidBookings.length}</span> terbayar • {statsBookings.length - statsPaidBookings.length} menunggu
                   </span>
                 </div>
 
                 <div className="bg-white p-5 rounded-2xl border border-neutral-200/90 hover:border-neutral-300 shadow-2xs hover:shadow-xs transition-all space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[11px] font-mono uppercase text-neutral-500 font-semibold">
-                      Rata-rata Pesanan
+                      Rata-rata Pesanan ({PERIOD_OPTIONS.find(p => p.id === statsFilterPeriod)?.label})
                     </span>
                     <span className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-800 flex items-center justify-center">
                       <TrendingUp className="w-3.5 h-3.5 text-[#285844]" />
                     </span>
                   </div>
                   <div className="font-display font-extrabold text-2xl text-[#285844]">
-                    {formatRupiah(paidBookings.length > 0 ? Math.round(totalBookingRevenue / paidBookings.length) : 0)}
+                    {formatRupiah(statsPaidBookings.length > 0 ? Math.round(statsBookingRevenue / statsPaidBookings.length) : 0)}
                   </div>
                   <span className="text-[11px] text-neutral-500 font-medium block">
                     per transaksi reservasi cukur

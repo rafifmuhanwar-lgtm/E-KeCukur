@@ -332,20 +332,6 @@ export default function AdminMasterDashboard() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isAdminUnlocked, authMode, pinInput, lockoutSeconds, handleVerifyPasskey]);
 
-  // Sync Supabase Barbers & Bookings on Mount + Realtime (HANYA KETIKA TEROTORISASI)
-  useEffect(() => {
-    if (!isAdminUnlocked) return;
-    if (typeof fetchBarbersFromSupabase === 'function') fetchBarbersFromSupabase();
-    if (typeof fetchBookingsFromSupabase === 'function') fetchBookingsFromSupabase();
-    if (typeof subscribeToBookings === 'function') {
-      const unsub = subscribeToBookings();
-      return () => { if (typeof unsub === 'function') unsub(); };
-    }
-  }, [isAdminUnlocked, fetchBarbersFromSupabase, fetchBookingsFromSupabase, subscribeToBookings]);
-
-  // Tabs: 'overview' | 'barbers' | 'bookings' | 'gateway' | 'withdrawals' | 'settings'
-  const [activeTab, setActiveTab] = useState('overview');
-
   // Search & Filter States
   const [searchQuery, setSearchQuery] = useState('');
   const [planFilter, setPlanFilter] = useState('ALL');
@@ -354,6 +340,59 @@ export default function AdminMasterDashboard() {
   const [bookingBarberFilter, setBookingBarberFilter] = useState('ALL');
   const [bookingSearchQuery, setBookingSearchQuery] = useState('');
   const [withdrawalStatusFilter, setWithdrawalStatusFilter] = useState('ALL');
+  const [barberViewMode, setBarberViewMode] = useState('barbers'); // 'barbers' | 'users'
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [registeredUsers, setRegisteredUsers] = useState([]);
+
+  const loadRegisteredUsers = useCallback(async () => {
+    if (!isSupabaseConfigured) return;
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false });
+      if (!error && Array.isArray(data)) {
+        setRegisteredUsers(data);
+      }
+    } catch (err) {
+      console.warn('Gagal memuat akun pengguna:', err);
+    }
+  }, []);
+
+  // Sync Supabase Barbers & Bookings on Mount + Realtime (HANYA KETIKA TEROTORISASI)
+  useEffect(() => {
+    if (!isAdminUnlocked) return;
+    if (typeof fetchBarbersFromSupabase === 'function') fetchBarbersFromSupabase();
+    if (typeof fetchBookingsFromSupabase === 'function') fetchBookingsFromSupabase();
+
+    let isSubscribed = true;
+    if (isSupabaseConfigured) {
+      supabase
+        .from('users')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .then(({ data, error }) => {
+          if (isSubscribed && !error && Array.isArray(data)) {
+            setRegisteredUsers(data);
+          }
+        })
+        .catch(() => {});
+    }
+
+    if (typeof subscribeToBookings === 'function') {
+      const unsub = subscribeToBookings();
+      return () => {
+        isSubscribed = false;
+        if (typeof unsub === 'function') unsub();
+      };
+    }
+    return () => {
+      isSubscribed = false;
+    };
+  }, [isAdminUnlocked, fetchBarbersFromSupabase, fetchBookingsFromSupabase, subscribeToBookings]);
+
+  // Tabs: 'overview' | 'barbers' | 'bookings' | 'gateway' | 'withdrawals' | 'settings'
+  const [activeTab, setActiveTab] = useState('overview');
 
   // Modal: Tambah Barber Baru
   const [isAddBarberModalOpen, setIsAddBarberModalOpen] = useState(false);
@@ -545,13 +584,122 @@ export default function AdminMasterDashboard() {
     });
   }, [metrics.allWithdrawals, withdrawalStatusFilter]);
 
+  // ─── FILTER REGISTERED USERS ───
+  const filteredRegisteredUsers = useMemo(() => {
+    if (!Array.isArray(registeredUsers)) return [];
+    if (!userSearchQuery.trim()) return registeredUsers;
+    const q = userSearchQuery.toLowerCase();
+    return registeredUsers.filter(
+      (u) =>
+        (u.name && u.name.toLowerCase().includes(q)) ||
+        (u.email && u.email.toLowerCase().includes(q)) ||
+        (u.role && u.role.toLowerCase().includes(q))
+    );
+  }, [registeredUsers, userSearchQuery]);
+
   // ─── HANDLE UPDATE PLAN BARBER DARI ADMIN ───
   const handleChangeBarberPlan = async (barberId, newPlan) => {
     try {
-      await updateBarber(barberId, { plan: newPlan });
-      showToast(`Paket berhasil diubah menjadi ${newPlan.toUpperCase()}!`);
+      const target = barbers.find((b) => b.id === barberId || b.slug === barberId);
+      const profileType = newPlan === 'capster' ? 'capster' : 'barber';
+
+      await updateBarber(barberId, {
+        plan: newPlan,
+        profileType: profileType,
+        features: {
+          ...(target?.features || {}),
+          team: newPlan === 'barber'
+        }
+      });
+
+      // Jika akun terhubung ke user_id di tabel users, pastikan role-nya adalah BARBER
+      if (isSupabaseConfigured && target?.user_id) {
+        await supabase
+          .from('users')
+          .update({ role: 'BARBER' })
+          .eq('id', target.user_id)
+          .catch(() => {});
+      }
+
+      showToast(`Status paket ${target?.name || ''} berhasil diubah menjadi ${newPlan.toUpperCase()}!`);
+      if (typeof fetchBarbersFromSupabase === 'function') {
+        fetchBarbersFromSupabase();
+      }
+      void loadRegisteredUsers();
     } catch (err) {
       showToast('Gagal mengubah paket: ' + err.message);
+    }
+  };
+
+  // ─── HANDLE UBAH AKUN PENGGUNA TERDAFTAR (FREE / CUSTOMER -> CAPSTER / BARBER) ───
+  const handleSetUserAccountPlan = async (user, newPlan) => {
+    try {
+      const isFree = newPlan === 'free';
+      const targetRole = isFree ? 'CUSTOMER' : 'BARBER';
+
+      // 1. Update role di tabel users Supabase
+      if (isSupabaseConfigured) {
+        const { error: userError } = await supabase
+          .from('users')
+          .update({ role: targetRole })
+          .eq('id', user.id);
+        if (userError) throw userError;
+      }
+
+      // 2. Cek apakah pengguna sudah memiliki profil di tabel barbers
+      const existingBarber = barbers.find(
+        (b) => b.user_id === user.id || (user.email && b.email?.toLowerCase() === user.email.toLowerCase())
+      );
+
+      const profileType = newPlan === 'capster' ? 'capster' : 'barber';
+
+      if (existingBarber) {
+        await updateBarber(existingBarber.id, {
+          plan: newPlan,
+          profileType: profileType,
+          features: {
+            ...(existingBarber.features || {}),
+            team: newPlan === 'barber'
+          }
+        });
+        showToast(`Akun ${user.name || user.email} berhasil diubah menjadi ${newPlan.toUpperCase()}!`);
+      } else if (!isFree) {
+        // Buat profil bio link barber baru secara instan untuk akun pengguna ini
+        const cleanName = user.name || user.email?.split('@')[0] || 'Barber E-Cukur';
+        const baseSlug = cleanName.toLowerCase().replace(/[^a-z0-9]/g, '') || `barber-${user.id.slice(0, 6)}`;
+        let finalSlug = baseSlug.slice(0, 24);
+        if (barbers.some((b) => b.slug === finalSlug)) {
+          finalSlug = `${finalSlug}-${user.id.slice(0, 4)}`;
+        }
+
+        const newBarberRow = {
+          user_id: user.id,
+          name: cleanName,
+          email: user.email || `${finalSlug}@ecukur.biz.id`,
+          slug: finalSlug,
+          plan: newPlan,
+          profile_type: profileType,
+          availability_status: 'AVAILABLE',
+          account_status: 'ACTIVE',
+          bio: `Profil resmi ${newPlan === 'capster' ? 'Capster' : 'Studio Barber'} terverifikasi oleh Admin E-Cukur.`
+        };
+
+        if (isSupabaseConfigured) {
+          const { error: insertError } = await supabase.from('barbers').insert(newBarberRow);
+          if (insertError) throw insertError;
+        }
+
+        showToast(`Akun ${cleanName} berhasil diubah jadi ${newPlan.toUpperCase()}! Bio link ecukur.biz.id/${finalSlug} telah aktif.`);
+      } else {
+        showToast(`Akun ${user.name || user.email} dikembalikan ke akun Free (Customer).`);
+      }
+
+      if (typeof fetchBarbersFromSupabase === 'function') {
+        await fetchBarbersFromSupabase();
+      }
+      await loadRegisteredUsers();
+    } catch (err) {
+      showToast(`Gagal mengubah akun: ${err.message}`);
     }
   };
 
@@ -1250,13 +1398,20 @@ export default function AdminMasterDashboard() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <h4 className="font-bold text-xs text-neutral-900 truncate">{barber.name}</h4>
-                            <span className={`px-1.5 py-0.2 rounded text-[9px] font-bold uppercase ${
-                              barber?.plan === 'barber' ? 'bg-amber-100 text-amber-800' :
-                              barber?.plan === 'capster' ? 'bg-emerald-100 text-emerald-800' :
-                              'bg-neutral-100 text-neutral-600'
-                            }`}>
-                              {barber?.plan || 'Free'}
-                            </span>
+                            <select
+                              value={barber?.plan || 'free'}
+                              onChange={(e) => handleChangeBarberPlan(barber.id, e.target.value)}
+                              className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase cursor-pointer border outline-none ${
+                                barber?.plan === 'barber' ? 'bg-amber-100 text-amber-900 border-amber-300' :
+                                barber?.plan === 'capster' ? 'bg-emerald-100 text-emerald-900 border-emerald-300' :
+                                'bg-neutral-100 text-neutral-700 border-neutral-300'
+                              }`}
+                              title="Ubah paket akun (Free / Capster / Barber)"
+                            >
+                              <option value="free">Free</option>
+                              <option value="capster">Capster</option>
+                              <option value="barber">Barber</option>
+                            </select>
                           </div>
                           <span className="text-[11px] text-neutral-400 font-mono block">
                             /{barber.slug || barber.id}{barber.locationCity ? ` • ${barber.locationCity}` : ''}
@@ -1366,183 +1521,363 @@ export default function AdminMasterDashboard() {
         {activeTab === 'barbers' && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-4">
             
-            {/* Toolbar: Search, Filter, & Add Button */}
-            <div className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
-              <div className="flex flex-1 flex-wrap items-center gap-2">
-                <div className="relative flex-1 min-w-[200px]">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-                  <input 
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Cari nama barber, slug, atau kota..."
-                    className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white"
-                  />
+            {/* View Switcher Tabs: Bio Link Barber vs Akun Pengguna Terdaftar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-neutral-200 shadow-2xs">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBarberViewMode('barbers')}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    barberViewMode === 'barbers'
+                      ? 'bg-[#285844] text-white shadow-xs'
+                      : 'bg-neutral-50 text-neutral-600 hover:bg-neutral-100 hover:text-black'
+                  }`}
+                >
+                  <Users className="w-3.5 h-3.5" />
+                  <span>Bio Link Barber ({barbers.length})</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBarberViewMode('users');
+                    void loadRegisteredUsers();
+                  }}
+                  className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                    barberViewMode === 'users'
+                      ? 'bg-[#285844] text-white shadow-xs'
+                      : 'bg-neutral-50 text-neutral-600 hover:bg-neutral-100 hover:text-black'
+                  }`}
+                >
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Akun Pengguna Terdaftar ({registeredUsers.length})</span>
+                </button>
+              </div>
+
+              <div className="text-[11px] text-neutral-500 font-medium">
+                {barberViewMode === 'barbers'
+                  ? 'Ubah paket langganan langsung dari kolom tabel di bawah.'
+                  : 'Ubah akun pengguna dari Free menjadi Capster atau Studio Barber.'}
+              </div>
+            </div>
+
+            {barberViewMode === 'users' ? (
+              /* ─── TAMPILAN MANAJEMEN AKUN PENGGUNA TERDAFTAR (USERS) ─── */
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                    <input 
+                      type="text"
+                      value={userSearchQuery}
+                      onChange={(e) => setUserSearchQuery(e.target.value)}
+                      placeholder="Cari nama, email, atau role pengguna..."
+                      className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={loadRegisteredUsers}
+                    className="px-3.5 py-2 border border-neutral-200 hover:bg-neutral-50 text-neutral-700 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer shadow-3xs"
+                    title="Segarkan daftar pengguna"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>Segarkan Data</span>
+                  </button>
                 </div>
 
-                <select
-                  value={planFilter}
-                  onChange={(e) => setPlanFilter(e.target.value)}
-                  className="px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-semibold outline-none focus:border-[#285844] cursor-pointer"
-                >
-                  <option value="ALL">Semua Paket</option>
-                  <option value="free">Paket Free</option>
-                  <option value="capster">Paket Capster (49K)</option>
-                  <option value="barber">Paket Studio (99K)</option>
-                </select>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setIsAddBarberModalOpen(true)}
-                className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
-              >
-                <Plus className="w-3.5 h-3.5" />
-                <span>Tambah Barber Baru</span>
-              </button>
-            </div>
-
-            {/* Table of Barbers */}
-            <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xs overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600 font-bold uppercase tracking-wider text-[10px]">
-                    <tr>
-                      <th className="py-3 px-4">Barber / Studio</th>
-                      <th className="py-3 px-4">Bio Link URL</th>
-                      <th className="py-3 px-4">Paket Langganan</th>
-                      <th className="py-3 px-4">Kota / Wilayah</th>
-                      <th className="py-3 px-4">Layanan</th>
-                      <th className="py-3 px-4">Booking Masuk</th>
-                      <th className="py-3 px-4">Saldo Tip</th>
-                      <th className="py-3 px-4">Status Akun</th>
-                      <th className="py-3 px-4 text-right">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-neutral-100">
-                    {filteredBarbers.length === 0 ? (
-                      <tr>
-                        <td colSpan={9} className="py-8 text-center text-neutral-400">
-                          Tidak ditemukan barber yang sesuai pencarian.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredBarbers.map((b) => {
-                        const barberBookingsCount = bookings.filter(x => x.barberId === b.id || x.barberName === b.name).length;
-                        const currentPlan = b?.plan || 'free';
-
-                        return (
-                          <tr key={b.id} className="hover:bg-neutral-50/70 transition-colors">
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full overflow-hidden bg-neutral-100 border border-neutral-200 shrink-0 flex items-center justify-center font-bold text-xs text-[#285844]">
-                                  {b.photo ? (
-                                    <img src={b.photo} alt={b.name} className="w-full h-full object-cover" />
-                                  ) : (
-                                    (b.name || 'B').charAt(0).toUpperCase()
-                                  )}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-1">
-                                    <span className="font-bold text-neutral-900 block truncate">{b.name}</span>
-                                    {currentPlan === 'barber' && <BadgeCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
-                                    {currentPlan === 'capster' && <BadgeCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-
-                            <td className="py-3.5 px-4 font-mono text-[11px] text-[#285844]">
-                              /{b.slug || b.id}
-                            </td>
-
-                            {/* Plan Switcher Dropdown */}
-                            <td className="py-3.5 px-4">
-                              <select
-                                value={currentPlan}
-                                onChange={(e) => handleChangeBarberPlan(b.id, e.target.value)}
-                                className={`px-2 py-1 rounded-lg text-[11px] font-bold cursor-pointer border outline-none ${
-                                  currentPlan === 'barber' 
-                                    ? 'bg-amber-50 text-amber-900 border-amber-300' 
-                                    : currentPlan === 'capster'
-                                      ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
-                                      : 'bg-neutral-100 text-neutral-700 border-neutral-300'
-                                }`}
-                              >
-                                <option value="free">Free (Gratis)</option>
-                                <option value="capster">Capster Pro (49K)</option>
-                                <option value="barber">Studio Resmi (99K)</option>
-                              </select>
-                            </td>
-
-                            <td className="py-3.5 px-4 font-mono">
-                              <span className="font-medium text-neutral-700 block">{b.locationCity || '-'}</span>
-                            </td>
-
-                            <td className="py-3.5 px-4 font-mono">
-                              {(b.services || []).length} Menu
-                            </td>
-
-                            <td className="py-3.5 px-4 font-mono font-semibold text-neutral-900">
-                              {barberBookingsCount}
-                            </td>
-
-                            <td className="py-3.5 px-4 font-mono font-semibold text-amber-700">
-                              {formatRupiah(b.tipBalance || 0)}
-                            </td>
-
-                            <td className="py-3.5 px-4">
-                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                                (b.accountStatus || 'ACTIVE') === 'ACTIVE' 
-                                  ? 'bg-emerald-50 text-emerald-800' 
-                                  : 'bg-neutral-100 text-neutral-600'
-                              }`}>
-                                {b.accountStatus || 'ACTIVE'}
-                              </span>
-                            </td>
-
-                            <td className="py-3.5 px-4 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <a
-                                  href={`/${b.slug || b.id}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="p-1.5 rounded-lg border border-neutral-200 hover:border-neutral-300 text-neutral-600 hover:text-black transition-colors"
-                                  title="Lihat Bio Link Publik"
-                                >
-                                  <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
-
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const nextStatus = b.accountStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
-                                    updateBarber(b.id, { accountStatus: nextStatus });
-                                    showToast(`Status ${b.name} diubah menjadi ${nextStatus}`);
-                                  }}
-                                  className="px-2 py-1 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-[10px] font-semibold transition-colors cursor-pointer"
-                                >
-                                  {b.accountStatus === 'ACTIVE' ? 'Suspend' : 'Aktifkan'}
-                                </button>
-
-                                <button
-                                  type="button"
-                                  onClick={() => handleDeleteBarber(b)}
-                                  className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                                  title="Hapus Barber dari Supabase"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
+                <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xs overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600 font-bold uppercase tracking-wider text-[10px]">
+                        <tr>
+                          <th className="py-3 px-4">Nama Akun Pengguna</th>
+                          <th className="py-3 px-4">Email</th>
+                          <th className="py-3 px-4">Role Akun</th>
+                          <th className="py-3 px-4">Status Bio Link</th>
+                          <th className="py-3 px-4">Paket Saat Ini</th>
+                          <th className="py-3 px-4 text-right">Ubah Status Akun</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100">
+                        {filteredRegisteredUsers.length === 0 ? (
+                          <tr>
+                            <td colSpan={6} className="py-8 text-center text-neutral-400">
+                              Tidak ada akun pengguna terdaftar yang ditemukan.
                             </td>
                           </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
+                        ) : (
+                          filteredRegisteredUsers.map((u) => {
+                            const linkedBarber = barbers.find(
+                              (b) => b.user_id === u.id || (u.email && b.email?.toLowerCase() === u.email.toLowerCase())
+                            );
+                            const currentPlan = linkedBarber?.plan || (String(u.role).toUpperCase() === 'BARBER' ? 'barber' : 'free');
+
+                            return (
+                              <tr key={u.id} className="hover:bg-neutral-50/70 transition-colors">
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 shrink-0 flex items-center justify-center font-bold text-xs text-[#285844]">
+                                      {(u.name || u.email || 'U').charAt(0).toUpperCase()}
+                                    </div>
+                                    <span className="font-bold text-neutral-900 block truncate">{u.name || 'Pengguna Tanpa Nama'}</span>
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-4 font-mono text-neutral-600">
+                                  {u.email || '-'}
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    String(u.role).toUpperCase() === 'BARBER'
+                                      ? 'bg-emerald-100 text-emerald-800'
+                                      : 'bg-neutral-100 text-neutral-600'
+                                  }`}>
+                                    {String(u.role).toUpperCase() || 'CUSTOMER'}
+                                  </span>
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  {linkedBarber ? (
+                                    <a
+                                      href={`/${linkedBarber.slug || linkedBarber.id}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="font-mono text-[11px] text-[#285844] hover:underline inline-flex items-center gap-1 font-semibold"
+                                      title="Buka Bio Link"
+                                    >
+                                      <span>/{linkedBarber.slug || linkedBarber.id}</span>
+                                      <ExternalLink className="w-3 h-3" />
+                                    </a>
+                                  ) : (
+                                    <span className="text-[11px] text-neutral-400 italic">Belum dibuat</span>
+                                  )}
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold font-mono uppercase ${
+                                    currentPlan === 'barber'
+                                      ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                                      : currentPlan === 'capster'
+                                        ? 'bg-emerald-100 text-emerald-900 border border-emerald-300'
+                                        : 'bg-neutral-100 text-neutral-700 border border-neutral-300'
+                                  }`}>
+                                    {currentPlan === 'barber' ? 'Studio Barber' : currentPlan === 'capster' ? 'Capster' : 'Free (Customer)'}
+                                  </span>
+                                </td>
+
+                                <td className="py-3.5 px-4 text-right">
+                                  <select
+                                    value={currentPlan}
+                                    onChange={(e) => handleSetUserAccountPlan(u, e.target.value)}
+                                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer border outline-none transition-all shadow-3xs ${
+                                      currentPlan === 'barber'
+                                        ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                        : currentPlan === 'capster'
+                                          ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                                          : 'bg-neutral-100 text-neutral-700 border-neutral-300'
+                                    }`}
+                                    title="Ubah tingkatan akun (Free / Capster / Barber)"
+                                  >
+                                    <option value="free">Free (Customer)</option>
+                                    <option value="capster">Capster Pro (49K)</option>
+                                    <option value="barber">Studio Barber (99K)</option>
+                                  </select>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-            </div>
+            ) : (
+              /* ─── TAMPILAN MANAJEMEN BIO LINK BARBER ─── */
+              <div className="space-y-4">
+                {/* Toolbar: Search, Filter, & Add Button */}
+                <div className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-2xs flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                  <div className="flex flex-1 flex-wrap items-center gap-2">
+                    <div className="relative flex-1 min-w-[200px]">
+                      <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                      <input 
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Cari nama barber, slug, atau kota..."
+                        className="w-full pl-9 pr-4 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white"
+                      />
+                    </div>
+
+                    <select
+                      value={planFilter}
+                      onChange={(e) => setPlanFilter(e.target.value)}
+                      className="px-3 py-2 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-semibold outline-none focus:border-[#285844] cursor-pointer"
+                    >
+                      <option value="ALL">Semua Paket</option>
+                      <option value="free">Paket Free</option>
+                      <option value="capster">Paket Capster (49K)</option>
+                      <option value="barber">Paket Studio (99K)</option>
+                    </select>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsAddBarberModalOpen(true)}
+                    className="px-4 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors flex items-center justify-center gap-1.5 shrink-0 cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>Tambah Barber Baru</span>
+                  </button>
+                </div>
+
+                {/* Table of Barbers */}
+                <div className="bg-white rounded-2xl border border-neutral-200 shadow-2xs overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-neutral-50 border-b border-neutral-200 text-neutral-600 font-bold uppercase tracking-wider text-[10px]">
+                        <tr>
+                          <th className="py-3 px-4">Barber / Studio</th>
+                          <th className="py-3 px-4">Bio Link URL</th>
+                          <th className="py-3 px-4">Paket Langganan</th>
+                          <th className="py-3 px-4">Kota / Wilayah</th>
+                          <th className="py-3 px-4">Layanan</th>
+                          <th className="py-3 px-4">Booking Masuk</th>
+                          <th className="py-3 px-4">Saldo Tip</th>
+                          <th className="py-3 px-4">Status Akun</th>
+                          <th className="py-3 px-4 text-right">Aksi</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-neutral-100">
+                        {filteredBarbers.length === 0 ? (
+                          <tr>
+                            <td colSpan={9} className="py-8 text-center text-neutral-400">
+                              Tidak ditemukan barber yang sesuai pencarian.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredBarbers.map((b) => {
+                            const barberBookingsCount = bookings.filter(x => x.barberId === b.id || x.barberName === b.name).length;
+                            const currentPlan = b?.plan || 'free';
+
+                            return (
+                              <tr key={b.id} className="hover:bg-neutral-50/70 transition-colors">
+                                <td className="py-3.5 px-4">
+                                  <div className="flex items-center gap-2.5">
+                                    <div className="w-8 h-8 rounded-full overflow-hidden bg-neutral-100 border border-neutral-200 shrink-0 flex items-center justify-center font-bold text-xs text-[#285844]">
+                                      {b.photo ? (
+                                        <img src={b.photo} alt={b.name} className="w-full h-full object-cover" />
+                                      ) : (
+                                        (b.name || 'B').charAt(0).toUpperCase()
+                                      )}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1">
+                                        <span className="font-bold text-neutral-900 block truncate">{b.name}</span>
+                                        {currentPlan === 'barber' && <BadgeCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
+                                        {currentPlan === 'capster' && <BadgeCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                <td className="py-3.5 px-4 font-mono text-[11px] text-[#285844]">
+                                  /{b.slug || b.id}
+                                </td>
+
+                                {/* Plan Switcher Dropdown */}
+                                <td className="py-3.5 px-4">
+                                  <select
+                                    value={currentPlan}
+                                    onChange={(e) => handleChangeBarberPlan(b.id, e.target.value)}
+                                    className={`px-2 py-1 rounded-lg text-[11px] font-bold cursor-pointer border outline-none ${
+                                      currentPlan === 'barber' 
+                                        ? 'bg-amber-50 text-amber-900 border-amber-300' 
+                                        : currentPlan === 'capster'
+                                          ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                                          : 'bg-neutral-100 text-neutral-700 border-neutral-300'
+                                    }`}
+                                    title="Ubah paket akun (Free / Capster / Barber)"
+                                  >
+                                    <option value="free">Free (Gratis)</option>
+                                    <option value="capster">Capster Pro (49K)</option>
+                                    <option value="barber">Studio Resmi (99K)</option>
+                                  </select>
+                                </td>
+
+                                <td className="py-3.5 px-4 font-mono">
+                                  <span className="font-medium text-neutral-700 block">{b.locationCity || '-'}</span>
+                                </td>
+
+                                <td className="py-3.5 px-4 font-mono">
+                                  {(b.services || []).length} Menu
+                                </td>
+
+                                <td className="py-3.5 px-4 font-mono font-semibold text-neutral-900">
+                                  {barberBookingsCount}
+                                </td>
+
+                                <td className="py-3.5 px-4 font-mono font-semibold text-amber-700">
+                                  {formatRupiah(b.tipBalance || 0)}
+                                </td>
+
+                                <td className="py-3.5 px-4">
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                                    (b.accountStatus || 'ACTIVE') === 'ACTIVE' 
+                                      ? 'bg-emerald-50 text-emerald-800' 
+                                      : 'bg-neutral-100 text-neutral-600'
+                                  }`}>
+                                    {b.accountStatus || 'ACTIVE'}
+                                  </span>
+                                </td>
+
+                                <td className="py-3.5 px-4 text-right">
+                                  <div className="flex items-center justify-end gap-1.5">
+                                    <a
+                                      href={`/${b.slug || b.id}`}
+                                      target="_blank"
+                                      rel="noreferrer"
+                                      className="p-1.5 rounded-lg border border-neutral-200 hover:border-neutral-300 text-neutral-600 hover:text-black transition-colors"
+                                      title="Lihat Bio Link Publik"
+                                    >
+                                      <ExternalLink className="w-3.5 h-3.5" />
+                                    </a>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const nextStatus = b.accountStatus === 'ACTIVE' ? 'SUSPENDED' : 'ACTIVE';
+                                        updateBarber(b.id, { accountStatus: nextStatus });
+                                        showToast(`Status ${b.name} diubah menjadi ${nextStatus}`);
+                                      }}
+                                      className="px-2 py-1 rounded-lg border border-neutral-200 hover:bg-neutral-100 text-[10px] font-semibold transition-colors cursor-pointer"
+                                    >
+                                      {b.accountStatus === 'ACTIVE' ? 'Suspend' : 'Aktifkan'}
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteBarber(b)}
+                                      className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                      title="Hapus Barber dari Supabase"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+            )}
 
           </motion.div>
         )}

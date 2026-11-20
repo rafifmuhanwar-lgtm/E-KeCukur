@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   ArrowLeft,
-  Check,
+  CheckCheck,
   Clock,
   Download,
   Image as ImageIcon,
@@ -142,6 +142,7 @@ export default function Messages({ barberMode = false }) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const authUser = useStore((state) => state.authUser);
+  const barbers = useStore((state) => state.barbers || []);
   const authUserId = authUser?.id;
   const isAppLoading = useStore((state) => state.isLoading);
   const ensureAnonymousCustomerSession = useStore((state) => state.ensureAnonymousCustomerSession);
@@ -366,8 +367,21 @@ export default function Messages({ barberMode = false }) {
         }
       }
 
-      await loadConversations();
-      if (active) setPageReady(true);
+      const activeConvs = await loadConversations();
+      if (active) {
+        if (!barberMode && !requestedConversationId) {
+          if (requestedBarberId) {
+            const existing = (activeConvs || []).find((c) => c.barber_id === requestedBarberId);
+            if (existing) {
+              const profileParam = requestedProfileSlug ? `&profileSlug=${encodeURIComponent(requestedProfileSlug)}` : '';
+              navigate(`/messages?conversationId=${encodeURIComponent(existing.id)}${profileParam}`, { replace: true });
+            }
+          } else if ((activeConvs || []).length > 0) {
+            navigate(`/messages?conversationId=${encodeURIComponent(activeConvs[0].id)}`, { replace: true });
+          }
+        }
+        setPageReady(true);
+      }
     };
 
     loadAccount().catch((loadError) => {
@@ -379,12 +393,17 @@ export default function Messages({ barberMode = false }) {
     return () => {
       active = false;
     };
-  }, [authUser, barberMode, ensureAnonymousCustomerSession, isAppLoading, loadConversations, navigate, returnTo]);
+  }, [authUser, barberMode, ensureAnonymousCustomerSession, isAppLoading, loadConversations, navigate, requestedBarberId, requestedConversationId, requestedProfileSlug, returnTo]);
 
   useEffect(() => {
     if (!pageReady || !barberMode) return;
     if (requestedConversationId) return;
     if (conversations.length === 0) return;
+
+    // Di mode HP / mobile (< 768px), jangan auto-select percakapan agar admin
+    // bisa melihat daftar chat seperti WhatsApp di HP dan bebas kembali ke daftar chat.
+    const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches;
+    if (!isDesktop) return;
 
     navigate(`/barber/messages?conversationId=${encodeURIComponent(conversations[0].id)}`, { replace: true });
   }, [barberMode, conversations, navigate, pageReady, requestedConversationId]);
@@ -395,6 +414,14 @@ export default function Messages({ barberMode = false }) {
     if (requiresCustomerName) return undefined;
 
     let active = true;
+
+    // Jika percakapan sudah ada di state, langsung arahkan tanpa menunggu roundtrip network
+    const existingInState = conversations.find((c) => c.barber_id === requestedBarberId);
+    if (existingInState) {
+      const profileParam = requestedProfileSlug ? `&profileSlug=${encodeURIComponent(requestedProfileSlug)}` : '';
+      navigate(`/messages?conversationId=${encodeURIComponent(existingInState.id)}${profileParam}`, { replace: true });
+      return undefined;
+    }
 
     const openOrCreate = async () => {
       setError('');
@@ -477,7 +504,7 @@ export default function Messages({ barberMode = false }) {
     return () => {
       active = false;
     };
-  }, [authUser, barberMode, customerName, isBarberAccountDetected, loadConversations, navigate, pageReady, requestedBarberId, requestedConversationId, requiresCustomerName]);
+  }, [authUser, barberMode, conversations, customerName, isBarberAccountDetected, loadConversations, navigate, pageReady, requestedBarberId, requestedConversationId, requestedProfileSlug, requiresCustomerName]);
 
   const selectedConversation = useMemo(
     () => conversations.find((conversation) => conversation.id === selectedConversationId) || null,
@@ -512,8 +539,15 @@ export default function Messages({ barberMode = false }) {
     };
   }, [barberMode, requestedProfileSlug, selectedConversation]);
 
-  const profilePath = barberProfileSlug
-    ? `/${encodeURIComponent(barberProfileSlug)}`
+  const matchedBarberFromStore = useMemo(() => {
+    const targetId = selectedConversation?.barber_id || requestedBarberId;
+    if (!targetId && !requestedProfileSlug) return null;
+    return barbers.find((b) => b.id === targetId || b.user_id === targetId || (requestedProfileSlug && b.slug === requestedProfileSlug)) || null;
+  }, [barbers, selectedConversation?.barber_id, requestedBarberId, requestedProfileSlug]);
+
+  const effectiveProfileSlug = barberProfileSlug || matchedBarberFromStore?.slug || requestedProfileSlug;
+  const profilePath = effectiveProfileSlug
+    ? `/${encodeURIComponent(effectiveProfileSlug)}`
     : '/';
   const messagesLoading = Boolean(selectedConversationId && selectedConversationId !== loadedConversationId);
   const visibleMessages = selectedConversationId === loadedConversationId ? messages : EMPTY_MESSAGES;
@@ -1089,14 +1123,28 @@ export default function Messages({ barberMode = false }) {
       className="fixed inset-0 w-full overflow-hidden bg-[#F7F6F2] text-[#171717] flex flex-col"
     >
       <header className="relative z-10 h-14 sm:h-16 shrink-0 bg-gradient-to-b from-white via-white to-[#F4F8F5] border-b border-[#DCE7DF] px-3 sm:px-6 flex items-center justify-between shadow-[0_6px_18px_rgba(40,88,68,0.14),0_2px_4px_rgba(40,88,68,0.08)]">
-        <Link to={barberMode ? '/barber/dashboard' : profilePath} className="flex items-center gap-2.5 text-sm font-bold">
-          <span className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#3D765A] via-[#285844] to-[#1E4334] text-white flex items-center justify-center shadow-[0_4px_0_#173829,0_7px_14px_rgba(40,88,68,0.3)] ring-1 ring-white/70">
-            <MessageCircle className="w-4 h-4" />
-          </span>
-          <span className="text-base font-bold tracking-tight text-[#171717] drop-shadow-[0_1px_0_rgba(255,255,255,0.9)]">Pesan</span>
-        </Link>
+        <div className="flex items-center gap-2.5 sm:gap-3">
+          {barberMode && (
+            <Link
+              to="/barber/dashboard"
+              className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-bold text-[#285844] bg-[#E9F1EB] hover:bg-[#D9E7DC] border border-[#285844]/20 transition-all cursor-pointer shadow-3xs active:scale-95"
+              title="Kembali ke Dasbor Barber"
+            >
+              <ArrowLeft className="w-4 h-4 shrink-0" />
+              <span className="font-bold">Dasbor</span>
+            </Link>
+          )}
+
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#3D765A] via-[#285844] to-[#1E4334] text-white flex items-center justify-center shadow-xs">
+              <MessageCircle className="w-4 h-4" />
+            </span>
+            <span className="text-base font-bold tracking-tight text-[#171717]">Pesan</span>
+          </div>
+        </div>
+
         {barberMode && account && (
-          <span className="hidden sm:block text-xs text-neutral-500">Inbox {account.name}</span>
+          <span className="hidden sm:block text-xs text-neutral-500 font-medium">Inbox {account.name}</span>
         )}
       </header>
 
@@ -1180,10 +1228,12 @@ export default function Messages({ barberMode = false }) {
                       onClick={() => {
                         navigate(barberMode ? '/barber/messages' : profilePath);
                       }}
-                      className="md:hidden w-10 h-10 shrink-0 rounded-xl text-[#285844] hover:bg-[#E9F1EB] flex items-center justify-center transition-colors"
-                      aria-label={barberMode ? 'Kembali ke inbox' : 'Kembali ke profil barber'}
+                      className={`${barberMode ? 'md:hidden' : 'inline-flex'} items-center gap-1.5 px-2.5 sm:px-3 py-1.5 shrink-0 rounded-xl text-[#285844] bg-[#E9F1EB] hover:bg-[#D9E7DC] border border-[#285844]/20 text-xs font-bold transition-all cursor-pointer shadow-3xs active:scale-95`}
+                      title={barberMode ? 'Kembali ke daftar pesan' : 'Kembali'}
+                      aria-label={barberMode ? 'Kembali ke daftar pesan' : 'Kembali'}
                     >
-                      <ArrowLeft className="w-5 h-5" />
+                      <ArrowLeft className="w-4 h-4 shrink-0" />
+                      <span>Kembali</span>
                     </button>
                     {currentParticipant.photo ? (
                       <img src={currentParticipant.photo} alt="" className="w-10 h-10 shrink-0 rounded-full object-cover bg-neutral-100" />
@@ -1357,12 +1407,12 @@ export default function Messages({ barberMode = false }) {
                               </p>
                             )}
 
-                            {/* Waktu Pesan & Centang Simpel */}
+                            {/* Waktu Pesan & Centang 2 */}
                             <div className={`mt-1 flex items-center justify-end gap-1 text-[10px] ${
                               isOwnMessage ? 'text-emerald-100' : 'text-neutral-400'
                             }`}>
                               <span>{formatMessageTime(message.created_at)}</span>
-                              {isOwnMessage && <Check className="w-3.5 h-3.5" aria-label="Terkirim" />}
+                              {isOwnMessage && <CheckCheck className="w-3.5 h-3.5" aria-label="Terkirim" />}
                             </div>
                           </div>
                         </div>
@@ -1613,6 +1663,14 @@ export default function Messages({ barberMode = false }) {
                   <div className="max-w-md rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900" role="alert">
                     {routeError || error}
                   </div>
+                ) : requestedBarberId ? (
+                  <>
+                    <LoaderCircle className="w-8 h-8 text-[#285844] animate-spin mb-3" />
+                    <h2 className="font-bold text-[#171717]">Menghubungkan ke ruang pesan...</h2>
+                    <p className="text-sm text-neutral-500 mt-1">
+                      Menyiapkan percakapan konsultasi dengan barber.
+                    </p>
+                  </>
                 ) : (
                   <>
                     <span className="w-14 h-14 rounded-2xl bg-[#E7EFE9] text-[#285844] flex items-center justify-center mb-4">

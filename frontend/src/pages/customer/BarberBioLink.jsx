@@ -34,12 +34,15 @@ import Logo from '../../components/Logo';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { createQrisPayment, checkQrisPaymentStatus, getDynamicQrisImageUrl } from '../../lib/qrisPayment';
 import { fetchBookingTracking } from '../../lib/bookingTracking';
-
-const TIME_SLOTS = [
-  '09:30', '10:00', '10:45', '11:30', 
-  '13:00', '13:45', '14:30', '15:15', 
-  '16:00', '17:00', '18:30', '19:15', '20:00'
-];
+import { 
+  DEFAULT_OPERATING_HOURS, 
+  generateTimeSlots, 
+  timeToMinutes, 
+  minutesToTime, 
+  parseServiceDurationMinutes, 
+  formatDurationLabel,
+  isSlotInBreakTime 
+} from '../../lib/operatingHours';
 
 const getJakartaDateKey = (date = new Date()) => {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -85,16 +88,6 @@ const getCapsterStatus = (member) => {
 };
 
 const generateBookingCode = () => `ECK-${Math.floor(100 + Math.random() * 900)}`;
-
-const timeToMinutes = (time) => {
-  const [hours, minutes] = String(time || '').split(':').map(Number);
-  return hours * 60 + minutes;
-};
-
-const getServiceDurationMinutes = (service) => {
-  const duration = Number.parseInt(String(service?.duration || service?.duration_minutes || ''), 10);
-  return Number.isFinite(duration) && duration > 0 ? duration : 45;
-};
 
 export default function BarberBioLink({ customBarber = null, isPreview = false }) {
   const appDomain = getAppDomain();
@@ -359,7 +352,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [todayIso, setTodayIso] = useState(() => getJakartaDateKey());
   const [selectedDate, setSelectedDate] = useState(() => getJakartaDateKey());
   const [calendarMonth, setCalendarMonth] = useState(() => getJakartaDateKey().slice(0, 7));
-  const [selectedTime, setSelectedTime] = useState(TIME_SLOTS[1]);
+  const operatingHours = barber?.features?.operatingHours || DEFAULT_OPERATING_HOURS;
+  const timeSlots = useMemo(() => generateTimeSlots(operatingHours), [operatingHours]);
+  const [selectedTime, setSelectedTime] = useState('');
   const [selectedCapsterId, setSelectedCapsterId] = useState('');
   const [liveTeamMembers, setLiveTeamMembers] = useState(barber?.teamMembers || []);
   const [availabilityBookings, setAvailabilityBookings] = useState([]);
@@ -459,8 +454,18 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       !selectedCapster || getCapsterStatus(selectedCapster) !== 'AVAILABLE'
     )) return false;
     const start = timeToMinutes(slot);
-    const end = start + getServiceDurationMinutes(selectedService || activeServices[0]);
-    if (!Number.isFinite(start) || end > 24 * 60) return false;
+    const duration = parseServiceDurationMinutes(selectedService || activeServices[0]);
+    const end = start + duration;
+    if (!Number.isFinite(start)) return false;
+
+    // Batasan jam operasional tutup studio (selesai pengerjaan tidak boleh melebihi jam tutup)
+    const closeMinutes = timeToMinutes(operatingHours?.close || DEFAULT_OPERATING_HOURS.close);
+    if (end > closeMinutes) return false;
+
+    // Batasan jam istirahat studio / Jumat (tidak boleh bentrok dengan waktu istirahat)
+    if (isSlotInBreakTime(slot, duration, operatingHours, selectedDate)) {
+      return false;
+    }
 
     // Jika tanggal yang dipilih adalah hari ini atau sebelumnya, jam yang sudah lewat tidak bisa dipilih
     if (selectedDate <= todayIso) {
@@ -469,14 +474,18 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       if (start <= currentJakartaMinutes) return false;
     }
 
+    // Pengecekan multi-slot bentrok dengan jadwal booking lain (+ buffer jeda antar tamu jika ada)
+    const buffer = Number(operatingHours?.bufferMinutes) || 0;
     return !availabilityBookings.some((booking) => {
       const bookingStart = timeToMinutes(booking.start_time);
+      const bookingDuration = booking.duration_minutes || (booking.end_time ? timeToMinutes(booking.end_time) - bookingStart : 45);
       const bookingEnd = booking.end_time
         ? timeToMinutes(booking.end_time)
-        : bookingStart + 45;
-      return start < bookingEnd && end > bookingStart;
+        : bookingStart + bookingDuration;
+      const bufferedEnd = bookingEnd + buffer;
+      return start < bufferedEnd && (end + buffer) > bookingStart;
     });
-  }, [availabilityReady, availabilityDate, selectedDate, todayIso, availabilityError, availabilityBookings, selectedService, activeServices, teamBookingEnabled, selectedCapster]);
+  }, [availabilityReady, availabilityDate, selectedDate, todayIso, availabilityError, availabilityBookings, selectedService, activeServices, teamBookingEnabled, selectedCapster, operatingHours]);
 
   useEffect(() => {
     let active = true;
@@ -724,7 +733,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const handleConsultation = () => {
     const barberUserId = barber?.user_id;
     if (!hasConsultationAccount || authUser?.id === barberUserId) return;
-    navigate(`/messages?barberId=${encodeURIComponent(barberUserId)}`);
+    navigate(`/messages?barberId=${encodeURIComponent(barberUserId)}${barber?.slug ? `&profileSlug=${encodeURIComponent(barber.slug)}` : ''}`);
   };
   const isOwnProfile = Boolean(authUser?.id && authUser.id === barber?.user_id);
 
@@ -770,6 +779,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     const uniqueCode = paymentMethod === 'QRIS' ? Math.floor(100 + Math.random() * 899) : 0;
     const finalPrice = basePrice + uniqueCode;
 
+    const serviceDuration = parseServiceDurationMinutes(selectedService || activeServices[0]);
+    const startMin = timeToMinutes(selectedTime);
+    const calculatedEndTime = minutesToTime(startMin + serviceDuration);
+
     const newBooking = {
       id: bookingCode,
       customerName: customerName.trim(),
@@ -782,6 +795,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       date: formatDateKey(selectedDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
       dateIso: selectedDate,
       time: selectedTime,
+      startTime: selectedTime,
+      endTime: calculatedEndTime,
+      durationMinutes: serviceDuration,
       serviceId: selectedService?.id || activeServices[0]?.id,
       status: paymentMethod === 'QRIS' ? 'Menunggu' : 'Terkonfirmasi',
       paymentMethod,
@@ -2024,7 +2040,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                         <option value="">Pilih capster yang sedang free</option>
                         {teamMembers.map((member) => {
                           const status = getCapsterStatus(member);
-                          const label = status === 'CUTTING' ? 'Sedang cukur' : status === 'OFF' ? 'Libur' : 'Free';
+                          const label = status === 'OFF' ? '🏖️ Libur Hari Ini' : status === 'CUTTING' ? '✂️ Sedang Cukur' : '🟢 Free';
                           return (
                             <option key={member.id} value={member.id} disabled={status !== 'AVAILABLE'}>
                               {member.name} — {label}
@@ -2109,29 +2125,47 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       <p role="alert" className="mb-2 text-[10px] text-red-700">{availabilityError}</p>
                     )}
                     <div className="grid grid-cols-4 gap-2">
-                      {TIME_SLOTS.map((slot) => (
-                        <button
-                          key={slot}
-                          type="button"
-                          onClick={() => setSelectedTime(slot)}
-                          disabled={!isSlotAvailable(slot)}
-                          className={`py-2 rounded-xl border text-center text-xs font-mono font-semibold transition-all ${
-                            !isSlotAvailable(slot)
-                              ? 'border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed line-through'
-                              : selectedTime === slot
-                              ? 'border-[#285844] bg-[#285844] text-white shadow-xs' 
-                              : 'border-neutral-200 bg-white hover:border-neutral-300 text-neutral-700'
-                          }`}
-                        >
-                          {slot}
-                        </button>
-                      ))}
+                      {timeSlots.map((slot) => {
+                        const available = isSlotAvailable(slot);
+                        const isBreak = isSlotInBreakTime(slot, 15, operatingHours, selectedDate);
+                        return (
+                          <button
+                            key={slot}
+                            type="button"
+                            onClick={() => setSelectedTime(slot)}
+                            disabled={!available}
+                            title={isBreak ? 'Waktu Istirahat Studio' : !available ? 'Slot tidak tersedia' : `Pilih jam ${slot} WIB`}
+                            className={`py-2 px-1 rounded-xl border text-center text-xs font-mono font-semibold transition-all relative ${
+                              !available
+                                ? 'border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed line-through opacity-70'
+                                : selectedTime === slot
+                                ? 'border-[#285844] bg-[#285844] text-white shadow-xs' 
+                                : 'border-neutral-200 bg-white hover:border-neutral-300 text-neutral-700'
+                            }`}
+                          >
+                            <span>{slot}</span>
+                            {isBreak && <span className="no-underline ml-1 text-[10px]">☕</span>}
+                          </button>
+                        );
+                      })}
                     </div>
-                    {selectedDate <= todayIso && (
-                      <p className="text-[10px] text-neutral-400 mt-1.5">
-                        * Jam yang dicoret telah terlewat dan tidak dapat dipilih.
-                      </p>
+
+                    {/* Estimasi Durasi Pengerjaan & Selesai */}
+                    {selectedTime && isSlotAvailable(selectedTime) && (
+                      <div className="mt-2.5 p-2.5 bg-[#D9E5DC]/30 border border-[#285844]/20 rounded-xl flex items-center justify-between text-xs text-[#285844]">
+                        <div className="flex items-center gap-1.5 font-semibold">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Estimasi Pengerjaan:</span>
+                        </div>
+                        <span className="font-mono font-bold">
+                          {selectedTime} – {minutesToTime(timeToMinutes(selectedTime) + parseServiceDurationMinutes(selectedService || activeServices[0]))} WIB ({formatDurationLabel(parseServiceDurationMinutes(selectedService || activeServices[0]))})
+                        </span>
+                      </div>
                     )}
+
+                    <p className="text-[10px] text-neutral-400 mt-1.5 leading-relaxed">
+                      * Jam yang dicoret telah terlewat, masuk jam istirahat (☕), ada antrean lain, atau melebihi jam tutup ({operatingHours?.close || '21:00'} WIB).
+                    </p>
                   </div>
 
                   {/* Contact Info */}

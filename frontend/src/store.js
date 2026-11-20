@@ -107,13 +107,27 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
     lookbook: rawLookbook,
     customLinks: rawLinks,
     profileType: row.profile_type || 'barber',
-    features: row.features || {
+    features: {
       booking: true,
       services: true,
       lookbook: true,
       team: false,
       location: true,
       tipping: true,
+      operatingHours: {
+        open: '09:00',
+        close: '21:00',
+        slotInterval: 30,
+        bufferMinutes: 0,
+        breakTime: {
+          enabled: false,
+          start: '12:00',
+          end: '13:00',
+          fridayStart: '11:30',
+          fridayEnd: '13:00'
+        }
+      },
+      ...(row.features || {})
     },
     teamMembers: Array.isArray(row.team_members) ? row.team_members : (Array.isArray(row.team) ? row.team : []),
     tippingConfig: row.tipping_config || {
@@ -1123,6 +1137,7 @@ export const useStore = create((set, get) => ({
     if (updates.services !== undefined) payload.services = updates.services;
     if (updates.bannerImage !== undefined) payload.banner_image = updates.bannerImage;
     if (updates.locationCity !== undefined) payload.location_city = updates.locationCity;
+    if (updates.plan !== undefined) payload.plan = updates.plan;
 
     return await saveBarberPayloadToSupabase(barberId, payload);
   },
@@ -1596,6 +1611,30 @@ export const useStore = create((set, get) => ({
       });
       const active = state.activeBarber && (state.activeBarber.id === barberId || state.activeBarber.slug === barberId)
         ? { ...state.activeBarber, teamMembers: (state.activeBarber.teamMembers || []).filter((m) => m.id !== memberId) }
+        : state.activeBarber;
+      return { barbers: updatedBarbers, activeBarber: active };
+    });
+    get().syncBarberToSupabase(barberId);
+  },
+
+  updateBarberTeamMember: (barberId, memberId, updates) => {
+    set((state) => {
+      const updatedBarbers = state.barbers.map((b) => {
+        if (b.id === barberId || b.slug === barberId) {
+          const updatedMembers = (b.teamMembers || []).map((m) =>
+            m.id === memberId ? { ...m, ...updates } : m
+          );
+          return { ...b, teamMembers: updatedMembers };
+        }
+        return b;
+      });
+      const active = state.activeBarber && (state.activeBarber.id === barberId || state.activeBarber.slug === barberId)
+        ? {
+            ...state.activeBarber,
+            teamMembers: (state.activeBarber.teamMembers || []).map((m) =>
+              m.id === memberId ? { ...m, ...updates } : m
+            )
+          }
         : state.activeBarber;
       return { barbers: updatedBarbers, activeBarber: active };
     });

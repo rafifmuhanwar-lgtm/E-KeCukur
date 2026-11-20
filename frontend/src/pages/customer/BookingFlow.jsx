@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -16,12 +16,15 @@ import {
   ChevronRight
 } from 'lucide-react';
 import { useStore } from '../../store';
-
-const TIME_SLOTS = [
-  '09:00', '09:30', '10:00', '10:30', '11:00', '11:30', 
-  '13:00', '13:30', '14:00', '14:30', '15:00', '15:30',
-  '16:00', '16:30', '17:00', '17:30', '19:00', '19:30'
-];
+import { 
+  DEFAULT_OPERATING_HOURS, 
+  generateTimeSlots, 
+  timeToMinutes, 
+  minutesToTime, 
+  parseServiceDurationMinutes, 
+  formatDurationLabel,
+  isSlotInBreakTime 
+} from '../../lib/operatingHours';
 
 const isBookingTimePast = (timeStr, selectedDateObj) => {
   if (!timeStr || !selectedDateObj) return false;
@@ -61,7 +64,12 @@ export default function BookingFlow() {
   const [searchParams] = useSearchParams();
   const barbers   = useStore((s) => s.barbers   || []);
   const services  = useStore((s) => s.services  || []);
+  const activeBarber = useStore((s) => s.activeBarber);
+  const bookings  = useStore((s) => s.bookings  || []);
   const addBooking = useStore((s) => s.addBooking);
+
+  const operatingHours = activeBarber?.features?.operatingHours || DEFAULT_OPERATING_HOURS;
+  const dynamicTimeSlots = useMemo(() => generateTimeSlots(operatingHours), [operatingHours]);
 
   // ID capster dari query‑string (jika ada)
   const barberIdFromUrl = searchParams.get('barber');
@@ -89,30 +97,79 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
   const [paymentMethod] = useState('QRIS');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const effectiveServices = services.length > 0 ? services : [
+  const effectiveServices = useMemo(() => (services.length > 0 ? services : [
     { id: '1', name: 'Signature Haircut', duration: '45m', price: 50000, description: 'Potong rambut presisi, konsultasi bentuk wajah, keramas, dan styling pomade.' },
     { id: '2', name: 'Beard Grooming & Shave', duration: '30m', price: 35000, description: 'Cukur jenggot & kumis rapi dengan handuk hangat dan shaving foam aromatik.' },
     { id: '3', name: 'Haircut + Beard Combo', duration: '60m', price: 75000, description: 'Paket lengkap potong rambut dan perapian jenggot untuk penampilan maksimal.' },
     { id: '4', name: 'Gentlemen Spa & Creambath', duration: '45m', price: 65000, description: 'Pijat kepala rileks dengan tonic ginseng untuk melancarkan sirkulasi darah.' }
-  ];
+  ]), [services]);
 
-  const effectiveBarbers = barbers.length > 0 ? barbers : [
+  const effectiveBarbers = useMemo(() => (barbers.length > 0 ? barbers : [
     { id: 'b1', name: 'Dimas Fade', specialty: 'Skin Fade & Taper', photo: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300' },
     { id: 'b2', name: 'Reza Barber', specialty: 'Classic Pompadour', photo: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=300' }
-  ];
+  ]), [barbers]);
 
   const formatRupiah = (val) => `Rp ${Number(val || 0).toLocaleString('id-ID')}`;
 
+  const isSlotBookingDisabled = useCallback((timeStr, selectedDateObj) => {
+    if (!timeStr) return true;
+    if (isBookingTimePast(timeStr, selectedDateObj)) return true;
+
+    const start = timeToMinutes(timeStr);
+    const duration = parseServiceDurationMinutes(selectedService);
+    const end = start + duration;
+
+    // Batasan jam tutup studio
+    const closeMinutes = timeToMinutes(operatingHours?.close || DEFAULT_OPERATING_HOURS.close);
+    if (end > closeMinutes) return true;
+
+    // Batasan jam istirahat studio / Jumat
+    if (isSlotInBreakTime(timeStr, duration, operatingHours, selectedDateObj)) {
+      return true;
+    }
+
+    // Cek capster libur jika capster spesifik dipilih
+    if (selectedBarber && selectedBarber !== 'Bebas (Capster Tersedia)') {
+      const capster = effectiveBarbers.find(b => b.name === selectedBarber);
+      if (capster && String(capster.status || '').toUpperCase() === 'OFF') {
+        return true;
+      }
+    }
+
+    // Pengecekan multi-slot bentrok dengan booking aktif lain (+ buffer jeda antar tamu jika ada)
+    const dateId = selectedDateObj?.id;
+    if (!dateId || !Array.isArray(bookings)) return false;
+
+    const buffer = Number(operatingHours?.bufferMinutes) || 0;
+    return bookings.some((b) => {
+      if (b.status === 'Batal' || b.status === 'CANCELLED') return false;
+      const matchDate = (b.dateIso === dateId) || (b.date && b.date.includes(dateId));
+      if (!matchDate) return false;
+
+      if (selectedBarber && selectedBarber !== 'Bebas (Capster Tersedia)') {
+        const matchCapster = b.barberName && b.barberName.toLowerCase() === selectedBarber.toLowerCase();
+        if (!matchCapster) return false;
+      }
+
+      const bStart = timeToMinutes(b.startTime || b.time);
+      const bDuration = b.durationMinutes || (b.endTime ? timeToMinutes(b.endTime) - bStart : 45);
+      const bEnd = b.endTime ? timeToMinutes(b.endTime) : bStart + bDuration;
+      const bufferedEnd = bEnd + buffer;
+
+      return start < bufferedEnd && (end + buffer) > bStart;
+    });
+  }, [operatingHours, selectedService, selectedBarber, effectiveBarbers, bookings]);
+
   const handleSelectDate = (d) => {
     setSelectedDate(d);
-    if (selectedTime && isBookingTimePast(selectedTime, d)) {
+    if (selectedTime && isSlotBookingDisabled(selectedTime, d)) {
       setSelectedTime('');
     }
   };
 
   const handleNext = () => {
     if (step === 1 && !selectedService) return;
-    if (step === 2 && (!selectedDate || !selectedTime || isBookingTimePast(selectedTime, selectedDate))) return;
+    if (step === 2 && (!selectedDate || !selectedTime || isSlotBookingDisabled(selectedTime, selectedDate))) return;
     setStep((prev) => Math.min(prev + 1, 3));
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -154,6 +211,10 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
 
     setIsSubmitting(true);
 
+    const serviceDuration = parseServiceDurationMinutes(selectedService);
+    const startMin = timeToMinutes(selectedTime || '10:00');
+    const calculatedEndTime = minutesToTime(startMin + serviceDuration);
+
     setTimeout(async () => {
       const created = await addBooking({
         customerName: trimmedName,
@@ -165,6 +226,9 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
         date: selectedDate?.label || 'Hari Ini',
         dateIso: selectedDate?.id,
         time: selectedTime || '10:00',
+        startTime: selectedTime || '10:00',
+        endTime: calculatedEndTime,
+        durationMinutes: serviceDuration,
         price: selectedService?.price || 40000,
         paymentMethod
       });
@@ -426,24 +490,38 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
                       </button>
 
                       {effectiveBarbers.map((b) => {
+                        const isOff = String(b.status || '').toUpperCase() === 'OFF';
                         const isSelected = selectedBarber === b.name;
                         return (
                           <button
                             key={b.id}
                             type="button"
-                            onClick={() => setSelectedBarber(b.name)}
-                            className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between cursor-pointer ${
-                              isSelected
-                                ? 'border-[#285844] bg-[#F0F5F2] ring-1 ring-[#285844] shadow-xs'
-                                : 'border-neutral-200 bg-white hover:border-neutral-300'
+                            disabled={isOff}
+                            title={isOff ? `${b.name} sedang libur hari ini` : b.name}
+                            onClick={() => !isOff && setSelectedBarber(b.name)}
+                            className={`p-3.5 rounded-2xl border text-left transition-all flex flex-col justify-between ${
+                              isOff
+                                ? 'border-neutral-200 bg-neutral-100/80 opacity-60 cursor-not-allowed'
+                                : isSelected
+                                ? 'border-[#285844] bg-[#F0F5F2] ring-1 ring-[#285844] shadow-xs cursor-pointer'
+                                : 'border-neutral-200 bg-white hover:border-neutral-300 cursor-pointer'
                             }`}
                           >
-                            <div className="w-8 h-8 rounded-full overflow-hidden mb-2 border border-neutral-200">
-                              <img src={b.photo} alt={b.name} className="w-full h-full object-cover" />
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="w-8 h-8 rounded-full overflow-hidden border border-neutral-200 shrink-0">
+                                <img src={b.photo} alt={b.name} className="w-full h-full object-cover" />
+                              </div>
+                              {isOff && (
+                                <span className="text-[10px] font-bold text-amber-800 bg-amber-100 border border-amber-300 px-1.5 py-0.5 rounded-md">
+                                  🏖️ Libur
+                                </span>
+                              )}
                             </div>
                             <div>
                               <div className="text-xs font-bold text-neutral-900 truncate">{b.name}</div>
-                              <div className="text-[10px] text-neutral-500 truncate">{b.specialty}</div>
+                              <div className="text-[10px] text-neutral-500 truncate">
+                                {isOff ? 'Sedang Libur' : b.specialty}
+                              </div>
                             </div>
                           </button>
                         );
@@ -493,39 +571,53 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
                           Pilih Jam Kunjungan
                         </h3>
                         <p className="text-xs text-neutral-500 mt-0.5">
-                          Sesi potong rambut dimulai tepat waktu.
+                          Sesi potong rambut dimulai tepat waktu ({operatingHours?.open || DEFAULT_OPERATING_HOURS.open} - {operatingHours?.close || DEFAULT_OPERATING_HOURS.close} WIB).
                         </p>
                       </div>
                     </div>
 
                     <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-                      {TIME_SLOTS.map((time) => {
-                        const isPast = isBookingTimePast(time, selectedDate);
+                      {dynamicTimeSlots.map((time) => {
+                        const isSlotDisabled = isSlotBookingDisabled(time, selectedDate);
+                        const isBreak = isSlotInBreakTime(time, 15, operatingHours, selectedDate);
                         const isSelected = selectedTime === time;
                         return (
                           <button
                             key={time}
                             type="button"
-                            disabled={isPast}
-                            onClick={() => !isPast && setSelectedTime(time)}
-                            className={`py-3 px-2 rounded-xl border text-center font-mono text-xs font-bold transition-all ${
-                              isPast
+                            disabled={isSlotDisabled}
+                            onClick={() => !isSlotDisabled && setSelectedTime(time)}
+                            title={isBreak ? 'Waktu Istirahat Studio' : isSlotDisabled ? 'Slot tidak tersedia' : `Pilih jam ${time} WIB`}
+                            className={`py-3 px-2 rounded-xl border text-center font-mono text-xs font-bold transition-all relative ${
+                              isSlotDisabled
                                 ? 'border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed line-through opacity-60'
                                 : isSelected
                                 ? 'border-[#285844] bg-[#285844] text-white shadow-xs'
                                 : 'border-neutral-200 bg-white text-neutral-700 hover:border-neutral-300 hover:bg-neutral-50 cursor-pointer'
                             }`}
                           >
-                            {time} WIB
+                            <span>{time} WIB</span>
+                            {isBreak && <span className="no-underline ml-1 text-[10px]">☕</span>}
                           </button>
                         );
                       })}
                     </div>
-                    {selectedDate?.isToday && (
-                      <p className="text-[11px] text-neutral-400 mt-1">
-                        * Jam yang dicoret telah terlewat dan tidak dapat dipilih.
-                      </p>
+
+                    {selectedTime && !isSlotBookingDisabled(selectedTime, selectedDate) && (
+                      <div className="mt-2.5 p-2.5 bg-[#D9E5DC]/30 border border-[#285844]/20 rounded-xl flex items-center justify-between text-xs text-[#285844]">
+                        <div className="flex items-center gap-1.5 font-semibold">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>Estimasi Pengerjaan:</span>
+                        </div>
+                        <span className="font-mono font-bold">
+                          {selectedTime} – {minutesToTime(timeToMinutes(selectedTime) + parseServiceDurationMinutes(selectedService))} WIB ({formatDurationLabel(parseServiceDurationMinutes(selectedService))})
+                        </span>
+                      </div>
                     )}
+
+                    <p className="text-[11px] text-neutral-400 mt-1">
+                      * Jam yang dicoret telah terlewat, bertabrakan dengan antrean, melebihi jam tutup, atau capster sedang libur.
+                    </p>
                   </div>
 
                   {/* Nav Buttons */}
@@ -540,7 +632,7 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
                     <button
                       type="button"
                       onClick={handleNext}
-                      disabled={!selectedDate || !selectedTime || isBookingTimePast(selectedTime, selectedDate)}
+                      disabled={!selectedDate || !selectedTime || isSlotBookingDisabled(selectedTime, selectedDate)}
                       className="px-8 py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed shadow-xs cursor-pointer active:scale-98"
                     >
                       <span>Lanjut Konfirmasi</span>
