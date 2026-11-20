@@ -222,20 +222,146 @@ export default async function handler(req, res) {
       throw error;
     }
 
-    const { data: result, error: processingError } = await supabase.rpc(
-      'process_qris_payment_webhook',
-      {
-        p_total_amount: targetAmount,
-        p_raw_notification: JSON.stringify(payload)
+    let matched = false;
+    let matchDetails = null;
+
+    // 1. Coba proses via Database RPC function (jika sudah di-deploy di Supabase)
+    try {
+      const { data: result, error: processingError } = await supabase.rpc(
+        'process_qris_payment_webhook',
+        {
+          p_total_amount: targetAmount,
+          p_raw_notification: JSON.stringify(payload)
+        }
+      );
+
+      if (!processingError && result) {
+        matchDetails = result?.payment || result?.booking || null;
+        matched = Boolean(matchDetails);
+      } else if (processingError) {
+        console.warn('RPC process_qris_payment_webhook warning (beralih ke query langsung):', processingError.message || processingError);
       }
-    );
-    if (processingError) {
-      console.error('QRIS payment processing failed:', processingError);
-      return res.status(500).json({ success: false, message: 'Pembayaran tidak dapat diproses saat ini.' });
+    } catch (rpcErr) {
+      console.warn('RPC call exception (beralih ke query langsung):', rpcErr.message);
     }
 
-    const matchDetails = result?.payment || result?.booking || null;
-    const matched = Boolean(matchDetails);
+    // 2. Fallback query langsung ke tabel qris_payments
+    if (!matched) {
+      try {
+        const { data: qrisRow } = await supabase
+          .from('qris_payments')
+          .select('*')
+          .eq('status', 'PENDING')
+          .eq('total_amount', targetAmount)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (qrisRow) {
+          matched = true;
+          matchDetails = qrisRow;
+          const nowStr = new Date().toISOString();
+
+          await supabase
+            .from('qris_payments')
+            .update({
+              status: 'PAID',
+              paid_at: nowStr,
+              raw_notification: JSON.stringify(payload)
+            })
+            .eq('id', qrisRow.id);
+
+          if (qrisRow.booking_id) {
+            await supabase
+              .from('bookings')
+              .update({
+                booking_status: 'CONFIRMED',
+                payment_status: 'PAID',
+                payment_method: 'QRIS'
+              })
+              .eq('id', qrisRow.booking_id);
+          }
+
+          if (qrisRow.type === 'TIP' && qrisRow.barber_id) {
+            try {
+              const { data: bData } = await supabase
+                .from('barbers')
+                .select('id, tip_balance, tips_history')
+                .eq('id', qrisRow.barber_id)
+                .maybeSingle();
+
+              if (bData) {
+                const currentBal = Number(bData.tip_balance) || 0;
+                const history = Array.isArray(bData.tips_history) ? bData.tips_history : [];
+                const newTipItem = {
+                  id: `tip-${Date.now()}`,
+                  date: nowStr,
+                  customerName: qrisRow.customer_name || 'Pelanggan Setia',
+                  amount: qrisRow.total_amount,
+                  coffeeLabel: 'Kopi',
+                  message: 'Tip masuk via QRIS Webhook',
+                  method: 'Payment Gateway QRIS'
+                };
+                await supabase.from('barbers').update({
+                  tip_balance: currentBal + qrisRow.total_amount,
+                  tips_history: [newTipItem, ...history]
+                }).eq('id', bData.id);
+              }
+            } catch (tipErr) {
+              console.warn('Tip balance update notice:', tipErr.message);
+            }
+          }
+
+          if (qrisRow.type?.startsWith('PLAN_') && qrisRow.barber_id) {
+            try {
+              const targetPlan = qrisRow.type.replace('PLAN_', '').toLowerCase();
+              await supabase.from('barbers').update({
+                plan: targetPlan
+              }).eq('id', qrisRow.barber_id);
+            } catch (planErr) {
+              console.warn('Plan upgrade update notice:', planErr.message);
+            }
+          }
+        }
+      } catch (tableErr) {
+        console.warn('Tabel qris_payments fallback notice:', tableErr.message);
+      }
+    }
+
+    // 3. Fallback jika record belum ada di qris_payments: cari langsung ke tabel bookings
+    if (!matched) {
+      try {
+        const { data: bookingsList } = await supabase
+          .from('bookings')
+          .select('*')
+          .eq('booking_status', 'PENDING_PAYMENT')
+          .order('created_at', { ascending: false })
+          .limit(20);
+
+        if (bookingsList && bookingsList.length > 0) {
+          let matchingBooking = bookingsList.find(b => Number(b.total_price) === targetAmount);
+
+          if (!matchingBooking) {
+            matchingBooking = bookingsList.find(b => {
+              const price = Number(b.total_price);
+              return targetAmount >= price + 100 && targetAmount <= price + 899;
+            });
+          }
+
+          if (matchingBooking) {
+            matched = true;
+            matchDetails = matchingBooking;
+            await supabase.from('bookings').update({
+              booking_status: 'CONFIRMED',
+              payment_status: 'PAID',
+              payment_method: 'QRIS'
+            }).eq('id', matchingBooking.id);
+          }
+        }
+      } catch (bErr) {
+        console.warn('Bookings direct fallback notice:', bErr.message);
+      }
+    }
 
     if (matched && matchDetails) {
       // Trigger notifikasi instan ke Grup Telegram
