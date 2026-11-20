@@ -55,6 +55,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS users_email_idx ON public.users (email);
 CREATE UNIQUE INDEX IF NOT EXISTS barbers_email_idx ON public.barbers (email);
 
 -- 3. Berikan hak akses penuh ke tabel bookings, barbers, services, dan users untuk anon & authenticated
+GRANT ALL ON public.bookings TO anon, authenticated;
+GRANT ALL ON public.barbers TO anon, authenticated;
+GRANT ALL ON public.services TO anon, authenticated;
+GRANT ALL ON public.users TO anon, authenticated;
+
 ALTER TABLE public.bookings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.barbers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;

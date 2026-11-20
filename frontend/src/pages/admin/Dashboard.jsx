@@ -784,16 +784,90 @@ export default function AdminMasterDashboard() {
 
   // ─── HANDLE DELETE BARBER DARI SUPABASE ───
   const handleDeleteBarber = async (barber) => {
-    if (!window.confirm(`Hapus akun barber "${barber.name}" (${barber.slug || barber.id}) secara permanen dari Supabase? Tindakan ini tidak dapat dibatalkan.`)) return;
+    if (!window.confirm(`Hapus bio link barber "${barber.name}" (${barber.slug || barber.id}) secara permanen dari Supabase? Tindakan ini tidak dapat dibatalkan.`)) return;
     try {
+      // 1. Bersihkan cache lokal
+      try {
+        if (barber.id) localStorage.removeItem(`ecukur_barber_cache_${barber.id}`);
+        if (barber.slug) localStorage.removeItem(`ecukur_barber_cache_${barber.slug}`);
+        if (barber.id) localStorage.removeItem(`ecukur_plan_${barber.id}`);
+        if (barber.slug) localStorage.removeItem(`ecukur_plan_${barber.slug}`);
+      } catch {}
+
+      // 2. Optimistic update di Zustand
+      useStore.setState((state) => ({
+        barbers: state.barbers.filter((b) => b.id !== barber.id && b.slug !== barber.slug)
+      }));
+
+      // 3. Hapus dari Supabase
       if (isSupabaseConfigured) {
+        // Hapus bookings terkait jika ada agar tidak terganjal relasi
+        try {
+          await supabase.from('bookings').delete().eq('barber_id', barber.id);
+        } catch {}
+
         const { error } = await supabase.from('barbers').delete().eq('id', barber.id);
-        if (error) throw error;
+        if (error && barber.slug) {
+          await supabase.from('barbers').delete().eq('slug', barber.slug);
+        }
       }
+
       showToast(`Barber "${barber.name}" berhasil dihapus.`);
-      if (typeof fetchBarbersFromSupabase === 'function') fetchBarbersFromSupabase();
+      if (typeof fetchBarbersFromSupabase === 'function') {
+        await fetchBarbersFromSupabase();
+      }
     } catch (err) {
       showToast(`Gagal menghapus barber: ${err.message}`);
+    }
+  };
+
+  // ─── HANDLE DELETE AKUN PENGGUNA TERDAFTAR ───
+  const handleDeleteUser = async (user) => {
+    const userLabel = user.name || user.email || user.id;
+    if (!window.confirm(`Hapus akun pengguna "${userLabel}" beserta profil bio link barber terkaitnya secara permanen dari database?`)) return;
+    try {
+      // 1. Bersihkan cache lokal
+      try {
+        localStorage.removeItem(`ecukur_user_plan_${user.id}`);
+        if (user.email) localStorage.removeItem(`ecukur_user_plan_${user.email.toLowerCase()}`);
+      } catch {}
+
+      // 2. Optimistic update di tampilan akun
+      setRegisteredUsers((prev) => prev.filter((u) => u.id !== user.id));
+
+      // 3. Update state barbers jika ada barber terkait yang dihapus
+      useStore.setState((state) => ({
+        barbers: state.barbers.filter((b) => b.user_id !== user.id && (!user.email || b.email?.toLowerCase() !== user.email.toLowerCase()))
+      }));
+
+      // 4. Hapus dari database Supabase
+      if (isSupabaseConfigured) {
+        // Hapus bio link barber yang terhubung
+        try {
+          await supabase.from('barbers').delete().eq('user_id', user.id);
+          if (user.email) {
+            await supabase.from('barbers').delete().eq('email', user.email);
+          }
+        } catch {}
+
+        // Hapus dari tabel users publik
+        try {
+          const { error: userError } = await supabase.from('users').delete().eq('id', user.id);
+          if (userError) {
+            console.warn('Notice delete public.users:', userError.message);
+          }
+        } catch (uErr) {
+          console.warn('Exception delete public.users:', uErr?.message);
+        }
+      }
+
+      showToast(`Akun pengguna "${userLabel}" berhasil dihapus.`);
+      if (typeof fetchBarbersFromSupabase === 'function') {
+        await fetchBarbersFromSupabase();
+      }
+      void loadRegisteredUsers();
+    } catch (err) {
+      showToast(`Gagal menghapus akun: ${err.message}`);
     }
   };
 
@@ -1982,22 +2056,32 @@ export default function AdminMasterDashboard() {
                                 </td>
 
                                 <td className="py-3.5 px-4 text-right">
-                                  <select
-                                    value={currentPlan}
-                                    onChange={(e) => handleSetUserAccountPlan(u, e.target.value)}
-                                    className={`px-2.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer border outline-none transition-all shadow-3xs ${
-                                      currentPlan === 'barber'
-                                        ? 'bg-amber-50 text-amber-900 border-amber-300'
-                                        : currentPlan === 'capster'
-                                          ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
-                                          : 'bg-neutral-100 text-neutral-700 border-neutral-300'
-                                    }`}
-                                    title="Ubah tingkatan akun (Free / Capster / Barber)"
-                                  >
-                                    <option value="free">Free (Customer)</option>
-                                    <option value="capster">Capster Pro (49K)</option>
-                                    <option value="barber">Studio Barber (99K)</option>
-                                  </select>
+                                  <div className="flex items-center justify-end gap-2">
+                                    <select
+                                      value={currentPlan}
+                                      onChange={(e) => handleSetUserAccountPlan(u, e.target.value)}
+                                      className={`px-2.5 py-1.5 rounded-xl text-xs font-bold cursor-pointer border outline-none transition-all shadow-3xs ${
+                                        currentPlan === 'barber'
+                                          ? 'bg-amber-50 text-amber-900 border-amber-300'
+                                          : currentPlan === 'capster'
+                                            ? 'bg-emerald-50 text-emerald-900 border-emerald-300'
+                                            : 'bg-neutral-100 text-neutral-700 border-neutral-300'
+                                      }`}
+                                      title="Ubah tingkatan akun (Free / Capster / Barber)"
+                                    >
+                                      <option value="free">Free (Customer)</option>
+                                      <option value="capster">Capster Pro (49K)</option>
+                                      <option value="barber">Studio Barber (99K)</option>
+                                    </select>
+                                    <button
+                                      type="button"
+                                      onClick={() => handleDeleteUser(u)}
+                                      className="p-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition-colors cursor-pointer shrink-0"
+                                      title="Hapus Akun Pengguna dari Supabase"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
                                 </td>
                               </tr>
                             );
