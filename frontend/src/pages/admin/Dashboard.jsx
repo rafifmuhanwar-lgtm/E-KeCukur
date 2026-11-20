@@ -2223,16 +2223,16 @@ export default function AdminMasterDashboard() {
                   <div className="p-3 bg-neutral-50 rounded-xl border border-neutral-200 grid grid-cols-1 sm:grid-cols-2 gap-2">
                     <div>
                       <span className="text-neutral-500 block text-[10px]">Merchant Terdaftar:</span>
-                      <strong className="text-neutral-900 text-xs">BAYAR VIA QRIS, Digital & Kreatif</strong>
-                      <span className="text-neutral-400 block text-[9.5px]">PERUM GRIYA SETU PERMAI BLOK D.5NO.20</span>
+                      <strong className="text-neutral-900 text-xs">Bayar Via Qris, Konter</strong>
+                      <span className="text-neutral-400 block text-[9.5px]">Bekasi, Jawa Barat</span>
                     </div>
                     <div>
                       <span className="text-neutral-500 block text-[10px]">NMID Nasional (ASPI):</span>
-                      <strong className="font-mono text-neutral-900 text-xs">ID1026490305079</strong>
+                      <strong className="font-mono text-neutral-900 text-xs">ID1026643315090</strong>
                     </div>
                     <div>
                       <span className="text-neutral-500 block text-[10px]">Acquiring Provider:</span>
-                      <span className="font-semibold text-emerald-800">GoPay / GoBiz Merchant</span>
+                      <span className="font-semibold text-emerald-800">DANA / ASPI Merchant</span>
                     </div>
                     <div>
                       <span className="text-neutral-500 block text-[10px]">Fitur Otomatis:</span>

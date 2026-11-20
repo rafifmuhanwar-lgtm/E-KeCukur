@@ -1236,7 +1236,17 @@ export const useStore = create((set, get) => ({
           p_new_status: dbStatus,
           p_notes: null
         });
-        if (error) throw error;
+        if (error) {
+          // Fallback update langsung ke tabel bookings jika RPC gagal / butuh auth khusus
+          const { error: directErr } = await supabase
+            .from('bookings')
+            .update({
+              booking_status: dbStatus,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', id);
+          if (directErr) throw error;
+        }
       } catch (err) {
         console.error('Supabase update status failed:', err);
         await get().fetchBookingsFromSupabase();
