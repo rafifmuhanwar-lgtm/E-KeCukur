@@ -109,14 +109,14 @@ BEGIN
         'id', 'tip-' || v_payment.id::TEXT,
         'date', NOW(),
         'customerName', COALESCE(v_payment.customer_name, 'Pelanggan Setia'),
-        'amount', v_payment.total_amount,
+        'amount', COALESCE(v_payment.base_amount, v_payment.total_amount),
         'coffeeLabel', 'Kopi',
         'message', 'Tip masuk via QRIS Listener',
         'method', 'Payment Gateway QRIS'
       );
 
       UPDATE public.barbers
-      SET tip_balance = COALESCE(tip_balance, 0) + v_payment.total_amount,
+      SET tip_balance = COALESCE(tip_balance, 0) + COALESCE(v_payment.base_amount, v_payment.total_amount),
           tips_history = JSONB_BUILD_ARRAY(v_tip_item) || COALESCE(tips_history, '[]'::JSONB)
       WHERE id = v_barber_id;
 

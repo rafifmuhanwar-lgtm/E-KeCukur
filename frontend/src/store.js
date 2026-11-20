@@ -562,24 +562,31 @@ export const useStore = create((set, get) => ({
             return false;
           });
 
-          return {
-            id: row.id,
-            customerName: row.customer_name || 'Pelanggan',
-            customerPhone: row.customer_phone || '-',
-            barberId: row.barber_id || matchedBarber?.id || '',
-            barberName: row.barber_name || matchedBarber?.name || 'Semua Capster',
-            capsterId: row.capster_id || null,
-            capsterName: row.capster_name || null,
-            serviceName: row.service_name || 'Layanan Cukur',
-            date: row.booking_date || 'Hari Ini',
-            time: row.start_time ? row.start_time.substring(0, 5) : '10:00',
-            status: dbToUiStatus(row.booking_status),
-            paymentMethod: row.payment_method === 'QRIS' ? 'QRIS' : (row.payment_method || 'Tunai'),
-            paymentStatus: row.payment_status || 'UNPAID',
-            price: Number(row.total_price) || 0,
-            note: '',
-            createdAt: row.created_at
-          };
+            const rawPrice = Number(row.total_price) || 0;
+            // Bersihkan kode unik jika booking QRIS tersimpan dengan 3 digit unik (misal 50.758 -> 50.000)
+            const cleanPrice = (rawPrice > 1000 && (rawPrice % 1000) >= 100 && row.payment_method === 'QRIS')
+              ? rawPrice - (rawPrice % 1000)
+              : rawPrice;
+
+            return {
+              id: row.id,
+              customerName: row.customer_name || 'Pelanggan',
+              customerPhone: row.customer_phone || '-',
+              barberId: row.barber_id || matchedBarber?.id || '',
+              barberName: row.barber_name || matchedBarber?.name || 'Semua Capster',
+              capsterId: row.capster_id || null,
+              capsterName: row.capster_name || null,
+              serviceName: row.service_name || 'Layanan Cukur',
+              date: row.booking_date || 'Hari Ini',
+              time: row.start_time ? row.start_time.substring(0, 5) : '10:00',
+              status: dbToUiStatus(row.booking_status),
+              paymentMethod: row.payment_method === 'QRIS' ? 'QRIS' : (row.payment_method || 'Tunai'),
+              paymentStatus: row.payment_status || 'UNPAID',
+              price: cleanPrice,
+              rawPrice,
+              note: '',
+              createdAt: row.created_at
+            };
         });
 
         set({ bookings: mapped });

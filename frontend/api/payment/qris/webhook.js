@@ -293,17 +293,19 @@ export default async function handler(req, res) {
               if (bData) {
                 const currentBal = Number(bData.tip_balance) || 0;
                 const history = Array.isArray(bData.tips_history) ? bData.tips_history : [];
+                // Bersihkan kode unik: gunakan base_amount agar nominal tip pas sesuai pilihan (misal 10.000)
+                const cleanAmount = Number(qrisRow.base_amount) || (Number(qrisRow.total_amount) - (Number(qrisRow.unique_code) || 0)) || Number(qrisRow.total_amount);
                 const newTipItem = {
                   id: `tip-${Date.now()}`,
                   date: nowStr,
                   customerName: qrisRow.customer_name || 'Pelanggan Setia',
-                  amount: qrisRow.total_amount,
+                  amount: cleanAmount,
                   coffeeLabel: 'Kopi',
                   message: 'Tip masuk via QRIS Webhook',
                   method: 'Payment Gateway QRIS'
                 };
                 await supabase.from('barbers').update({
-                  tip_balance: currentBal + qrisRow.total_amount,
+                  tip_balance: currentBal + cleanAmount,
                   tips_history: [newTipItem, ...history]
                 }).eq('id', bData.id);
               }

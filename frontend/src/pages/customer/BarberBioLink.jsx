@@ -599,7 +599,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               serviceName: selectedService?.name || activeServices[0]?.name,
               date: formatDateKey(selectedDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
               time: selectedTime,
-              price: bookingQrisData.totalAmount,
+              price: bookingQrisData.basePrice || bookingQrisData.totalAmount,
               paymentMethod: 'QRIS (Lunas Otomatis)'
             };
             setBookingSuccessData(successPayload);
@@ -785,7 +785,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       serviceId: selectedService?.id || activeServices[0]?.id,
       status: paymentMethod === 'QRIS' ? 'Menunggu' : 'Terkonfirmasi',
       paymentMethod,
-      price: finalPrice,
+      price: basePrice, // Nominal bersih layanan cukur (tanpa kode unik untuk dashboard barber & admin)
       note: noteStyle.trim()
     };
 
@@ -801,6 +801,28 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       return;
     }
     const resolvedId = saved.id;
+
+    // Catat ke tabel qris_payments dengan kode unik untuk verifikasi otomatis
+    if (paymentMethod === 'QRIS') {
+      try {
+        if (isSupabaseConfigured && supabase) {
+          supabase.from('qris_payments').insert({
+            reference_id: `ECK-${bookingCode}-${uniqueCode}`,
+            type: 'BOOKING',
+            booking_id: String(resolvedId),
+            barber_id: barber.id ? String(barber.id) : null,
+            customer_name: customerName.trim(),
+            customer_phone: customerPhone.trim(),
+            base_amount: basePrice,
+            unique_code: uniqueCode,
+            total_amount: finalPrice,
+            qris_image_url: getDynamicQrisImageUrl(finalPrice),
+            status: 'PENDING',
+            expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+          }).then(() => {}).catch((err) => console.warn('qris_payments insert notice:', err.message));
+        }
+      } catch {}
+    }
 
     setBookingQrisData({
       bookingId: resolvedId,
