@@ -154,6 +154,7 @@ export default function BarberDashboard() {
   const requestBarberWithdrawal = useStore((state) => state.requestBarberWithdrawal);
   const bookings = useStore((state) => state.bookings);
   const updateBookingStatus = useStore((state) => state.updateBookingStatus);
+  const updateBookingPaymentStatus = useStore((state) => state.updateBookingPaymentStatus);
   const uploadBarberPhoto = useStore((state) => state.uploadBarberPhoto);
   const uploadBarberPortfolioPhoto = useStore((state) => state.uploadBarberPortfolioPhoto);
   const uploadBarberBanner = useStore((state) => state.uploadBarberBanner);
@@ -2760,9 +2761,14 @@ export default function BarberDashboard() {
                             }`}>
                               {b.status}
                             </span>
-                            {b.paymentStatus === 'PAID' && (
-                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                Lunas (QRIS)
+                            {b.paymentStatus === 'PAID' ? (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>Lunas ({b.paymentMethod === 'Tunai' ? 'Kasir' : 'QRIS'})</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                                Belum Lunas ({b.paymentMethod === 'Tunai' ? 'Bayar di Kasir' : 'QRIS'})
                               </span>
                             )}
                           </div>
@@ -2795,7 +2801,29 @@ export default function BarberDashboard() {
                         </div>
 
                         {/* Action buttons (Clean status controls, WA button removed) */}
-                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0 flex-wrap">
+                          {/* Tombol Kasir: Verifikasi Lunas jika belum PAID */}
+                          {b.paymentStatus !== 'PAID' && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const ok = window.confirm(`Verifikasi pembayaran untuk pesanan ${shortCode} senilai ${formatRupiah(b.price)} sebagai LUNAS?`);
+                                if (!ok) return;
+                                const res = await updateBookingPaymentStatus(b.id, 'PAID');
+                                if (res?.success) {
+                                  showToast(`Pesanan ${shortCode} berhasil ditandai LUNAS!`);
+                                } else {
+                                  showToast(`Gagal: ${res?.error || 'Akses ditolak'}`);
+                                }
+                              }}
+                              className="px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                              title="Tandai pembayaran telah diterima di kasir studio"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Tandai Lunas (Kasir)</span>
+                            </button>
+                          )}
+
                           {b.status === 'Menunggu' && (
                             <button
                               type="button"

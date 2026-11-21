@@ -25,7 +25,8 @@ import {
   Send,
   Camera,
   Ticket,
-  ChevronLeft
+  ChevronLeft,
+  Banknote
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
@@ -369,7 +370,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     return '';
   });
   const [customerPhone] = useState('');
-  const paymentMethod = 'QRIS';
+  const [paymentMethod, setPaymentMethod] = useState('QRIS');
   const [noteStyle, setNoteStyle] = useState('');
 
   // Sinkronisasi dua arah nama pelanggan antara Konsultasi Chat dan Form Booking
@@ -848,8 +849,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       endTime: calculatedEndTime,
       durationMinutes: serviceDuration,
       serviceId: selectedService?.id || activeServices[0]?.id,
-      status: paymentMethod === 'QRIS' ? 'Menunggu' : 'Terkonfirmasi',
+      status: 'Terkonfirmasi',
       paymentMethod,
+      paymentStatus: 'UNPAID',
       price: basePrice, // Nominal bersih layanan cukur (tanpa kode unik untuk dashboard barber & admin)
       note: noteStyle.trim()
     };
@@ -866,6 +868,17 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       return;
     }
     const resolvedId = saved.id;
+
+    // Jika metode Bayar di Kasir / Tunai, reservasi langsung berhasil tanpa perlu scan QRIS
+    if (paymentMethod === 'Tunai') {
+      setBookingSuccessData({
+        ...newBooking,
+        id: resolvedId,
+        ticketToken: saved.ticketToken
+      });
+      setBookingStep('success');
+      return;
+    }
 
     // Catat ke tabel qris_payments dengan kode unik untuk verifikasi otomatis
     if (paymentMethod === 'QRIS') {
@@ -2617,20 +2630,56 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     </div>
                   </div>
 
-                  {/* Pembayaran 100% Cashless */}
-                  <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between gap-3">
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="text-xs font-bold text-emerald-950">100% Cashless via QRIS</span>
-                      </div>
-                      <p className="text-[10px] text-emerald-800 leading-tight">
-                        BCA, Mandiri, GoPay, DANA, OVO, ShopeePay (Nominal terkunci otomatis)
-                      </p>
+                  {/* Pilihan Metode Pembayaran Nyata (QRIS vs Tunai / Kasir) */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-semibold text-neutral-700 block">Metode Pembayaran:</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('QRIS')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          paymentMethod === 'QRIS'
+                            ? 'bg-emerald-50/90 border-[#285844] ring-2 ring-[#285844]/20'
+                            : 'bg-white border-neutral-200 hover:border-neutral-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-neutral-900 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                            QRIS Otomatis
+                          </span>
+                          <span className="text-[9px] font-bold text-[#285844] bg-[#D9E5DC] px-1.5 py-0.5 rounded">
+                            Instan
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-neutral-500 leading-tight">
+                          BCA, GoPay, DANA, OVO, ShopeePay
+                        </p>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setPaymentMethod('Tunai')}
+                        className={`p-3 rounded-xl border text-left transition-all cursor-pointer ${
+                          paymentMethod === 'Tunai'
+                            ? 'bg-amber-50/90 border-amber-600 ring-2 ring-amber-600/20'
+                            : 'bg-white border-neutral-200 hover:border-neutral-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-bold text-neutral-900 flex items-center gap-1.5">
+                            <Banknote className="w-3.5 h-3.5 text-amber-600" />
+                            Bayar di Kasir
+                          </span>
+                          <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.5 rounded">
+                            Tunai
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-neutral-500 leading-tight">
+                          Bayar langsung saat tiba di lokasi studio
+                        </p>
+                      </button>
                     </div>
-                    <span className="text-[10px] font-bold text-[#285844] bg-white px-2 py-1 rounded-lg border border-emerald-200 shrink-0">
-                      Auto-Verify
-                    </span>
                   </div>
 
                   <button
@@ -2640,6 +2689,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   >
                     {isSubmitting
                       ? 'Memproses Reservasi...'
+                      : paymentMethod === 'Tunai'
+                      ? `Konfirmasi Reservasi — Bayar di Kasir (${formatRupiah(selectedService?.price || activeServices[0].price)})`
                       : `Lanjut Bayar QRIS (${formatRupiah(selectedService?.price || activeServices[0].price)})`}
                   </button>
                 </form>

@@ -39,3 +39,6 @@ pnpm-debug.log*
 *.sln
 *.sw?
 Thumbs.db
+
+# sql
+supabase_schema_setup.sql
