@@ -1778,7 +1778,7 @@ export const useStore = create((set, get) => ({
       bankName: withdrawalData.bankName || 'BCA',
       accountNumber: withdrawalData.accountNumber,
       accountHolder: withdrawalData.accountHolder,
-      status: 'Berhasil Ditransfer',
+      status: 'Menunggu Transfer',
       referenceId: `TRX-WD-${Date.now().toString().slice(-6)}`
     };
 
@@ -1815,7 +1815,7 @@ export const useStore = create((set, get) => ({
 
       result = { 
         success: true, 
-        message: `Penarikan Rp ${amount.toLocaleString('id-ID')} berhasil diproses ke rekening ${withdrawalData.bankName}!` 
+        message: `Pengajuan penarikan Rp ${amount.toLocaleString('id-ID')} berhasil diajukan dan sedang menunggu verifikasi/transfer oleh admin.` 
       };
       return { barbers: updatedBarbers, activeBarber: active };
     });

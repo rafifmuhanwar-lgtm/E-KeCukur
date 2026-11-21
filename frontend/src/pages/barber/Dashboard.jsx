@@ -79,7 +79,7 @@ const computeWeeklyChartData = (bookingsList) => {
 };
 
 const PERIOD_OPTIONS = [
-  { id: 'today', label: 'Hari Ini (24 Jam)' },
+  { id: 'today', label: 'Hari Ini' },
   { id: 'yesterday', label: 'Kemarin' },
   { id: 'week', label: '1 Minggu' },
   { id: 'month', label: '1 Bulan' },
@@ -353,8 +353,48 @@ export default function BarberDashboard() {
   const totalCombinedRevenue = totalBookingRevenue + totalTipRevenue;
 
   const totalWithdrawn = React.useMemo(() => {
-    return (barber?.withdrawalsHistory || []).reduce((acc, w) => acc + (Number(w.amount) || 0), 0);
+    return (barber?.withdrawalsHistory || [])
+      .filter((w) => w.status !== 'Ditolak / Dibatalkan' && w.status !== 'Ditolak')
+      .reduce((acc, w) => acc + (Number(w.amount) || 0), 0);
   }, [barber]);
+
+  const [dismissedPayoutNotifs, setDismissedPayoutNotifs] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('ecukur_dismissed_payout_notifs') || '[]');
+    } catch {
+      return [];
+    }
+  });
+
+  const handleDismissPayoutNotif = (notifKey) => {
+    setDismissedPayoutNotifs((prev) => {
+      const next = [...prev, notifKey];
+      try {
+        localStorage.setItem('ecukur_dismissed_payout_notifs', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  };
+
+  const latestPendingWd = useMemo(() => {
+    return (barber?.withdrawalsHistory || []).find(
+      (w) => w.status === 'Menunggu' || w.status === 'Menunggu Transfer'
+    );
+  }, [barber?.withdrawalsHistory]);
+
+  const latestCompletedWd = useMemo(() => {
+    return (barber?.withdrawalsHistory || []).find(
+      (w) => (w.status === 'Berhasil Ditransfer' || w.status === 'Selesai') &&
+        !dismissedPayoutNotifs.includes(w.id || w.referenceId)
+    );
+  }, [barber?.withdrawalsHistory, dismissedPayoutNotifs]);
+
+  const latestRejectedWd = useMemo(() => {
+    return (barber?.withdrawalsHistory || []).find(
+      (w) => (w.status === 'Ditolak / Dibatalkan' || w.status === 'Ditolak') &&
+        !dismissedPayoutNotifs.includes(w.id || w.referenceId)
+    );
+  }, [barber?.withdrawalsHistory, dismissedPayoutNotifs]);
 
   const availableBalance = Math.max(0, totalCombinedRevenue - totalWithdrawn);
 
@@ -1584,7 +1624,7 @@ export default function BarberDashboard() {
               { id: 'services', label: 'Menu Layanan', icon: Scissors, show: barber.features?.services !== false },
               { id: 'team', label: 'Tim Capster', icon: Users, show: barber.features?.team === true, badge: (barber.teamMembers || []).length },
               { id: 'bookings', label: 'Reservasi', icon: Calendar, badge: barberBookings.filter(b => b.status === 'Menunggu').length, show: barber.features?.booking !== false },
-              { id: 'tipping', label: 'Tip Kopi', icon: Coffee, show: barber.features?.tipping !== false, badge: recentTipsCount || null },
+              { id: 'tipping', label: 'Tip Kopi', icon: Coffee, show: barber.features?.tipping !== false, badge: (recentTipsCount || 0) + (latestPendingWd || latestRejectedWd || latestCompletedWd ? 1 : 0) || null },
               { id: 'lookbook', label: 'Portofolio', icon: Eye, show: barber.features?.lookbook !== false },
               { id: 'links', label: 'Tautan', icon: Globe },
               { id: 'design', label: 'Tema', icon: Palette },
@@ -3810,8 +3850,6 @@ export default function BarberDashboard() {
                     <span>Tarik Saldo</span>
                   </button>
                   <span className="px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    100% Cashless QRIS
                   </span>
                 </div>
               </div>
@@ -3848,6 +3886,93 @@ export default function BarberDashboard() {
                   })}
                 </div>
               </div>
+
+              {/* NOTIFIKASI STATUS PENARIKAN DANA (PAYOUT NOTIFICATION ALERTS) */}
+              {latestRejectedWd && (
+                <div className="bg-rose-50 border border-rose-200/90 rounded-2xl p-4 sm:p-5 flex items-start justify-between gap-3 shadow-2xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 mt-0.5">
+                      <AlertCircle className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-display font-bold text-xs sm:text-sm text-rose-900">
+                          Pemberitahuan: Pengajuan Penarikan Saldo Ditolak oleh Admin
+                        </h4>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-rose-200/60 text-rose-800 rounded-md">
+                          {latestRejectedWd.referenceId || 'TRX-WD'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-rose-800 leading-relaxed">
+                        Pengajuan penarikan dana sebesar <strong>{formatRupiah(latestRejectedWd.amount)}</strong> ditolak oleh Admin dengan alasan: <span className="font-semibold underline">"{latestRejectedWd.rejectReason || 'Data rekening tidak sesuai'}"</span>.
+                      </p>
+                      <p className="text-[11px] text-rose-700 font-semibold">
+                        ✓ Saldo sebesar {formatRupiah(latestRejectedWd.amount)} telah otomatis dikembalikan utuh ke saldo dompet Anda.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDismissPayoutNotif(latestRejectedWd.id || latestRejectedWd.referenceId)}
+                    className="px-2.5 py-1 text-rose-700 hover:text-rose-900 hover:bg-rose-100/60 rounded-lg text-xs font-semibold cursor-pointer transition-colors shrink-0"
+                    title="Tutup pemberitahuan ini"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              )}
+
+              {latestCompletedWd && (
+                <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-4 sm:p-5 flex items-start justify-between gap-3 shadow-2xs">
+                  <div className="flex items-start gap-3">
+                    <div className="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center shrink-0 mt-0.5">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-display font-bold text-xs sm:text-sm text-emerald-900">
+                          Pencairan Saldo Berhasil Ditransfer oleh Admin! 🎉
+                        </h4>
+                        <span className="text-[10px] font-mono font-bold px-2 py-0.5 bg-emerald-200/60 text-emerald-800 rounded-md">
+                          {latestCompletedWd.referenceId || 'TRX-WD'}
+                        </span>
+                      </div>
+                      <p className="text-xs text-emerald-800 leading-relaxed">
+                        Dana penarikan sebesar <strong>{formatRupiah(latestCompletedWd.amount)}</strong> telah selesai diproses dan berhasil ditransfer ke rekening <strong>{latestCompletedWd.bankName} - {latestCompletedWd.accountNumber} ({latestCompletedWd.accountHolder})</strong>.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleDismissPayoutNotif(latestCompletedWd.id || latestCompletedWd.referenceId)}
+                    className="px-2.5 py-1 text-emerald-700 hover:text-emerald-900 hover:bg-emerald-100/60 rounded-lg text-xs font-semibold cursor-pointer transition-colors shrink-0"
+                    title="Tutup pemberitahuan ini"
+                  >
+                    Tutup
+                  </button>
+                </div>
+              )}
+
+              {latestPendingWd && (
+                <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 flex items-start gap-3 shadow-2xs">
+                  <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center shrink-0 mt-0.5">
+                    <Clock className="w-4 h-4 text-amber-700 animate-pulse" />
+                  </div>
+                  <div className="space-y-0.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h4 className="font-display font-bold text-xs text-amber-900">
+                        Pengajuan Penarikan Saldo Sedang Menunggu Transfer Admin
+                      </h4>
+                      <span className="text-[10px] font-mono font-bold px-1.5 py-0.5 bg-amber-200/60 text-amber-800 rounded">
+                        {latestPendingWd.referenceId || 'TRX-WD'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-800 leading-relaxed">
+                      Penarikan sebesar <strong>{formatRupiah(latestPendingWd.amount)}</strong> ke <strong>{latestPendingWd.bankName} - {latestPendingWd.accountNumber}</strong> sedang dalam antrean verifikasi dan transfer oleh Admin.
+                    </p>
+                  </div>
+                </div>
+              )}
 
               {/* 1. HERO CARD: SALDO DOMPET & TOTAL OMSET (ELEGANT LIGHT FINTECH THEME) */}
               <div className="bg-white p-6 sm:p-7 rounded-2xl border border-neutral-200/90 shadow-sm relative overflow-hidden space-y-6">
@@ -4092,9 +4217,30 @@ export default function BarberDashboard() {
                               {wd.bankName} - {wd.accountNumber} ({wd.accountHolder})
                             </td>
                             <td className="py-3 px-3">
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                                {wd.status || 'Berhasil Ditransfer'}
-                              </span>
+                              {wd.status === 'Berhasil Ditransfer' || wd.status === 'Selesai' ? (
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+                                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                  <span>Berhasil Ditransfer</span>
+                                </span>
+                              ) : wd.status === 'Ditolak / Dibatalkan' || wd.status === 'Ditolak' ? (
+                                <div className="space-y-0.5">
+                                  <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-rose-50 text-rose-800 border border-rose-200 inline-flex items-center gap-1">
+                                    <AlertCircle className="w-3 h-3 text-rose-600" />
+                                    <span>Ditolak Admin</span>
+                                  </span>
+                                  {wd.rejectReason && (
+                                    <p className="text-[10px] text-rose-600 font-medium italic mt-0.5 max-w-xs">
+                                      Alasan: {wd.rejectReason}
+                                    </p>
+                                  )}
+                                  <span className="text-[9px] text-neutral-400 block font-medium">Saldo telah dikembalikan</span>
+                                </div>
+                              ) : (
+                                <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 inline-flex items-center gap-1">
+                                  <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
+                                  <span>Menunggu Transfer Admin</span>
+                                </span>
+                              )}
                             </td>
                             <td className="py-3 px-3 text-neutral-400 font-mono text-right text-[11px]">
                               {formatLedgerDate(wd.date)}

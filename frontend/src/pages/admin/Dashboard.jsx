@@ -534,6 +534,7 @@ export default function AdminMasterDashboard() {
 
     const pendingWithdrawals = allWithdrawals.filter((w) => w?.status === 'Menunggu' || w?.status === 'Menunggu Transfer' || !w?.status);
     const completedWithdrawals = allWithdrawals.filter((w) => w?.status === 'Berhasil Ditransfer' || w?.status === 'Selesai');
+    const rejectedWithdrawals = allWithdrawals.filter((w) => w?.status === 'Ditolak / Dibatalkan' || w?.status === 'Ditolak');
 
     const totalPendingPayoutAmount = pendingWithdrawals.reduce((sum, w) => sum + (Number(w?.amount) || 0), 0);
     const totalCompletedPayoutAmount = completedWithdrawals.reduce((sum, w) => sum + (Number(w?.amount) || 0), 0);
@@ -551,6 +552,7 @@ export default function AdminMasterDashboard() {
       totalGrossVolume: totalBookingVolume + totalTipsVolume,
       pendingWithdrawalsCount: pendingWithdrawals.length,
       completedWithdrawalsCount: completedWithdrawals.length,
+      rejectedWithdrawalsCount: rejectedWithdrawals.length,
       totalPendingPayoutAmount,
       totalCompletedPayoutAmount,
       allWithdrawals
@@ -602,6 +604,9 @@ export default function AdminMasterDashboard() {
       }
       if (withdrawalStatusFilter === 'COMPLETED') {
         return w.status === 'Berhasil Ditransfer' || w.status === 'Selesai';
+      }
+      if (withdrawalStatusFilter === 'REJECTED') {
+        return w.status === 'Ditolak / Dibatalkan' || w.status === 'Ditolak';
       }
       return true;
     });
@@ -918,6 +923,11 @@ export default function AdminMasterDashboard() {
 
   // ─── HANDLE UPDATE STATUS PENCAIRAN SALDO TIP (SELESAI) ───
   const handleMarkWithdrawalCompleted = async (withdrawalItem) => {
+    const confirmTransfer = window.confirm(
+      `Konfirmasi Transfer:\nTandai pengajuan penarikan dana sebesar ${formatRupiah(withdrawalItem.amount)} untuk ${withdrawalItem.barberName} ke rekening:\n${withdrawalItem.bankName} - ${withdrawalItem.accountNumber} (${withdrawalItem.accountHolder})\nsebagai SUDAH DITRANSFER (Lunas)?`
+    );
+    if (!confirmTransfer) return;
+
     try {
       const targetBarber = barbers.find(b => b.id === withdrawalItem.barberId || b.slug === withdrawalItem.barberId);
       if (!targetBarber) return;
@@ -928,7 +938,9 @@ export default function AdminMasterDashboard() {
           return {
             ...w,
             status: 'Berhasil Ditransfer',
-            transferredAt: new Date().toISOString()
+            transferredAt: new Date().toISOString(),
+            statusUpdatedAt: new Date().toISOString(),
+            adminNote: 'Dana telah berhasil ditransfer oleh Admin'
           };
         }
         return w;
@@ -946,8 +958,12 @@ export default function AdminMasterDashboard() {
 
   // ─── HANDLE TOLAK PENCAIRAN SALDO TIP ───
   const handleRejectWithdrawal = async (withdrawalItem) => {
-    const reason = window.prompt(`Alasan pembatalan penarikan dana ${withdrawalItem.barberName} (${formatRupiah(withdrawalItem.amount)}):`, 'Rekening tidak valid');
+    const reason = window.prompt(
+      `Tolak pengajuan penarikan dana ${withdrawalItem.barberName} (${formatRupiah(withdrawalItem.amount)}):\n\nMasukkan alasan penolakan (alasan ini akan langsung tampil sebagai notifikasi ke barber):`,
+      'Nomor rekening tidak valid atau nama pemilik tidak sesuai'
+    );
     if (reason === null) return;
+    const cleanReason = reason.trim() || 'Data rekening tidak sesuai atau informasi tidak valid';
 
     try {
       const targetBarber = barbers.find(b => b.id === withdrawalItem.barberId || b.slug === withdrawalItem.barberId);
@@ -959,8 +975,9 @@ export default function AdminMasterDashboard() {
           return {
             ...w,
             status: 'Ditolak / Dibatalkan',
-            rejectReason: reason,
-            rejectedAt: new Date().toISOString()
+            rejectReason: cleanReason,
+            rejectedAt: new Date().toISOString(),
+            statusUpdatedAt: new Date().toISOString()
           };
         }
         return w;
@@ -974,7 +991,7 @@ export default function AdminMasterDashboard() {
         withdrawalsHistory: updatedWds,
         tipBalance: refundedBal 
       });
-      showToast(`Penarikan dana untuk ${withdrawalItem.barberName} dibatalkan dan saldo dikembalikan.`);
+      showToast(`Penarikan dana untuk ${withdrawalItem.barberName} ditolak dan saldo ${formatRupiah(withdrawalItem.amount)} dikembalikan.`);
       if (typeof fetchBarbersFromSupabase === 'function') {
         await fetchBarbersFromSupabase();
       }
@@ -2795,6 +2812,7 @@ export default function AdminMasterDashboard() {
                   <option value="ALL">Semua Permintaan</option>
                   <option value="PENDING">Menunggu Transfer ({metrics.pendingWithdrawalsCount})</option>
                   <option value="COMPLETED">Sudah Ditransfer ({metrics.completedWithdrawalsCount})</option>
+                  <option value="REJECTED">Ditolak ({metrics.rejectedWithdrawalsCount})</option>
                 </select>
 
                 <div className="font-mono text-xs px-3 py-1 bg-amber-50 rounded-xl border border-amber-200">
@@ -2854,13 +2872,26 @@ export default function AdminMasterDashboard() {
                             </td>
                             <td className="py-3.5 px-4 text-right">
                               {isCompleted ? (
-                                <span className="text-[11px] text-emerald-700 font-mono font-bold">
-                                  Tuntas ✓
-                                </span>
+                                <div className="flex items-center justify-end gap-2">
+                                  <span className="text-[11px] text-emerald-700 font-mono font-bold bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                                    Tuntas ✓
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRejectWithdrawal(w)}
+                                    className="text-[10px] text-neutral-400 hover:text-rose-600 underline cursor-pointer transition-colors"
+                                    title="Koreksi / batalkan transfer dan kembalikan saldo ke barber"
+                                  >
+                                    Batalkan
+                                  </button>
+                                </div>
                               ) : w.status === 'Ditolak / Dibatalkan' ? (
-                                <span className="text-[11px] text-rose-600 font-mono italic">
-                                  {w.rejectReason || 'Dibatalkan'}
-                                </span>
+                                <div className="text-right space-y-0.5">
+                                  <span className="text-[11px] text-rose-600 font-medium italic block" title={w.rejectReason}>
+                                    Alasan: {w.rejectReason || 'Data rekening tidak sesuai'}
+                                  </span>
+                                  <span className="text-[9.5px] text-neutral-400 font-mono block">Saldo dikembalikan</span>
+                                </div>
                               ) : (
                                 <div className="flex items-center justify-end gap-1.5">
                                   <button
@@ -2868,7 +2899,7 @@ export default function AdminMasterDashboard() {
                                     onClick={() => handleMarkWithdrawalCompleted(w)}
                                     className="px-3 py-1.5 bg-[#285844] hover:bg-[#1E4334] text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors shadow-2xs"
                                   >
-                                    Transfer Selesai
+                                    Tandai Lunas
                                   </button>
                                   <button
                                     type="button"
