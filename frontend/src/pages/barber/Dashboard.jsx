@@ -3495,62 +3495,269 @@ export default function BarberDashboard() {
           {activeTab === 'design' && (
             <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
               
-              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-4">
+              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-6">
                 <div>
-                  <h2 className="font-display font-bold text-base text-[#171717]">Pilihan Tema Visual Profil</h2>
-                  <p className="text-xs text-neutral-500">
-                    Sesuaikan warna bio-link kamu agar mencerminkan karakter barbershop atau gaya cukurmu.
+                  <div className="flex items-center gap-2">
+                    <Palette className="w-5 h-5 text-[#285844]" />
+                    <h2 className="font-display font-bold text-base text-[#171717]">Pilihan Tema Visual Profil</h2>
+                  </div>
+                  <p className="text-xs text-neutral-500 mt-1">
+                    Pilih tema favoritmu untuk pengalaman yang lebih personal! Perubahan langsung tampil seketika di ponsel pratinjau.
                   </p>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
-                  {[
-                    {
-                      id: 'forest',
-                      title: 'E Cukur Forest (Default)',
-                      desc: 'Warna resmi E Cukur. Nuansa natural, sejuk, dan maskulin.',
-                      preview: 'bg-[#F7F6F2] border-[#285844]',
-                      dot: 'bg-[#285844]'
-                    },
-                    {
-                      id: 'charcoal',
-                      title: 'Studio Dark Charcoal',
-                      desc: 'Gelap premium, modern lounge, dan kontras tajam.',
-                      preview: 'bg-[#171717] text-white border-neutral-700',
-                      dot: 'bg-[#10B981]'
-                    },
-                    {
-                      id: 'asgar',
-                      title: 'Asgar Heritage Linen',
-                      desc: 'Hangat, ramah, tradisional turun-temurun khas pangkas Asgar.',
-                      preview: 'bg-[#FAF6EE] border-[#B85D3B]',
-                      dot: 'bg-[#B85D3B]'
-                    },
-                    {
-                      id: 'monochrome',
-                      title: 'Clean Minimal Monochrome',
-                      desc: 'Hitam-putih tegas, bersih, dan modern tanpa distraksi.',
-                      preview: 'bg-white border-black',
-                      dot: 'bg-black'
-                    }
-                  ].map((thm) => (
-                    <button
-                      key={thm.id}
-                      type="button"
-                      onClick={() => handleProfileFieldChange('theme', thm.id)}
-                      className={`p-4 rounded-2xl border-2 text-left transition-all relative ${
-                        (barber.theme || 'forest') === thm.id 
-                          ? 'border-[#285844] shadow-md ring-2 ring-[#285844]/20' 
-                          : 'border-neutral-200 hover:border-neutral-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`w-3.5 h-3.5 rounded-full ${thm.dot}`} />
-                        <h4 className="font-display font-bold text-sm text-[#171717]">{thm.title}</h4>
-                      </div>
-                      <p className="text-xs text-neutral-500 leading-relaxed">{thm.desc}</p>
-                    </button>
-                  ))}
+                {/* ─── GROUP 1: 5 TEMA UTAMA E-CUKUR (SESUAI GAMBAR 1) ─── */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#285844]" />
+                      5 Tema Tampilan Profil (Koleksi Resmi E-Cukur)
+                    </span>
+                    <span className="text-[10.5px] font-semibold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      Rekomendasi Utama
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {[
+                      {
+                        id: 'light',
+                        title: 'Light Mode',
+                        tagline: 'Bersih, modern, dan mudah dibaca',
+                        desc: 'Tampilan putih bersih minimalis dengan kontras optimal dan aksen hijau signature.',
+                        previewBg: 'bg-[#F8FAFC]',
+                        cardBg: 'bg-white',
+                        accentDot: 'bg-[#285844]',
+                        accentText: 'Emerald Green',
+                        isDark: false,
+                        aliases: ['forest', 'light']
+                      },
+                      {
+                        id: 'dark',
+                        title: 'Dark Mode',
+                        tagline: 'Elegan & nyaman di mata',
+                        desc: 'Nuansa gelap premium modern lounge dengan tombol hijau mint yang menyala kontras.',
+                        previewBg: 'bg-[#0f1115]',
+                        cardBg: 'bg-[#181a1f]',
+                        accentDot: 'bg-[#10B981]',
+                        accentText: 'Mint Glow',
+                        isDark: true,
+                        aliases: ['charcoal', 'dark']
+                      },
+                      {
+                        id: 'pink',
+                        title: 'Pink Theme',
+                        tagline: 'Feminin & modern untuk tampilan fresh',
+                        desc: 'Nuansa blush pastel segar dipadu aksen ruby berry yang ramah dan menawan.',
+                        previewBg: 'bg-[#FDF2F4]',
+                        cardBg: 'bg-[#FFF8F9]',
+                        accentDot: 'bg-[#BE185D]',
+                        accentText: 'Ruby Berry',
+                        isDark: false,
+                        aliases: ['pink']
+                      },
+                      {
+                        id: 'green',
+                        title: 'Green Theme',
+                        tagline: 'Natural & premium dengan kesan elegan',
+                        desc: 'Nuansa olive forest dan deep moss night yang maskulin, natural, dan berkarakter.',
+                        previewBg: 'bg-[#121E17]',
+                        cardBg: 'bg-[#18271E]',
+                        accentDot: 'bg-[#84A98C]',
+                        accentText: 'Sage Forest',
+                        isDark: true,
+                        aliases: ['green']
+                      },
+                      {
+                        id: 'premium',
+                        title: 'Premium Theme',
+                        tagline: 'Mewah & berkelas untuk kesan profesional',
+                        desc: 'Obsidian black dipadu gradasi emas champagne eksklusif untuk barbershop papan atas.',
+                        previewBg: 'bg-[#0B0B0C]',
+                        cardBg: 'bg-[#131315]',
+                        accentDot: 'bg-gradient-to-r from-amber-400 to-amber-600',
+                        accentText: 'Gold Metallic',
+                        isDark: true,
+                        aliases: ['premium']
+                      }
+                    ].map((thm) => {
+                      const curTheme = (barber.theme || 'light').toLowerCase();
+                      const isSelected = curTheme === thm.id || thm.aliases.includes(curTheme);
+
+                      return (
+                        <button
+                          key={thm.id}
+                          type="button"
+                          onClick={() => handleProfileFieldChange('theme', thm.id)}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition-all relative overflow-hidden group flex flex-col justify-between cursor-pointer ${
+                            isSelected 
+                              ? 'border-[#285844] shadow-md ring-2 ring-[#285844]/20 bg-emerald-50/20' 
+                              : 'border-neutral-200 hover:border-neutral-300 bg-white'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-full border border-neutral-300/60 flex items-center justify-center p-0.5 shadow-2xs">
+                                  <span className={`w-full h-full rounded-full ${thm.accentDot}`} />
+                                </div>
+                                <h4 className="font-display font-bold text-sm text-[#171717]">{thm.title}</h4>
+                              </div>
+                              {isSelected && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#285844] text-white shadow-2xs">
+                                  <Check className="w-2.5 h-2.5" />
+                                  <span>Aktif</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="text-xs font-semibold text-neutral-800 mb-1 leading-snug">{thm.tagline}</p>
+                            <p className="text-[11px] text-neutral-500 leading-relaxed mb-3">{thm.desc}</p>
+                          </div>
+
+                          {/* Mini Visual Palette Swatch */}
+                          <div className={`w-full p-2 rounded-xl border border-neutral-200/60 ${thm.previewBg} flex items-center justify-between`}>
+                            <div className="flex items-center gap-1.5">
+                              <div className={`w-4 h-4 rounded-md ${thm.cardBg} border border-neutral-300/50 shadow-3xs`} />
+                              <span className={`text-[10px] font-mono font-medium ${thm.isDark ? 'text-neutral-300' : 'text-neutral-600'}`}>
+                                {thm.accentText}
+                              </span>
+                            </div>
+                            <div className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${thm.accentDot} ${thm.isDark ? 'text-neutral-950' : 'text-white'}`}>
+                              Tombol
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* ─── GROUP 2: 5 TEMA EDITORIAL & STUDIO .BARB (SESUAI GAMBAR 2) ─── */}
+                <div className="space-y-3 pt-4 border-t border-neutral-100">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-mono font-bold uppercase tracking-wider text-neutral-700 flex items-center gap-1.5">
+                      <Scissors className="w-3.5 h-3.5 text-neutral-600" />
+                      5 Tema Eksklusif .barb (Gaya Studio & Editorial)
+                    </span>
+                    <span className="text-[10.5px] font-semibold text-neutral-700 bg-neutral-100 px-2.5 py-0.5 rounded-full border border-neutral-200">
+                      Gaya Estetik
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                    {[
+                      {
+                        id: 'editorial',
+                        title: 'Editorial Theme',
+                        tagline: 'Elegan & berkelas dengan sentuhan klasik',
+                        desc: 'Tipografi majalah mode dengan warm linen parchment dan kontras arang tegas.',
+                        previewBg: 'bg-[#F5EFEB]',
+                        cardBg: 'bg-[#FAF7F2]',
+                        accentDot: 'bg-[#24201D]',
+                        accentText: 'Espresso',
+                        isDark: false,
+                        aliases: ['editorial', 'monochrome']
+                      },
+                      {
+                        id: 'clay',
+                        title: 'Warm Clay Theme',
+                        tagline: 'Hangat, nyaman, dan penuh karakter',
+                        desc: 'Nuansa terakota hangat dan krem tanah liat yang estetik serta bersahabat.',
+                        previewBg: 'bg-[#F8EFE9]',
+                        cardBg: 'bg-[#FFF9F5]',
+                        accentDot: 'bg-[#C86D51]',
+                        accentText: 'Terracotta',
+                        isDark: false,
+                        aliases: ['clay', 'asgar']
+                      },
+                      {
+                        id: 'modern_blue',
+                        title: 'Modern Blue Theme',
+                        tagline: 'Profesional, modern, dan minimalis',
+                        desc: 'Nuansa cool navy slate dan baja dingin yang rapi, modern, dan terpercaya.',
+                        previewBg: 'bg-[#EFF4F9]',
+                        cardBg: 'bg-white',
+                        accentDot: 'bg-[#1E293B]',
+                        accentText: 'Navy Slate',
+                        isDark: false,
+                        aliases: ['modern_blue']
+                      },
+                      {
+                        id: 'vintage',
+                        title: 'Vintage Theme',
+                        tagline: 'Klasik, autentik, dan timeless',
+                        desc: 'Sentuhan nostalgia barbershop era 70-an dengan zaitun pudar dan kertas tua.',
+                        previewBg: 'bg-[#EBE6DB]',
+                        cardBg: 'bg-[#F5F2EB]',
+                        accentDot: 'bg-[#3E4F3E]',
+                        accentText: 'Vintage Moss',
+                        isDark: false,
+                        aliases: ['vintage']
+                      },
+                      {
+                        id: 'sporty',
+                        title: 'Sporty Theme',
+                        tagline: 'Dinamis, modern, dan penuh energi',
+                        desc: 'Kontras ekstrem cyber black dengan aksen hijau neon lime berkecepatan tinggi.',
+                        previewBg: 'bg-[#080B12]',
+                        cardBg: 'bg-[#101624]',
+                        accentDot: 'bg-[#84CC16]',
+                        accentText: 'Neon Lime',
+                        isDark: true,
+                        aliases: ['sporty']
+                      }
+                    ].map((thm) => {
+                      const curTheme = (barber.theme || 'light').toLowerCase();
+                      const isSelected = curTheme === thm.id || thm.aliases.includes(curTheme);
+
+                      return (
+                        <button
+                          key={thm.id}
+                          type="button"
+                          onClick={() => handleProfileFieldChange('theme', thm.id)}
+                          className={`p-3.5 rounded-2xl border-2 text-left transition-all relative overflow-hidden group flex flex-col justify-between cursor-pointer ${
+                            isSelected 
+                              ? 'border-[#285844] shadow-md ring-2 ring-[#285844]/20 bg-emerald-50/20' 
+                              : 'border-neutral-200 hover:border-neutral-300 bg-white'
+                          }`}
+                        >
+                          <div>
+                            <div className="flex items-center justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 rounded-full border border-neutral-300/60 flex items-center justify-center p-0.5 shadow-2xs">
+                                  <span className={`w-full h-full rounded-full ${thm.accentDot}`} />
+                                </div>
+                                <h4 className="font-display font-bold text-sm text-[#171717]">{thm.title}</h4>
+                              </div>
+                              {isSelected && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#285844] text-white shadow-2xs">
+                                  <Check className="w-2.5 h-2.5" />
+                                  <span>Aktif</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <p className="text-xs font-semibold text-neutral-800 mb-1 leading-snug">{thm.tagline}</p>
+                            <p className="text-[11px] text-neutral-500 leading-relaxed mb-3">{thm.desc}</p>
+                          </div>
+
+                          {/* Mini Visual Palette Swatch */}
+                          <div className={`w-full p-2 rounded-xl border border-neutral-200/60 ${thm.previewBg} flex items-center justify-between`}>
+                            <div className="flex items-center gap-1.5">
+                              <div className={`w-4 h-4 rounded-md ${thm.cardBg} border border-neutral-300/50 shadow-3xs`} />
+                              <span className={`text-[10px] font-mono font-medium ${thm.isDark ? 'text-neutral-300' : 'text-neutral-600'}`}>
+                                {thm.accentText}
+                              </span>
+                            </div>
+                            <div className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${thm.accentDot} ${thm.isDark ? 'text-neutral-950' : 'text-white'}`}>
+                              Tombol
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
 

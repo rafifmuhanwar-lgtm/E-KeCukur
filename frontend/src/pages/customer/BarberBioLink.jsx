@@ -905,65 +905,426 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
   const isAvailable = barber.status === 'AVAILABLE';
 
-  // Theme Styling Helper
+  // Theme Styling Helper (5 Official E-Cukur Themes + 5 .barb Editorial Themes)
   const getThemeStyles = (themeKey) => {
-    switch (themeKey) {
-      case 'charcoal':
+    let key = (themeKey || 'light').toLowerCase();
+    // Legacy theme aliases mapping
+    if (key === 'forest') key = 'light';
+    if (key === 'charcoal') key = 'dark';
+    if (key === 'asgar') key = 'clay';
+    if (key === 'monochrome') key = 'editorial';
+
+    switch (key) {
+      case 'dark':
         return {
-          pageBg: 'bg-[#171717]',
+          id: 'dark',
+          name: 'Dark Mode',
+          isDark: true,
+          pageBg: 'bg-[#0f1115]',
+          cardBg: 'bg-[#181a1f]',
+          cardBorder: 'border-[#262a33]',
           textPrimary: 'text-white',
           textSecondary: 'text-neutral-400',
-          cardBg: 'bg-[#222222]',
-          cardBorder: 'border-neutral-800',
+          pillBg: 'bg-[#22252c] hover:bg-[#2c3038]',
+          pillBorder: 'border-[#2e333d]',
+          pillText: 'text-neutral-200',
+          pillIcon: 'text-emerald-400',
+          navBg: 'bg-[#1f2229]',
+          navBorder: 'border-[#2b2f38]',
+          tabActiveBg: 'bg-[#10B981] text-neutral-950 font-bold',
+          tabActiveIcon: 'text-neutral-950',
+          tabInactiveText: 'text-neutral-400 hover:text-white',
+          tabInactiveIcon: 'text-neutral-400',
+          serviceCardBg: 'bg-[#1f2229]',
+          serviceCardHover: 'hover:border-[#10B981]/70',
+          servicePrice: 'text-emerald-400',
+          serviceArrowBg: 'bg-[#282d36] group-hover:bg-[#10B981]',
+          serviceArrowText: 'text-neutral-300 group-hover:text-neutral-950',
           accentBg: 'bg-[#10B981] hover:bg-[#059669]',
-          accentText: 'text-white',
-          badgeBg: 'bg-neutral-800',
-          badgeText: 'text-emerald-400',
-          tabActiveBg: 'bg-[#10B981] text-white',
-          tabInactiveText: 'text-neutral-400'
+          accentText: 'text-neutral-950 font-bold',
+          outlineBtn: 'bg-[#22252c] hover:bg-[#2a2e36] text-white border border-[#2e333d]',
+          badgeBg: 'bg-emerald-950/60',
+          badgeText: 'text-emerald-300 border border-emerald-500/30',
+          logoTheme: 'light',
+          footerBorder: 'border-white/5',
+          footerBadgeBg: 'bg-[#22252c]',
+          footerBadgeBorder: 'border-[#2e333d]',
+          footerBadgeText: 'text-neutral-400',
+          proBadge: 'bg-emerald-950/80 text-emerald-300 border border-emerald-500/30',
+          proIcon: 'text-emerald-400',
+          studioBadge: 'bg-amber-950/80 text-amber-300 border border-amber-500/30',
+          studioIcon: 'text-amber-400',
         };
-      case 'asgar':
+
+      case 'pink':
         return {
-          pageBg: 'bg-[#FAF6EE]',
-          textPrimary: 'text-[#2C221E]',
-          textSecondary: 'text-neutral-600',
-          cardBg: 'bg-white',
-          cardBorder: 'border-[#EADCC9]',
-          accentBg: 'bg-[#B85D3B] hover:bg-[#9E4D30]',
-          accentText: 'text-white',
-          badgeBg: 'bg-[#F3E6D5]',
-          badgeText: 'text-[#8E4327]',
-          tabActiveBg: 'bg-[#B85D3B] text-white',
-          tabInactiveText: 'text-neutral-600'
+          id: 'pink',
+          name: 'Pink Theme',
+          isDark: false,
+          pageBg: 'bg-[#FDF2F4]',
+          cardBg: 'bg-[#FFF8F9]',
+          cardBorder: 'border-[#FBCFE8]/80',
+          textPrimary: 'text-[#4C0519]',
+          textSecondary: 'text-[#9F1239]/75',
+          pillBg: 'bg-[#FCE7EB] hover:bg-[#FBCFE8]',
+          pillBorder: 'border-[#F472B6]/40',
+          pillText: 'text-[#881337]',
+          pillIcon: 'text-[#BE185D]',
+          navBg: 'bg-[#FCE7EB]/90',
+          navBorder: 'border-[#FBCFE8]',
+          tabActiveBg: 'bg-[#BE185D] text-white font-bold',
+          tabActiveIcon: 'text-white',
+          tabInactiveText: 'text-[#9F1239]/70 hover:text-[#881337]',
+          tabInactiveIcon: 'text-[#9F1239]/60',
+          serviceCardBg: 'bg-white',
+          serviceCardHover: 'hover:border-[#BE185D]/70',
+          servicePrice: 'text-[#BE185D]',
+          serviceArrowBg: 'bg-[#FCE7EB] group-hover:bg-[#BE185D]',
+          serviceArrowText: 'text-[#9F1239] group-hover:text-white',
+          accentBg: 'bg-[#BE185D] hover:bg-[#9D174D]',
+          accentText: 'text-white font-bold',
+          outlineBtn: 'bg-white hover:bg-rose-50/80 text-[#881337] border border-[#FBCFE8] shadow-xs',
+          badgeBg: 'bg-[#FCE7EB]',
+          badgeText: 'text-[#9D174D] border border-[#F472B6]/30',
+          logoTheme: 'dark',
+          footerBorder: 'border-rose-900/5',
+          footerBadgeBg: 'bg-[#FCE7EB]',
+          footerBadgeBorder: 'border-[#FBCFE8]',
+          footerBadgeText: 'text-[#9F1239]',
+          proBadge: 'bg-[#FCE7EB] text-[#9D174D] border border-[#F472B6]/40',
+          proIcon: 'text-[#BE185D]',
+          studioBadge: 'bg-amber-100 text-amber-900 border border-amber-300',
+          studioIcon: 'text-amber-700',
         };
-      case 'monochrome':
+
+      case 'green':
         return {
-          pageBg: 'bg-white',
-          textPrimary: 'text-black',
-          textSecondary: 'text-neutral-500',
-          cardBg: 'bg-neutral-50',
-          cardBorder: 'border-neutral-200',
-          accentBg: 'bg-black hover:bg-neutral-800',
-          accentText: 'text-white',
-          badgeBg: 'bg-neutral-200',
-          badgeText: 'text-black',
-          tabActiveBg: 'bg-black text-white',
-          tabInactiveText: 'text-neutral-500'
+          id: 'green',
+          name: 'Green Theme',
+          isDark: true,
+          pageBg: 'bg-[#121E17]',
+          cardBg: 'bg-[#18271E]',
+          cardBorder: 'border-[#273F31]',
+          textPrimary: 'text-[#F0FDF4]',
+          textSecondary: 'text-[#9EB9AA]',
+          pillBg: 'bg-[#22352A] hover:bg-[#2B4235]',
+          pillBorder: 'border-[#314E3D]',
+          pillText: 'text-[#D4E8DC]',
+          pillIcon: 'text-[#84A98C]',
+          navBg: 'bg-[#203126]',
+          navBorder: 'border-[#2D4536]',
+          tabActiveBg: 'bg-[#84A98C] text-[#121E17] font-bold',
+          tabActiveIcon: 'text-[#121E17]',
+          tabInactiveText: 'text-[#9EB9AA] hover:text-white',
+          tabInactiveIcon: 'text-[#9EB9AA]',
+          serviceCardBg: 'bg-[#1D2E24]',
+          serviceCardHover: 'hover:border-[#84A98C]',
+          servicePrice: 'text-[#84A98C]',
+          serviceArrowBg: 'bg-[#263C2E] group-hover:bg-[#84A98C]',
+          serviceArrowText: 'text-[#A3C9A8] group-hover:text-[#121E17]',
+          accentBg: 'bg-[#84A98C] hover:bg-[#72977A]',
+          accentText: 'text-[#121E17] font-bold',
+          outlineBtn: 'bg-[#22352A] hover:bg-[#2B4235] text-[#F0FDF4] border border-[#314E3D]',
+          badgeBg: 'bg-[#263D2F]',
+          badgeText: 'text-[#A3C9A8] border border-[#3C5D48]',
+          logoTheme: 'light',
+          footerBorder: 'border-white/5',
+          footerBadgeBg: 'bg-[#22352A]',
+          footerBadgeBorder: 'border-[#314E3D]',
+          footerBadgeText: 'text-[#9EB9AA]',
+          proBadge: 'bg-[#263D2F] text-[#A3C9A8] border border-[#3C5D48]',
+          proIcon: 'text-[#84A98C]',
+          studioBadge: 'bg-amber-950/80 text-amber-300 border border-amber-500/30',
+          studioIcon: 'text-amber-400',
         };
-      case 'forest':
+
+      case 'premium':
+        return {
+          id: 'premium',
+          name: 'Premium Theme',
+          isDark: true,
+          pageBg: 'bg-[#0B0B0C]',
+          cardBg: 'bg-[#131315]',
+          cardBorder: 'border-amber-500/30',
+          textPrimary: 'text-white',
+          textSecondary: 'text-neutral-400',
+          pillBg: 'bg-[#1D1B16] hover:bg-[#26231C]',
+          pillBorder: 'border-amber-500/30',
+          pillText: 'text-amber-200',
+          pillIcon: 'text-amber-400',
+          navBg: 'bg-[#191814]',
+          navBorder: 'border-amber-500/25',
+          tabActiveBg: 'bg-gradient-to-r from-[#F59E0B] via-[#D97706] to-[#B45309] text-neutral-950 font-bold',
+          tabActiveIcon: 'text-neutral-950',
+          tabInactiveText: 'text-neutral-400 hover:text-amber-300',
+          tabInactiveIcon: 'text-neutral-400',
+          serviceCardBg: 'bg-[#18181A]',
+          serviceCardHover: 'hover:border-amber-500/60',
+          servicePrice: 'text-amber-400',
+          serviceArrowBg: 'bg-[#23221E] group-hover:bg-[#F59E0B]',
+          serviceArrowText: 'text-amber-300 group-hover:text-neutral-950',
+          accentBg: 'bg-gradient-to-r from-[#F59E0B] to-[#D97706] hover:opacity-95',
+          accentText: 'text-neutral-950 font-bold',
+          outlineBtn: 'bg-[#1D1B16] hover:bg-[#26231C] text-amber-200 border border-amber-500/35 shadow-xs',
+          badgeBg: 'bg-amber-950/60',
+          badgeText: 'text-amber-300 border border-amber-500/30',
+          logoTheme: 'light',
+          footerBorder: 'border-amber-500/15',
+          footerBadgeBg: 'bg-[#1D1B16]',
+          footerBadgeBorder: 'border-amber-500/30',
+          footerBadgeText: 'text-amber-200',
+          proBadge: 'bg-amber-950/60 text-amber-300 border border-amber-500/40',
+          proIcon: 'text-amber-400',
+          studioBadge: 'bg-gradient-to-r from-amber-500 to-amber-600 text-neutral-950 font-bold shadow-xs',
+          studioIcon: 'text-neutral-950',
+          hasGoldWave: true,
+        };
+
+      case 'editorial':
+        return {
+          id: 'editorial',
+          name: 'Editorial Theme',
+          isDark: false,
+          pageBg: 'bg-[#F5EFEB]',
+          cardBg: 'bg-[#FAF7F2]',
+          cardBorder: 'border-[#E2D8CD]',
+          textPrimary: 'text-[#1E1A17]',
+          textSecondary: 'text-[#6A625A]',
+          pillBg: 'bg-[#EAE2D8] hover:bg-[#DFD6CB]',
+          pillBorder: 'border-[#D5C9BC]',
+          pillText: 'text-[#2D2621]',
+          pillIcon: 'text-[#1E1A17]',
+          navBg: 'bg-[#EAE2D8]/80',
+          navBorder: 'border-[#D8CCC0]',
+          tabActiveBg: 'bg-[#24201D] text-[#FAF7F2] font-bold',
+          tabActiveIcon: 'text-[#FAF7F2]',
+          tabInactiveText: 'text-[#6A625A] hover:text-[#1E1A17]',
+          tabInactiveIcon: 'text-[#6A625A]',
+          serviceCardBg: 'bg-[#FAF7F2]',
+          serviceCardHover: 'hover:border-[#1E1A17]',
+          servicePrice: 'text-[#1E1A17]',
+          serviceArrowBg: 'bg-[#EAE2D8] group-hover:bg-[#24201D]',
+          serviceArrowText: 'text-[#2D2621] group-hover:text-white',
+          accentBg: 'bg-[#24201D] hover:bg-[#38322E]',
+          accentText: 'text-[#FAF7F2] font-bold',
+          outlineBtn: 'bg-[#FAF7F2] hover:bg-[#EAE2D8] text-[#1E1A17] border border-[#D5C9BC]',
+          badgeBg: 'bg-[#EAE2D8]',
+          badgeText: 'text-[#2D2621] border border-[#D5C9BC]',
+          logoTheme: 'dark',
+          footerBorder: 'border-black/5',
+          footerBadgeBg: 'bg-[#EAE2D8]',
+          footerBadgeBorder: 'border-[#D5C9BC]',
+          footerBadgeText: 'text-[#6A625A]',
+          proBadge: 'bg-[#EAE2D8] text-[#2D2621] border border-[#D5C9BC]',
+          proIcon: 'text-[#1E1A17]',
+          studioBadge: 'bg-amber-100 text-amber-900 border border-amber-300',
+          studioIcon: 'text-amber-800',
+        };
+
+      case 'clay':
+        return {
+          id: 'clay',
+          name: 'Warm Clay Theme',
+          isDark: false,
+          pageBg: 'bg-[#F8EFE9]',
+          cardBg: 'bg-[#FFF9F5]',
+          cardBorder: 'border-[#ECCEC2]',
+          textPrimary: 'text-[#2E1810]',
+          textSecondary: 'text-[#7D5344]',
+          pillBg: 'bg-[#F3DFD5] hover:bg-[#EACFC1]',
+          pillBorder: 'border-[#E2BAA9]',
+          pillText: 'text-[#482216]',
+          pillIcon: 'text-[#C86D51]',
+          navBg: 'bg-[#F3DFD5]/80',
+          navBorder: 'border-[#E2BAA9]',
+          tabActiveBg: 'bg-[#C86D51] text-white font-bold',
+          tabActiveIcon: 'text-white',
+          tabInactiveText: 'text-[#7D5344] hover:text-[#2E1810]',
+          tabInactiveIcon: 'text-[#7D5344]',
+          serviceCardBg: 'bg-white',
+          serviceCardHover: 'hover:border-[#C86D51]',
+          servicePrice: 'text-[#C86D51]',
+          serviceArrowBg: 'bg-[#F3DFD5] group-hover:bg-[#C86D51]',
+          serviceArrowText: 'text-[#7D5344] group-hover:text-white',
+          accentBg: 'bg-[#C86D51] hover:bg-[#B3593D]',
+          accentText: 'text-white font-bold',
+          outlineBtn: 'bg-white hover:bg-[#F8EFE9] text-[#482216] border border-[#ECCEC2]',
+          badgeBg: 'bg-[#F3DFD5]',
+          badgeText: 'text-[#7D5344] border border-[#E2BAA9]',
+          logoTheme: 'dark',
+          footerBorder: 'border-[#C86D51]/10',
+          footerBadgeBg: 'bg-[#F3DFD5]',
+          footerBadgeBorder: 'border-[#E2BAA9]',
+          footerBadgeText: 'text-[#7D5344]',
+          proBadge: 'bg-[#F3DFD5] text-[#7D5344] border border-[#E2BAA9]',
+          proIcon: 'text-[#C86D51]',
+          studioBadge: 'bg-amber-100 text-amber-900 border border-amber-300',
+          studioIcon: 'text-amber-800',
+        };
+
+      case 'modern_blue':
+        return {
+          id: 'modern_blue',
+          name: 'Modern Blue Theme',
+          isDark: false,
+          pageBg: 'bg-[#EFF4F9]',
+          cardBg: 'bg-[#FFFFFF]',
+          cardBorder: 'border-[#CFDEED]',
+          textPrimary: 'text-[#0F172A]',
+          textSecondary: 'text-[#475569]',
+          pillBg: 'bg-[#E2EDF8] hover:bg-[#D4E4F3]',
+          pillBorder: 'border-[#C5D8EB]',
+          pillText: 'text-[#1E293B]',
+          pillIcon: 'text-[#0284C7]',
+          navBg: 'bg-[#E2EDF8]/80',
+          navBorder: 'border-[#C5D8EB]',
+          tabActiveBg: 'bg-[#1E293B] text-white font-bold',
+          tabActiveIcon: 'text-white',
+          tabInactiveText: 'text-[#475569] hover:text-[#0F172A]',
+          tabInactiveIcon: 'text-[#475569]',
+          serviceCardBg: 'bg-white',
+          serviceCardHover: 'hover:border-[#0284C7]',
+          servicePrice: 'text-[#0284C7]',
+          serviceArrowBg: 'bg-[#E2EDF8] group-hover:bg-[#1E293B]',
+          serviceArrowText: 'text-[#475569] group-hover:text-white',
+          accentBg: 'bg-[#1E293B] hover:bg-[#0F172A]',
+          accentText: 'text-white font-bold',
+          outlineBtn: 'bg-white hover:bg-[#EFF4F9] text-[#1E293B] border border-[#CFDEED]',
+          badgeBg: 'bg-[#E2EDF8]',
+          badgeText: 'text-[#0369A1] border border-[#BAE6FD]',
+          logoTheme: 'dark',
+          footerBorder: 'border-slate-900/10',
+          footerBadgeBg: 'bg-[#E2EDF8]',
+          footerBadgeBorder: 'border-[#C5D8EB]',
+          footerBadgeText: 'text-[#475569]',
+          proBadge: 'bg-[#E2EDF8] text-[#0369A1] border border-[#BAE6FD]',
+          proIcon: 'text-[#0284C7]',
+          studioBadge: 'bg-amber-100 text-amber-900 border border-amber-300',
+          studioIcon: 'text-amber-800',
+        };
+
+      case 'vintage':
+        return {
+          id: 'vintage',
+          name: 'Vintage Theme',
+          isDark: false,
+          pageBg: 'bg-[#EBE6DB]',
+          cardBg: 'bg-[#F5F2EB]',
+          cardBorder: 'border-[#D9D1C1]',
+          textPrimary: 'text-[#202720]',
+          textSecondary: 'text-[#566358]',
+          pillBg: 'bg-[#DFD8C8] hover:bg-[#D5CCB9]',
+          pillBorder: 'border-[#C8BEA7]',
+          pillText: 'text-[#2E3A2F]',
+          pillIcon: 'text-[#3E4F3E]',
+          navBg: 'bg-[#DFD8C8]/80',
+          navBorder: 'border-[#C8BEA7]',
+          tabActiveBg: 'bg-[#3E4F3E] text-[#F5F2EB] font-bold',
+          tabActiveIcon: 'text-[#F5F2EB]',
+          tabInactiveText: 'text-[#566358] hover:text-[#202720]',
+          tabInactiveIcon: 'text-[#566358]',
+          serviceCardBg: 'bg-[#FAF8F3]',
+          serviceCardHover: 'hover:border-[#3E4F3E]',
+          servicePrice: 'text-[#3E4F3E]',
+          serviceArrowBg: 'bg-[#DFD8C8] group-hover:bg-[#3E4F3E]',
+          serviceArrowText: 'text-[#566358] group-hover:text-white',
+          accentBg: 'bg-[#3E4F3E] hover:bg-[#2E3D2E]',
+          accentText: 'text-[#F5F2EB] font-bold',
+          outlineBtn: 'bg-[#FAF8F3] hover:bg-[#DFD8C8] text-[#2E3A2F] border border-[#C8BEA7]',
+          badgeBg: 'bg-[#DFD8C8]',
+          badgeText: 'text-[#3E4F3E] border border-[#C8BEA7]',
+          logoTheme: 'dark',
+          footerBorder: 'border-[#3E4F3E]/10',
+          footerBadgeBg: 'bg-[#DFD8C8]',
+          footerBadgeBorder: 'border-[#C8BEA7]',
+          footerBadgeText: 'text-[#566358]',
+          proBadge: 'bg-[#DFD8C8] text-[#3E4F3E] border border-[#C8BEA7]',
+          proIcon: 'text-[#3E4F3E]',
+          studioBadge: 'bg-amber-100 text-amber-900 border border-amber-300',
+          studioIcon: 'text-amber-800',
+        };
+
+      case 'sporty':
+        return {
+          id: 'sporty',
+          name: 'Sporty Theme',
+          isDark: true,
+          pageBg: 'bg-[#080B12]',
+          cardBg: 'bg-[#101624]',
+          cardBorder: 'border-[#1E293B]',
+          textPrimary: 'text-white',
+          textSecondary: 'text-neutral-400',
+          pillBg: 'bg-[#182033] hover:bg-[#202B44]',
+          pillBorder: 'border-[#283552]',
+          pillText: 'text-neutral-200',
+          pillIcon: 'text-[#A3E635]',
+          navBg: 'bg-[#151D2E]',
+          navBorder: 'border-[#222E47]',
+          tabActiveBg: 'bg-[#84CC16] text-black font-extrabold',
+          tabActiveIcon: 'text-black',
+          tabInactiveText: 'text-neutral-400 hover:text-[#A3E635]',
+          tabInactiveIcon: 'text-neutral-400',
+          serviceCardBg: 'bg-[#141C2C]',
+          serviceCardHover: 'hover:border-[#84CC16]',
+          servicePrice: 'text-[#A3E635]',
+          serviceArrowBg: 'bg-[#1C273D] group-hover:bg-[#84CC16]',
+          serviceArrowText: 'text-neutral-300 group-hover:text-black',
+          accentBg: 'bg-[#84CC16] hover:bg-[#65A30D]',
+          accentText: 'text-black font-extrabold',
+          outlineBtn: 'bg-[#182033] hover:bg-[#202B44] text-white border border-[#283552]',
+          badgeBg: 'bg-lime-950/60',
+          badgeText: 'text-lime-400 border border-lime-500/30',
+          logoTheme: 'light',
+          footerBorder: 'border-white/5',
+          footerBadgeBg: 'bg-[#182033]',
+          footerBadgeBorder: 'border-[#283552]',
+          footerBadgeText: 'text-neutral-400',
+          proBadge: 'bg-lime-950/80 text-lime-400 border border-lime-500/40',
+          proIcon: 'text-lime-400',
+          studioBadge: 'bg-amber-950/80 text-amber-300 border border-amber-500/30',
+          studioIcon: 'text-amber-400',
+        };
+
+      case 'light':
       default:
         return {
-          pageBg: 'bg-[#F7F6F2]',
-          textPrimary: 'text-[#171717]',
-          textSecondary: 'text-neutral-600',
+          id: 'light',
+          name: 'Light Mode',
+          isDark: false,
+          pageBg: 'bg-[#F8FAFC]',
           cardBg: 'bg-white',
-          cardBorder: 'border-neutral-200',
+          cardBorder: 'border-slate-200',
+          textPrimary: 'text-slate-900',
+          textSecondary: 'text-slate-500',
+          pillBg: 'bg-slate-100 hover:bg-slate-200/80',
+          pillBorder: 'border-slate-200',
+          pillText: 'text-slate-700',
+          pillIcon: 'text-[#285844]',
+          navBg: 'bg-white',
+          navBorder: 'border-slate-200',
+          tabActiveBg: 'bg-[#285844] text-white font-bold',
+          tabActiveIcon: 'text-white',
+          tabInactiveText: 'text-slate-500 hover:text-slate-900',
+          tabInactiveIcon: 'text-slate-400',
+          serviceCardBg: 'bg-white',
+          serviceCardHover: 'hover:border-[#285844]',
+          servicePrice: 'text-[#285844]',
+          serviceArrowBg: 'bg-neutral-100 group-hover:bg-[#285844]',
+          serviceArrowText: 'text-neutral-500 group-hover:text-white',
           accentBg: 'bg-[#285844] hover:bg-[#1E4334]',
-          accentText: 'text-white',
+          accentText: 'text-white font-bold',
+          outlineBtn: 'bg-white hover:bg-slate-50 text-slate-800 border border-slate-200 shadow-xs',
           badgeBg: 'bg-[#D9E5DC]',
           badgeText: 'text-[#285844]',
-          tabActiveBg: 'bg-[#285844] text-white',
-          tabInactiveText: 'text-neutral-600'
+          logoTheme: 'dark',
+          footerBorder: 'border-black/5',
+          footerBadgeBg: 'bg-black/[0.04]',
+          footerBadgeBorder: 'border-black/[0.05]',
+          footerBadgeText: 'text-neutral-500',
+          proBadge: 'bg-[#D9E5DC]/80 text-[#1E4334] border border-[#285844]/20',
+          proIcon: 'text-[#285844]',
+          studioBadge: 'bg-amber-50 text-amber-900 border border-amber-200/80',
+          studioIcon: 'text-amber-600',
         };
     }
   };
@@ -1052,7 +1413,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               <div className="w-full pt-4 px-4 sm:pt-5 sm:px-5 flex items-center justify-between z-10">
                 {isPreview ? (
                   <div className="flex items-center gap-1.5">
-                    <Logo variant="compact" size="sm" className={barber.theme === 'charcoal' ? 'text-white' : 'text-[#171717]'} />
+                    <Logo variant="compact" size="sm" theme={theme.logoTheme} className={theme.textPrimary} />
                   </div>
                 ) : (
                   <Link 
@@ -1060,21 +1421,17 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
                     title="Ditenagai oleh E Cukur"
                   >
-                    <Logo variant="compact" size="sm" className={barber.theme === 'charcoal' ? 'text-white' : 'text-[#171717]'} />
+                    <Logo variant="compact" size="sm" theme={theme.logoTheme} className={theme.textPrimary} />
                   </Link>
                 )}
 
                 <button 
                   type="button"
                   onClick={handleShare}
-                  className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full ${
-                    barber.theme === 'charcoal' 
-                      ? 'bg-neutral-800 hover:bg-neutral-700 text-white border-neutral-700' 
-                      : 'bg-neutral-100 hover:bg-neutral-200 text-[#171717] border-neutral-200'
-                  } border text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-xs cursor-pointer`}
+                  className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-xs cursor-pointer`}
                   title="Bagikan Tautan Profil"
                 >
-                  <Share2 className="w-3.5 h-3.5 text-neutral-500" />
+                  <Share2 className={`w-3.5 h-3.5 ${theme.pillIcon}`} />
                   <span>Share</span>
                 </button>
               </div>
@@ -1118,7 +1475,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
             {/* Name with Verified Badge (Hanya untuk Capster Pro & Barber Pro) */}
             <div className="flex flex-col items-center justify-center mt-2.5 text-center">
-              <h1 className={`font-display font-black ${isPreview ? 'text-lg' : 'text-xl sm:text-2xl'} tracking-tight text-neutral-900 flex items-center justify-center gap-1.5`}>
+              <h1 className={`font-display font-black ${isPreview ? 'text-lg' : 'text-xl sm:text-2xl'} tracking-tight ${theme.textPrimary} flex items-center justify-center gap-1.5`}>
                 <span>{barber.name}</span>
                 {(barber?.plan === 'capster' || barber?.plan === 'barber') && (
                   <VerifiedBadge
@@ -1130,24 +1487,24 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
               {/* Clean Professional Meta Line: Handle (@username) & Subtle Pro Pill */}
               <div className="flex items-center justify-center gap-1.5 mt-1">
-                <span className={`font-sans font-medium ${isPreview ? 'text-[11px]' : 'text-xs sm:text-[13px]'} text-neutral-500 tracking-tight`}>
+                <span className={`font-sans font-medium ${isPreview ? 'text-[11px]' : 'text-xs sm:text-[13px]'} ${theme.textSecondary} tracking-tight`}>
                   {barber.handle ? barber.handle.replace(/\.ecukur$/, '') : `@${barber.slug || barber.id}`}
                 </span>
 
                 {barber?.plan === 'barber' ? (
                   <>
-                    <span className="text-neutral-300 text-[10px] select-none">•</span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-900 border border-amber-200/80 shadow-3xs" title="Official Studio Barbershop">
-                      <Crown className="w-2.5 h-2.5 text-amber-600 shrink-0" />
-                      <span>Studio Resmi</span>
+                    <span className={`${theme.isDark ? 'text-neutral-600' : 'text-neutral-300'} text-[10px] select-none`}>•</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${theme.studioBadge} shadow-3xs`} title="Official Studio Barbershop">
+                      <Crown className={`w-2.5 h-2.5 ${theme.studioIcon} shrink-0`} />
+                      <span>Official Studio</span>
                     </span>
                   </>
                 ) : barber?.plan === 'capster' ? (
                   <>
-                    <span className="text-neutral-300 text-[10px] select-none">•</span>
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#D9E5DC]/80 text-[#1E4334] border border-[#285844]/20 shadow-3xs" title="Capster Terverifikasi Pro">
-                      <Scissors className="w-2.5 h-2.5 text-[#285844] shrink-0" />
-                      <span>Capster Pro</span>
+                    <span className={`${theme.isDark ? 'text-neutral-600' : 'text-neutral-300'} text-[10px] select-none`}>•</span>
+                    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${theme.proBadge} shadow-3xs`} title="Capster Terverifikasi Pro">
+                      <Scissors className={`w-2.5 h-2.5 ${theme.proIcon} shrink-0`} />
+                      <span>Capster Profesional</span>
                     </span>
                   </>
                 ) : null}
@@ -1155,19 +1512,19 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
               {/* Bio Description */}
               {barber.bio && (
-                <p className={`${isPreview ? 'text-[10.5px] mt-2 max-w-[270px]' : 'text-xs sm:text-[13px] mt-2 max-w-sm'} text-center leading-relaxed text-neutral-600 font-normal`}>
+                <p className={`${isPreview ? 'text-[10.5px] mt-2 max-w-[270px]' : 'text-xs sm:text-[13px] mt-2 max-w-sm'} text-center leading-relaxed ${theme.textSecondary} font-normal`}>
                   {barber.bio}
                 </p>
               )}
             </div>
 
             {/* ─── 3. HORIZONTAL PILL ROW FOR LINKS & TAGS (AS SHOWN IN REFERENCE IMAGE) ─── */}
-            <div className={`flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 ${isPreview ? 'mt-2.5 mb-3' : 'mt-3.5 mb-5'} w-full px-2`}>
+            <div className={`flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 ${isPreview ? 'mt-2.5 mb-2.5' : 'mt-3.5 mb-3.5'} w-full px-2`}>
               
               {/* Location Pill */}
               {(barber.locationCity || barber.address) && (
-                <span className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium flex items-center gap-1.5 bg-neutral-100 hover:bg-neutral-200/80 text-neutral-700 border border-neutral-200/70 shadow-2xs transition-colors">
-                  <MapPin className="w-3.5 h-3.5 text-[#285844]" />
+                <span className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium flex items-center gap-1.5 ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} shadow-2xs transition-colors`}>
+                  <MapPin className={`w-3.5 h-3.5 ${theme.pillIcon}`} />
                   <span>{barber.locationCity || barber.address.split(',')[0].trim()}</span>
                 </span>
               )}
@@ -1178,9 +1535,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   href={barber.instagram.startsWith('http') ? barber.instagram : `https://instagram.com/${barber.instagram.replace('@', '')}`} 
                   target="_blank" 
                   rel="noreferrer"
-                  className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200/70 shadow-2xs transition-all hover:scale-[1.02]"
+                  className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} shadow-2xs transition-all hover:scale-[1.02]`}
                 >
-                  <Globe className="w-3.5 h-3.5 text-[#285844]" />
+                  <Globe className={`w-3.5 h-3.5 ${theme.pillIcon}`} />
                   <span>Instagram</span>
                 </a>
               )}
@@ -1191,9 +1548,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   href={barber.tiktok.startsWith('http') ? barber.tiktok : `https://tiktok.com/@${barber.tiktok.replace('@', '')}`} 
                   target="_blank" 
                   rel="noreferrer"
-                  className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200/70 shadow-2xs transition-all hover:scale-[1.02]"
+                  className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} shadow-2xs transition-all hover:scale-[1.02]`}
                 >
-                  <ExternalLink className="w-3.5 h-3.5 text-neutral-600" />
+                  <ExternalLink className={`w-3.5 h-3.5 ${theme.pillIcon}`} />
                   <span>TikTok</span>
                 </a>
               )}
@@ -1205,38 +1562,40 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   href={lnk.url}
                   target="_blank"
                   rel="noreferrer"
-                  className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 border border-neutral-200/70 shadow-2xs transition-all hover:scale-[1.02]"
+                  className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} shadow-2xs transition-all hover:scale-[1.02]`}
                 >
-                  <Globe className="w-3.5 h-3.5 text-[#285844]" />
+                  <Globe className={`w-3.5 h-3.5 ${theme.pillIcon}`} />
                   <span>{lnk.title}</span>
                 </a>
               ))}
             </div>
-            {!isPreview && (
-              <div className="px-4 w-full max-w-sm mt-1 mb-4">
-                <button
-                  type="button"
-                  onClick={handleConsultation}
-                  disabled={!hasConsultationAccount || isOwnProfile}
-                  className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-[#285844] hover:bg-[#1E4334] text-white px-4 py-2.5 text-sm font-semibold shadow-sm transition-colors disabled:bg-neutral-300 disabled:text-neutral-600 disabled:cursor-not-allowed"
-                  title={
-                    !hasConsultationAccount
+
+            {/* Profil Anda / Konsultasi Action Button (Sesuai Referensi Gambar) */}
+            <div className="px-4 w-full max-w-xs sm:max-w-sm mt-0.5 mb-3.5 flex flex-col items-center">
+              <button
+                type="button"
+                onClick={!isPreview ? handleConsultation : undefined}
+                disabled={!isPreview && (!hasConsultationAccount || isOwnProfile)}
+                className={`w-full inline-flex items-center justify-center gap-2 rounded-2xl ${theme.outlineBtn} px-4 py-2 sm:py-2.5 text-xs sm:text-sm font-semibold shadow-2xs transition-all active:scale-98 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer`}
+                title={
+                  isPreview
+                    ? 'Pratinjau Tombol Profil'
+                    : !hasConsultationAccount
                       ? 'Konsultasi belum tersedia untuk profil ini.'
                       : isOwnProfile
                         ? 'Anda sedang melihat profil publik milik sendiri.'
                         : 'Konsultasi langsung dengan pemilik profil'
-                  }
-                >
-                  <MessageCircle className="w-4 h-4" />
-                  <span>{isOwnProfile ? 'Profil Anda' : 'Konsultasi'}</span>
-                </button>
-                {!hasConsultationAccount && (
-                  <p role="status" className="text-[11px] text-amber-700 mt-2">
-                    Akun pemilik profil belum terhubung, jadi konsultasi belum dapat dimulai.
-                  </p>
-                )}
-              </div>
-            )}
+                }
+              >
+                <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 opacity-80" />
+                <span>{isOwnProfile || isPreview ? 'Profil Anda' : 'Konsultasi'}</span>
+              </button>
+              {!isPreview && !hasConsultationAccount && (
+                <p role="status" className="text-[11px] text-amber-700 mt-2">
+                  Akun pemilik profil belum terhubung, jadi konsultasi belum dapat dimulai.
+                </p>
+              )}
+            </div>
           </div>
 
           {/* ─── 4. NAVIGATION TABS BAR (STYLE SEPERTI CONTOH GAMBAR) ─── */}
@@ -1254,7 +1613,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
               return (
                 <div 
-                  className={`flex items-center justify-between p-1 rounded-2xl border bg-white shadow-xs ${theme.cardBorder}`}
+                  className={`flex items-center justify-between p-1 rounded-2xl border ${theme.navBg} ${theme.navBorder} shadow-xs`}
                 >
                   {navTabs.map((tab, idx) => {
                     const Icon = tab.icon;
@@ -1262,18 +1621,18 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     return (
                       <React.Fragment key={tab.id}>
                         {idx > 0 && (
-                          <div className="h-6 w-px bg-neutral-200/70 shrink-0 mx-0.5" />
+                          <div className={`h-5 w-px ${theme.isDark ? 'bg-white/10' : 'bg-neutral-200/80'} shrink-0 mx-0.5`} />
                         )}
                         <button
                           type="button"
                           onClick={() => setActiveTab(tab.id)}
                           className={`flex-1 py-2 sm:py-2.5 px-2 rounded-xl font-bold active:scale-95 transition-all duration-75 flex items-center justify-center gap-1.5 cursor-pointer select-none ${
                             isActive 
-                              ? 'bg-[#285844] text-white shadow-xs' 
-                              : 'text-neutral-500 hover:text-neutral-800'
+                              ? `${theme.tabActiveBg} shadow-xs` 
+                              : `${theme.tabInactiveText}`
                           } ${isPreview ? 'text-[10px]' : 'text-xs'}`}
                         >
-                          <Icon className={`${isPreview ? 'w-3 h-3' : 'w-3.5 h-3.5'} ${isActive ? 'text-white' : 'text-neutral-400'}`} />
+                          <Icon className={`${isPreview ? 'w-3 h-3' : 'w-3.5 h-3.5'} ${isActive ? theme.tabActiveIcon : theme.tabInactiveIcon}`} />
                           <span>{tab.label}</span>
                         </button>
                       </React.Fragment>
@@ -1314,11 +1673,11 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                 <div 
                   key={item.id}
                   onClick={() => handleOpenBooking(item)}
-                  className={`w-full text-left ${isPreview ? 'p-2.5 rounded-xl' : 'p-4 rounded-2xl'} border transition-all cursor-pointer group flex items-center justify-between ${theme.cardBg} ${theme.cardBorder} hover:border-[#285844] shadow-2xs`}
+                  className={`w-full text-left ${isPreview ? 'p-2.5 rounded-xl' : 'p-4 rounded-2xl'} border transition-all cursor-pointer group flex items-center justify-between ${theme.serviceCardBg} ${theme.cardBorder} ${theme.serviceCardHover} shadow-2xs`}
                 >
                   <div className="pr-2 min-w-0">
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <h3 className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-sm'} tracking-tight truncate`}>{item.name}</h3>
+                      <h3 className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-sm'} tracking-tight truncate ${theme.textPrimary}`}>{item.name}</h3>
                       {item.tag && (
                         <span className={`text-[8.5px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${theme.badgeBg} ${theme.badgeText}`}>
                           {item.tag}
@@ -1331,8 +1690,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       </p>
                     )}
                     <div className="flex items-center gap-2 text-xs font-mono">
-                      <span className={`font-bold text-[#285844] ${isPreview ? 'text-[11px]' : 'text-xs'}`}>{formatRupiah(item.price)}</span>
-                      <span className="text-neutral-400">•</span>
+                      <span className={`font-bold ${theme.servicePrice} ${isPreview ? 'text-[11px]' : 'text-xs'}`}>{formatRupiah(item.price)}</span>
+                      <span className={theme.isDark ? 'text-neutral-600' : 'text-neutral-400'}>•</span>
                       <span className={`flex items-center gap-1 ${isPreview ? 'text-[9.5px]' : 'text-xs'} ${theme.textSecondary}`}>
                         <Clock className={`${isPreview ? 'w-2.5 h-2.5' : 'w-3 h-3'}`} /> {item.duration || '45m'}
                       </span>
@@ -1340,13 +1699,13 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                    <span className="text-[10px] font-bold text-[#285844] hidden sm:inline-block">Pilih Jam</span>
+                    <span className={`text-[10px] font-bold ${theme.servicePrice} hidden sm:inline-block`}>Pilih Jam</span>
                     <button
                       type="button"
-                      className={`${isPreview ? 'p-1.5 rounded-lg' : 'p-2.5 rounded-xl'} bg-neutral-100 group-hover:bg-[#285844] text-neutral-500 group-hover:text-white transition-colors`}
+                      className={`${isPreview ? 'p-1.5 rounded-lg' : 'p-2.5 rounded-xl'} ${theme.serviceArrowBg} transition-colors`}
                       title="Booking Layanan Ini"
                     >
-                      <ChevronRight className={`${isPreview ? 'w-3.5 h-3.5' : 'w-4 h-4'}`} />
+                      <ChevronRight className={`${isPreview ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${theme.serviceArrowText}`} />
                     </button>
                   </div>
                 </div>
@@ -1448,14 +1807,14 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               {/* Header Info */}
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-[#285844] flex items-center justify-center text-white shadow-2xs">
+                  <div className={`w-6 h-6 rounded-lg ${theme.accentBg} flex items-center justify-center ${theme.accentText} shadow-2xs`}>
                     <Sparkles className="w-3.5 h-3.5" />
                   </div>
                   <div>
-                    <span className="font-display font-bold text-xs text-[#171717] block leading-tight">
+                    <span className={`font-display font-bold text-xs ${theme.textPrimary} block leading-tight`}>
                       Feed & Galeri
                     </span>
-                    <span className="text-[10px] text-neutral-400 font-mono">
+                    <span className={`text-[10px] ${theme.textSecondary} opacity-75 font-mono`}>
                       {((barber.lookbook && barber.lookbook.length > 0) ? barber.lookbook : [1,2,3,4,5,6]).length} Postingan
                     </span>
                   </div>
@@ -1792,15 +2151,15 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     }}
                     className={`${isPreview ? 'p-1.5 rounded-lg' : 'p-3 rounded-xl'} border text-center transition-all cursor-pointer ${
                       tipAmount === preset.amount 
-                        ? 'border-[#285844] bg-[#D9E5DC]/30 text-[#285844] font-bold scale-[1.02]' 
-                        : 'border-neutral-200 bg-white hover:border-neutral-300'
+                        ? `${theme.tabActiveBg} scale-[1.02] shadow-xs` 
+                        : `${theme.serviceCardBg} ${theme.cardBorder} hover:opacity-80`
                     }`}
                   >
                     <span className="text-sm block mb-0.5">{preset.emoji || '☕'}</span>
-                    <p className={`${isPreview ? 'text-xs' : 'text-base'} font-display font-bold text-amber-600`}>
+                    <p className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-base'} ${tipAmount === preset.amount ? '' : 'text-amber-600'}`}>
                       {preset.price || `${Math.round((preset.amount || 0) / 1000)}K`}
                     </p>
-                    <p className={`${isPreview ? 'text-[8.5px]' : 'text-[10px]'} uppercase font-semibold text-neutral-500 truncate`}>{preset.label}</p>
+                    <p className={`text-[8.5px] sm:text-[10px] uppercase font-semibold truncate ${tipAmount === preset.amount ? 'opacity-90' : theme.textSecondary}`}>{preset.label}</p>
                   </button>
                 ))}
               </div>
@@ -1808,7 +2167,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               <button 
                 type="button"
                 onClick={() => setIsTippingOpen(true)}
-                className={`w-full ${isPreview ? 'py-2 text-[11px] rounded-lg' : 'py-3.5 text-xs rounded-xl'} text-white font-bold shadow-sm transition-transform active:scale-98 flex items-center justify-center gap-1.5 cursor-pointer ${theme.accentBg}`}
+                className={`w-full ${isPreview ? 'py-2 text-[11px] rounded-lg' : 'py-3.5 text-xs rounded-xl'} ${theme.accentText} font-bold shadow-sm transition-transform active:scale-98 flex items-center justify-center gap-1.5 cursor-pointer ${theme.accentBg}`}
               >
                 <Coffee className="w-3.5 h-3.5" /> 
                 <span>Kirim Tip Apresiasi</span>
@@ -1820,7 +2179,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
           {activeTab === 'info' && (
             <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-2.5 transform-gpu will-change-transform">
               <div className={`${isPreview ? 'p-2.5 rounded-xl' : 'p-4 rounded-2xl'} border shadow-2xs ${theme.cardBg} ${theme.cardBorder}`}>
-                <span className={`font-display font-bold ${isPreview ? 'text-[11px]' : 'text-xs'} block mb-0.5`}>📍 Alamat Studio:</span>
+                <span className={`font-display font-bold ${isPreview ? 'text-[11px]' : 'text-xs'} ${theme.textPrimary} block mb-0.5`}>📍 Alamat Studio:</span>
                 <p className={`${isPreview ? 'text-[10px]' : 'text-xs'} leading-relaxed ${theme.textSecondary}`}>
                   {barber.address || 'Alamat belum diatur oleh barber.'}
                 </p>
@@ -1829,7 +2188,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     href={barber.mapsUrl} 
                     target="_blank" 
                     rel="noreferrer"
-                    className={`mt-2 inline-flex items-center gap-1 ${isPreview ? 'text-[10px]' : 'text-xs'} text-[#285844] font-bold hover:underline`}
+                    className={`mt-2 inline-flex items-center gap-1 ${isPreview ? 'text-[10px]' : 'text-xs'} ${theme.servicePrice} font-bold hover:underline`}
                   >
                     <MapPin className="w-3 h-3" />
                     <span>Petunjuk Arah Google Maps ↗</span>
@@ -1842,25 +2201,44 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
           </div>
         </div>
 
+        {/* ─── Decorative Aesthetic Accent (Sesuai Referensi Gambar untuk Tema Premium & Pink) ─── */}
+        {theme.hasGoldWave && (
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 overflow-hidden opacity-35 select-none z-0">
+            <svg viewBox="0 0 500 150" preserveAspectRatio="none" className="h-full w-full">
+              <path d="M0,85 C140,140 330,10 500,70 L500,150 L0,150 Z" fill="url(#premiumGoldGrad)" />
+              <defs>
+                <linearGradient id="premiumGoldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                  <stop offset="0%" stopColor="#D4AF37" />
+                  <stop offset="50%" stopColor="#F59E0B" />
+                  <stop offset="100%" stopColor="#AA7C11" />
+                </linearGradient>
+              </defs>
+            </svg>
+          </div>
+        )}
+        {theme.id === 'pink' && (
+          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 overflow-hidden opacity-30 select-none z-0">
+            <svg viewBox="0 0 500 150" preserveAspectRatio="none" className="h-full w-full">
+              <path d="M0,70 C160,135 340,15 500,70 L500,150 L0,150 Z" fill="#F472B6" />
+            </svg>
+          </div>
+        )}
+
         {/* ─── Footer (Pure Public Link in Bio - Responsive & Clean on Mobile) ─── */}
-        <footer className={`w-full text-center ${isPreview ? 'py-2.5 px-3' : 'pt-6 pb-8 px-4'} border-t border-black/5 shrink-0 select-none mt-auto`}>
+        <footer className={`w-full text-center ${isPreview ? 'py-2.5 px-3' : 'pt-6 pb-8 px-4'} ${theme.footerBorder} shrink-0 select-none mt-auto relative z-10`}>
           <div className="flex flex-col items-center justify-center gap-1.5 text-center">
             <Link 
               to="/"
-              className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full ${
-                barber.theme === 'charcoal' 
-                  ? 'bg-neutral-800/80 hover:bg-neutral-800 border-neutral-700/60' 
-                  : 'bg-black/[0.04] hover:bg-black/[0.07] border-black/[0.05]'
-              } border text-[10.5px] font-medium tracking-tight transition-all active:scale-95 shadow-2xs`}
+              className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full ${theme.footerBadgeBg} border ${theme.footerBadgeBorder} text-[10.5px] font-medium tracking-tight transition-all active:scale-95 shadow-2xs`}
               title="Ditenagai oleh E Cukur"
             >
-              <span className={barber.theme === 'charcoal' ? 'text-neutral-400' : 'text-neutral-500'}>
+              <span className={theme.footerBadgeText}>
                 Ditenagai oleh
               </span>
               <Logo 
                 variant="compact" 
                 size="xs" 
-                theme={barber.theme === 'charcoal' ? 'light' : 'dark'}
+                theme={theme.logoTheme}
                 className="scale-85" 
               />
             </Link>
