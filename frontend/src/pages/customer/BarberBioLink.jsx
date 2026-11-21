@@ -1331,12 +1331,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
   const theme = getThemeStyles(barber.theme || 'forest');
 
-  const getBtnRadiusClass = (style) => {
-    if (style === 'pill') return 'rounded-full';
-    if (style === 'square') return 'rounded-md';
-    return 'rounded-2xl';
-  };
-
   return (
     <div className={`w-full ${isPreview ? 'min-h-0' : 'min-h-screen'} ${theme.pageBg} ${theme.textPrimary} font-sans selection:bg-[#285844] selection:text-white relative`}>
       
@@ -1718,7 +1712,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   href={lnk.url}
                   target="_blank"
                   rel="noreferrer"
-                  className={`block ${isPreview ? 'p-2.5 text-[11px]' : 'p-3.5 text-xs'} text-center font-bold border transition-all shadow-2xs ${theme.cardBg} ${theme.cardBorder} hover:border-[#285844] ${getBtnRadiusClass(barber.buttonStyle)}`}
+                  className={`block ${isPreview ? 'p-2.5 text-[11px]' : 'p-3.5 text-xs'} text-center font-bold border transition-all shadow-2xs ${theme.cardBg} ${theme.cardBorder} hover:border-[#285844] rounded-2xl`}
                 >
                   {lnk.title}
                 </a>

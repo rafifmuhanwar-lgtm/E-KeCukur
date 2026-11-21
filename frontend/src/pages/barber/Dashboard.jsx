@@ -3761,32 +3761,6 @@ export default function BarberDashboard() {
                 </div>
               </div>
 
-              {/* Button Shape Customizer */}
-              <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-4">
-                <h2 className="font-display font-bold text-base text-[#171717]">Bentuk Tombol (Button Shape)</h2>
-                
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { id: 'rounded', label: 'Rounded Soft', class: 'rounded-xl' },
-                    { id: 'pill', label: 'Full Pill', class: 'rounded-full' },
-                    { id: 'square', label: 'Sharp Modern', class: 'rounded-md' },
-                  ].map((btn) => (
-                    <button
-                      key={btn.id}
-                      type="button"
-                      onClick={() => handleProfileFieldChange('buttonStyle', btn.id)}
-                      className={`py-3 px-2 border-2 text-xs font-semibold transition-all ${btn.class} ${
-                        (barber.buttonStyle || 'rounded') === btn.id 
-                          ? 'border-[#285844] bg-[#D9E5DC]/40 text-[#285844]' 
-                          : 'border-neutral-200 text-neutral-600 hover:border-neutral-300'
-                      }`}
-                    >
-                      {btn.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
             </motion.div>
           )}
 
