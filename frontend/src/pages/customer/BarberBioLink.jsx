@@ -1117,8 +1117,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
             </div>
 
             {/* Name with Verified Badge (Hanya untuk Capster Pro & Barber Pro) */}
-            <div className="flex flex-col items-center justify-center mt-2.5">
-              <h1 className={`font-display font-black ${isPreview ? 'text-base' : 'text-xl sm:text-2xl'} tracking-tight flex items-center justify-center gap-1.5`}>
+            <div className="flex flex-col items-center justify-center mt-2.5 text-center">
+              <h1 className={`font-display font-black ${isPreview ? 'text-lg' : 'text-xl sm:text-2xl'} tracking-tight text-neutral-900 flex items-center justify-center gap-1.5`}>
                 <span>{barber.name}</span>
                 {(barber?.plan === 'capster' || barber?.plan === 'barber') && (
                   <VerifiedBadge
@@ -1128,31 +1128,38 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                 )}
               </h1>
 
-              {/* Plan Badge: Capster Pro / Official Studio */}
-              {barber?.plan === 'barber' ? (
-                <span className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs" title="Official Studio Barbershop">
-                  <Crown className="w-3 h-3 text-amber-600 shrink-0" />
-                  <span>Official Studio</span>
+              {/* Clean Professional Meta Line: Handle (@username) & Subtle Pro Pill */}
+              <div className="flex items-center justify-center gap-1.5 mt-1">
+                <span className={`font-sans font-medium ${isPreview ? 'text-[11px]' : 'text-xs sm:text-[13px]'} text-neutral-500 tracking-tight`}>
+                  {barber.handle ? barber.handle.replace(/\.ecukur$/, '') : `@${barber.slug || barber.id}`}
                 </span>
-              ) : barber?.plan === 'capster' ? (
-                <span className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs" title="Capster Terverifikasi Pro">
-                  <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span>Capster Terverifikasi</span>
-                </span>
-              ) : null}
+
+                {barber?.plan === 'barber' ? (
+                  <>
+                    <span className="text-neutral-300 text-[10px] select-none">•</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-900 border border-amber-200/80 shadow-3xs" title="Official Studio Barbershop">
+                      <Crown className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                      <span>Studio Resmi</span>
+                    </span>
+                  </>
+                ) : barber?.plan === 'capster' ? (
+                  <>
+                    <span className="text-neutral-300 text-[10px] select-none">•</span>
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#D9E5DC]/80 text-[#1E4334] border border-[#285844]/20 shadow-3xs" title="Capster Terverifikasi Pro">
+                      <Scissors className="w-2.5 h-2.5 text-[#285844] shrink-0" />
+                      <span>Capster Pro</span>
+                    </span>
+                  </>
+                ) : null}
+              </div>
+
+              {/* Bio Description */}
+              {barber.bio && (
+                <p className={`${isPreview ? 'text-[10.5px] mt-2 max-w-[270px]' : 'text-xs sm:text-[13px] mt-2 max-w-sm'} text-center leading-relaxed text-neutral-600 font-normal`}>
+                  {barber.bio}
+                </p>
+              )}
             </div>
-
-            {/* Handle (@username) */}
-            <p className={`font-mono ${isPreview ? 'text-[10px]' : 'text-xs'} mt-0.5 text-neutral-500 font-medium`}>
-              {barber.handle ? barber.handle.replace(/\.ecukur$/, '') : `@${barber.slug || barber.id}`}
-            </p>
-
-            {/* Bio Description */}
-            {barber.bio && (
-              <p className={`${isPreview ? 'text-[10.5px] mt-1.5 max-w-[270px]' : 'text-xs mt-2 max-w-sm'} text-center leading-relaxed text-neutral-600`}>
-                {barber.bio}
-              </p>
-            )}
 
             {/* ─── 3. HORIZONTAL PILL ROW FOR LINKS & TAGS (AS SHOWN IN REFERENCE IMAGE) ─── */}
             <div className={`flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 ${isPreview ? 'mt-2.5 mb-3' : 'mt-3.5 mb-5'} w-full px-2`}>
