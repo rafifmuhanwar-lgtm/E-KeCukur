@@ -2691,102 +2691,111 @@ export default function BarberDashboard() {
                     </p>
                   </div>
                 ) : (
-                  barberBookings.map((b) => (
-                    <div 
-                      key={b.id} 
-                      className="bg-white p-5 rounded-2xl border border-neutral-200 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
-                    >
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-xs font-bold text-[#285844] bg-[#D9E5DC] px-2 py-0.5 rounded">
-                            {b.id}
-                          </span>
-                          <span className="font-display font-bold text-sm text-[#171717]">
-                            {b.customerName}
-                          </span>
-                          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-                            b.status === 'Terkonfirmasi' 
-                              ? 'bg-emerald-100 text-emerald-800' 
-                              : b.status === 'Selesai'
-                              ? 'bg-neutral-100 text-neutral-700'
-                              : 'bg-amber-100 text-amber-800'
-                          }`}>
-                            {b.status}
-                          </span>
-                        </div>
+                  barberBookings.map((b) => {
+                    const shortCode = b.bookingCode || (String(b.id).startsWith('ECK-') ? b.id : `#ECK-${String(b.id).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase()}`);
 
-                        <div className="text-xs text-neutral-600 flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-[#285844]">{b.serviceName}</span>
-                          {b.capsterName && (
-                            <>
-                              <span>•</span>
-                              <span>Capster: <strong>{b.capsterName}</strong></span>
-                            </>
+                    return (
+                      <div 
+                        key={b.id} 
+                        className="bg-white p-4 sm:p-5 rounded-2xl border border-neutral-200/80 shadow-2xs hover:shadow-xs transition-all flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4"
+                      >
+                        <div className="flex-1 space-y-1.5">
+                          {/* Row 1: Short ID Code, Customer Name, Status Badge */}
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span 
+                              className="font-mono text-xs font-bold text-[#285844] bg-[#D9E5DC]/80 border border-[#285844]/20 px-2.5 py-0.5 rounded-full select-none"
+                              title={`ID Sistem: ${b.id}`}
+                            >
+                              {shortCode}
+                            </span>
+                            <span className="font-display font-bold text-sm text-[#171717]">
+                              {b.customerName}
+                            </span>
+                            <span className={`text-[10.5px] font-semibold px-2.5 py-0.5 rounded-full ${
+                              b.status === 'Terkonfirmasi' 
+                                ? 'bg-emerald-100/80 text-emerald-800 border border-emerald-200' 
+                                : b.status === 'Selesai'
+                                ? 'bg-neutral-100 text-neutral-600 border border-neutral-200'
+                                : 'bg-amber-100/80 text-amber-800 border border-amber-200'
+                            }`}>
+                              {b.status}
+                            </span>
+                            {b.paymentStatus === 'PAID' && (
+                              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                Lunas (QRIS)
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Row 2: Service Name, Capster (if any), Price */}
+                          <div className="text-xs text-neutral-600 flex items-center gap-2 flex-wrap">
+                            <span className="font-semibold text-[#285844]">{b.serviceName}</span>
+                            {b.capsterName && (
+                              <>
+                                <span className="text-neutral-300">•</span>
+                                <span>Capster: <strong className="text-neutral-800">{b.capsterName}</strong></span>
+                              </>
+                            )}
+                            <span className="text-neutral-300">•</span>
+                            <span className="font-mono font-medium text-neutral-700">{formatRupiah(b.price)}</span>
+                          </div>
+
+                          {/* Row 3: Scheduled Date and Time (Clean, without WA info) */}
+                          <div className="text-xs text-neutral-500 flex items-center gap-1.5">
+                            <Clock className="w-3.5 h-3.5 text-neutral-400 shrink-0" /> 
+                            <strong className="text-neutral-700 font-semibold">{b.date} • {b.time} WIB</strong>
+                          </div>
+
+                          {/* Note if customer provided any */}
+                          {b.note && (
+                            <p className="text-[11px] text-neutral-500 italic bg-neutral-50 p-2.5 rounded-xl border border-neutral-100 mt-1 max-w-md">
+                              "{b.note}"
+                            </p>
                           )}
-                          <span>•</span>
-                          <span className="font-mono font-medium">{formatRupiah(b.price)}</span>
                         </div>
 
-                        <div className="text-xs text-neutral-500 flex items-center gap-3">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-neutral-400" /> 
-                            <strong>{b.date} • {b.time} WIB</strong>
-                          </span>
-                          <span>•</span>
-                          <span className="font-mono">WA: {b.customerPhone}</span>
+                        {/* Action buttons (Clean status controls, WA button removed) */}
+                        <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                          {b.status === 'Menunggu' && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const result = await updateBookingStatus(b.id, 'Terkonfirmasi');
+                                showToast(result?.success
+                                  ? `Booking ${shortCode} dikonfirmasi!`
+                                  : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
+                              }}
+                              className="px-3.5 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+                            >
+                              Konfirmasi
+                            </button>
+                          )}
+
+                          {b.status === 'Terkonfirmasi' && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const result = await updateBookingStatus(b.id, 'Selesai');
+                                showToast(result?.success
+                                  ? `Booking ${shortCode} selesai!`
+                                  : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
+                              }}
+                              className="px-3.5 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl text-xs font-semibold transition-colors cursor-pointer"
+                            >
+                              Tandai Selesai
+                            </button>
+                          )}
+
+                          {b.status === 'Selesai' && (
+                            <span className="text-xs text-neutral-400 font-medium px-2 py-1 flex items-center gap-1 select-none">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                              <span>Selesai</span>
+                            </span>
+                          )}
                         </div>
-
-                        {b.note && (
-                          <p className="text-[11px] text-neutral-500 italic bg-neutral-50 p-2 rounded-lg mt-1">
-                            " {b.note} "
-                          </p>
-                        )}
                       </div>
-
-                      {/* Action buttons */}
-                      <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
-                        <a
-                          href={`https://wa.me/${b.customerPhone.replace(/\D/g, '')}?text=Halo%20${encodeURIComponent(b.customerName)},%20saya%20${encodeURIComponent(barber.name)}.%20Booking%20jadwal%20cukur%20kamu%20(${b.serviceName})%20pada%20${b.date}%20jam%20${b.time}%20WIB%20sudah%20kami%20catat.`}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-colors"
-                        >
-                          <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                          <span>Chat WA</span>
-                        </a>
-
-                        {b.status === 'Menunggu' && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const result = await updateBookingStatus(b.id, 'Terkonfirmasi');
-                              showToast(result?.success
-                                ? `Booking ${b.id} dikonfirmasi!`
-                                : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
-                            }}
-                            className="px-3 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
-                          >
-                            Konfirmasi
-                          </button>
-                        )}
-
-                        {b.status === 'Terkonfirmasi' && (
-                          <button
-                            type="button"
-                            onClick={async () => {
-                              const result = await updateBookingStatus(b.id, 'Selesai');
-                              showToast(result?.success
-                                ? `Booking ${b.id} selesai!`
-                                : `Gagal mengubah booking: ${result?.error || 'akses ditolak'}`);
-                            }}
-                            className="px-3 py-2 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl text-xs font-semibold transition-colors"
-                          >
-                            Tandai Selesai
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))
+                    );
+                  })
                 )}
               </div>
 
