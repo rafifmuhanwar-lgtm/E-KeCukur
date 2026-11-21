@@ -1210,7 +1210,7 @@ export const useStore = create((set, get) => ({
           : 'create_guest_booking_with_ticket';
         const rpcParams = {
           p_customer_name: booking.customerName,
-          p_customer_phone: booking.customerPhone,
+          p_customer_phone: booking.customerPhone || '080000000000',
           p_customer_email: get().authUser?.email || null,
           p_barber_id: barberId,
           p_barber_name: booking.barberName || null,

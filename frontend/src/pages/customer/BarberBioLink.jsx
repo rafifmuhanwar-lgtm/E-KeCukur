@@ -362,10 +362,39 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const [availabilityReady, setAvailabilityReady] = useState(false);
   const [availabilityDate, setAvailabilityDate] = useState('');
   const [availabilityError, setAvailabilityError] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('ecukur_customer_name');
+      if (saved && saved.trim()) return saved.trim();
+    }
+    return '';
+  });
+  const [customerPhone] = useState('');
   const paymentMethod = 'QRIS';
   const [noteStyle, setNoteStyle] = useState('');
+
+  // Sinkronisasi dua arah nama pelanggan antara Konsultasi Chat dan Form Booking
+  useEffect(() => {
+    const syncCustomerName = () => {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('ecukur_customer_name');
+        if (saved && saved.trim()) {
+          setCustomerName(saved.trim());
+          return;
+        }
+      }
+      if (authUser?.user_metadata?.name) {
+        setCustomerName(authUser.user_metadata.name);
+      }
+    };
+    syncCustomerName();
+    window.addEventListener('storage', syncCustomerName);
+    window.addEventListener('focus', syncCustomerName);
+    return () => {
+      window.removeEventListener('storage', syncCustomerName);
+      window.removeEventListener('focus', syncCustomerName);
+    };
+  }, [authUser]);
   const [bookingSuccessData, setBookingSuccessData] = useState(null);
   const [bookingQrisData, setBookingQrisData] = useState(null);
   const [copiedBookingAmount, setCopiedBookingAmount] = useState(false);
@@ -754,33 +783,33 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   const handleConsultation = () => {
     const barberUserId = barber?.user_id;
     if (!hasConsultationAccount || authUser?.id === barberUserId) return;
-    navigate(`/messages?barberId=${encodeURIComponent(barberUserId)}${barber?.slug ? `&profileSlug=${encodeURIComponent(barber.slug)}` : ''}`);
+    const currentName = customerName.trim() || (typeof localStorage !== 'undefined' ? (localStorage.getItem('ecukur_customer_name') || '') : '') || '';
+    const nameParam = currentName ? `&name=${encodeURIComponent(currentName)}` : '';
+    navigate(`/messages?barberId=${encodeURIComponent(barberUserId)}${barber?.slug ? `&profileSlug=${encodeURIComponent(barber.slug)}` : ''}${nameParam}`);
   };
   const isOwnProfile = Boolean(authUser?.id && authUser.id === barber?.user_id);
-
-  const handlePhoneChange = (e) => {
-    let val = e.target.value.replace(/\D/g, '');
-    if (val.startsWith('628')) {
-      val = '08' + val.slice(3);
-    }
-    if (val.length > 13) {
-      val = val.slice(0, 13);
-    }
-    setCustomerPhone(val);
-  };
 
   const handleSubmitBooking = async (e) => {
     e.preventDefault();
     const trimmedName = customerName.trim();
-    const trimmedPhone = customerPhone.trim();
-    if (!trimmedName || !trimmedPhone) {
-      window.alert('Silakan lengkapi nama dan nomor WhatsApp Anda.');
+    if (!trimmedName) {
+      window.alert('Silakan masukkan nama lengkap pemesan.');
       return;
     }
-    if (!/^08[0-9]{8,11}$/.test(trimmedPhone)) {
-      window.alert('Nomor WhatsApp tidak valid. Nomor wajib diawali 08 dan memiliki panjang 10–13 angka (maksimal 13 digit).');
-      return;
+
+    // Simpan nama pelanggan di cache lokal agar otomatis sinkron ke ruang Konsultasi
+    if (typeof localStorage !== 'undefined' && trimmedName) {
+      localStorage.setItem('ecukur_customer_name', trimmedName);
     }
+    if (authUser && !authUser.user_metadata?.name) {
+      supabase?.auth?.updateUser({
+        data: { ...authUser.user_metadata, name: trimmedName, role: 'customer' }
+      }).then(({ data }) => {
+        if (data?.user) useStore.setState({ authUser: data.user });
+      }).catch(() => {});
+      supabase?.rpc('update_my_chat_display_name', { display_name: trimmedName }).then(() => {}).catch(() => {});
+    }
+
     if (teamBookingEnabled && (
       !selectedCapster || getCapsterStatus(selectedCapster) !== 'AVAILABLE'
     )) {
@@ -806,8 +835,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
     const newBooking = {
       id: bookingCode,
-      customerName: customerName.trim(),
-      customerPhone: customerPhone.trim(),
+      customerName: trimmedName,
+      customerPhone: '',
       barberId: barber.id,
       barberName: barber.name,
       capsterId: teamBookingEnabled ? selectedCapster.id : null,
@@ -2358,10 +2387,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       <strong className="text-[#171717]">{bookingSuccessData.customerName}</strong>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-neutral-500">WhatsApp:</span>
-                      <strong className="font-mono text-[#171717]">{bookingSuccessData.customerPhone}</strong>
-                    </div>
-                    <div className="flex justify-between">
                       <span className="text-neutral-500">Layanan:</span>
                       <strong className="text-[#171717]">{bookingSuccessData.serviceName}</strong>
                     </div>
@@ -2392,21 +2417,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       <Ticket className="w-4 h-4 text-emerald-300" />
                       <span>Buka & Simpan E-Tiket Digital</span>
                     </Link>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const shortId = `#${String(bookingSuccessData.id).slice(-6).toUpperCase()}`;
-                        const ticketUrl = `${window.location.origin}/tiket/${bookingSuccessData.id}#t=${encodeURIComponent(bookingSuccessData.ticketToken || '')}`;
-                        const capsterLine = bookingSuccessData.capsterName ? `\nCapster: ${bookingSuccessData.capsterName}` : '';
-                        const text = `💈 *TIKET RESERVASI E-CUKUR*\nNo. Tiket: ${shortId}\nJadwal: ${bookingSuccessData.date} • ${bookingSuccessData.time} WIB\nLayanan: ${bookingSuccessData.serviceName}${capsterLine}\nBuka Tiket: ${ticketUrl}`;
-                        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
-                      }}
-                      className="w-full py-3 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer"
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                      <span>Kirim Ringkasan ke WhatsApp Saya</span>
-                    </button>
 
                     <button
                       type="button"
@@ -2585,45 +2595,24 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     </p>
                   </div>
 
-                  {/* Contact Info */}
+                  {/* Contact Info (Clean, No WhatsApp) */}
                   <div className="space-y-2.5 pt-2">
                     <div>
-                      <label className="text-xs font-semibold text-neutral-700 block mb-1">Nama Pemesan</label>
+                      <label className="text-xs font-semibold text-neutral-700 block mb-1">Nama Lengkap Pemesan *</label>
                       <input 
                         type="text"
                         required
                         value={customerName}
-                        onChange={(e) => setCustomerName(e.target.value)}
-                        placeholder="e.g. Budi Santoso"
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setCustomerName(val);
+                          if (typeof localStorage !== 'undefined') {
+                            localStorage.setItem('ecukur_customer_name', val);
+                          }
+                        }}
+                        placeholder="Contoh: Budi Santoso"
                         className="w-full text-xs p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
                       />
-                    </div>
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-neutral-700">Nomor WhatsApp Aktif *</label>
-                        <span className="text-[10px] text-neutral-400 font-mono">
-                          {customerPhone.length}/13 digit
-                        </span>
-                      </div>
-                      <input 
-                        type="tel"
-                        required
-                        maxLength={13}
-                        value={customerPhone}
-                        onChange={handlePhoneChange}
-                        placeholder="081234567890"
-                        className={`w-full text-xs font-mono p-3 bg-neutral-50 border rounded-xl outline-none transition-colors ${
-                          customerPhone && !customerPhone.startsWith('08')
-                            ? 'border-red-400 focus:border-red-500 bg-red-50/20'
-                            : 'border-neutral-300 focus:border-[#285844]'
-                        }`}
-                      />
-                      {customerPhone && !customerPhone.startsWith('08') && (
-                        <p className="text-[11px] text-red-600 mt-1">Nomor WhatsApp wajib diawali 08.</p>
-                      )}
-                      {customerPhone && customerPhone.startsWith('08') && customerPhone.length < 10 && (
-                        <p className="text-[11px] text-amber-600 mt-1">Nomor terlalu pendek (minimal 10 digit, maks 13 digit).</p>
-                      )}
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-neutral-700 block mb-1">Catatan Khusus (Opsional)</label>

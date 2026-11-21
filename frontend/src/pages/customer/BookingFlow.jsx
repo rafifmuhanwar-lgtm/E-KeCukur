@@ -91,11 +91,32 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
 
   const [selectedDate, setSelectedDate] = useState(UPCOMING_DATES[0]);
   const [selectedTime, setSelectedTime] = useState('');
-  const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('');
+  const [customerName, setCustomerName] = useState(() => {
+    if (typeof localStorage !== 'undefined') {
+      return localStorage.getItem('ecukur_customer_name') || '';
+    }
+    return '';
+  });
   const [customerNote, setCustomerNote] = useState('');
   const [paymentMethod] = useState('QRIS');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    const handleSyncName = () => {
+      if (typeof localStorage !== 'undefined') {
+        const saved = localStorage.getItem('ecukur_customer_name');
+        if (saved && saved.trim()) {
+          setCustomerName(saved.trim());
+        }
+      }
+    };
+    window.addEventListener('storage', handleSyncName);
+    window.addEventListener('focus', handleSyncName);
+    return () => {
+      window.removeEventListener('storage', handleSyncName);
+      window.removeEventListener('focus', handleSyncName);
+    };
+  }, []);
 
   const effectiveServices = useMemo(() => (services.length > 0 ? services : [
     { id: '1', name: 'Signature Haircut', duration: '45m', price: 50000, description: 'Potong rambut presisi, konsultasi bentuk wajah, keramas, dan styling pomade.' },
@@ -183,30 +204,19 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
     }
   };
 
-  const handlePhoneChange = (e) => {
-    let val = e.target.value.replace(/\D/g, '');
-    if (val.startsWith('628')) {
-      val = '08' + val.slice(3);
-    }
-    if (val.length > 13) {
-      val = val.slice(0, 13);
-    }
-    setCustomerPhone(val);
-  };
-
   const handleConfirm = (e) => {
     e.preventDefault();
     const trimmedName = customerName.trim();
-    const trimmedPhone = customerPhone.trim();
 
-    if (!trimmedName || !trimmedPhone) {
-      alert('Silakan lengkapi nama dan nomor WhatsApp Anda.');
+    if (!trimmedName) {
+      alert('Silakan lengkapi nama Anda.');
       return;
     }
 
-    if (!/^08[0-9]{8,11}$/.test(trimmedPhone)) {
-      alert('Nomor WhatsApp tidak valid. Nomor wajib diawali 08 dan memiliki panjang 10–13 angka (maksimal 13 digit).');
-      return;
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.setItem('ecukur_customer_name', trimmedName);
+      } catch {}
     }
 
     setIsSubmitting(true);
@@ -218,7 +228,7 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
     setTimeout(async () => {
       const created = await addBooking({
         customerName: trimmedName,
-        customerPhone: trimmedPhone,
+        customerPhone: '',
         note: customerNote.trim() || '-',
         barberName: selectedBarber || 'Bebas (Capster Tersedia)',
         serviceId: selectedService?.id,
@@ -657,54 +667,30 @@ const [selectedBarber, setSelectedBarber] = useState(isBarberLocked ? lockedBarb
                       Data Pemesan & Pembayaran
                     </h2>
                     <p className="text-xs text-neutral-500 mt-0.5">
-                      Informasi tiket booking akan dikonfirmasikan via WhatsApp.
+                      Tiket digital otomatis dibuat dan siap ditunjukkan saat tiba di studio.
                     </p>
                   </div>
 
                   <form id="booking-final-form" onSubmit={handleConfirm} className="space-y-5">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
                       <div className="space-y-1.5">
                         <label className="text-xs font-bold text-neutral-700 flex items-center gap-1.5">
-                          <User className="w-3.5 h-3.5 text-[#285844]" /> Nama Lengkap *
+                          <User className="w-3.5 h-3.5 text-[#285844]" /> Nama Lengkap Pemesan *
                         </label>
                         <input
                           type="text"
                           required
                           value={customerName}
-                          onChange={(e) => setCustomerName(e.target.value)}
+                          onChange={(e) => {
+                            const val = e.target.value;
+                            setCustomerName(val);
+                            if (typeof localStorage !== 'undefined') {
+                              localStorage.setItem('ecukur_customer_name', val);
+                            }
+                          }}
                           placeholder="Contoh: Budi Santoso"
                           className="w-full bg-white border border-neutral-200 focus:border-[#285844] rounded-xl p-3 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors shadow-2xs"
                         />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <label className="text-xs font-bold text-neutral-700">
-                            Nomor WhatsApp *
-                          </label>
-                          <span className="text-[10px] text-neutral-400 font-mono">
-                            {customerPhone.length}/13 digit
-                          </span>
-                        </div>
-                        <input
-                          type="tel"
-                          required
-                          maxLength={13}
-                          value={customerPhone}
-                          onChange={handlePhoneChange}
-                          placeholder="081234567890"
-                          className={`w-full bg-white border rounded-xl p-3 text-xs font-mono text-neutral-900 placeholder:text-neutral-400 outline-none transition-colors shadow-2xs ${
-                            customerPhone && !customerPhone.startsWith('08')
-                              ? 'border-red-400 focus:border-red-500 bg-red-50/20'
-                              : 'border-neutral-200 focus:border-[#285844]'
-                          }`}
-                        />
-                        {customerPhone && !customerPhone.startsWith('08') && (
-                          <p className="text-[11px] text-red-600">Nomor WhatsApp wajib diawali 08.</p>
-                        )}
-                        {customerPhone && customerPhone.startsWith('08') && customerPhone.length < 10 && (
-                          <p className="text-[11px] text-amber-600">Nomor terlalu pendek (minimal 10 digit, maks 13 digit).</p>
-                        )}
                       </div>
                     </div>
 

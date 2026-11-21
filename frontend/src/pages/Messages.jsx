@@ -158,7 +158,21 @@ export default function Messages({ barberMode = false }) {
   const [loadedConversationId, setLoadedConversationId] = useState('');
   const [account, setAccount] = useState(null);
   const [barberProfileSlug, setBarberProfileSlug] = useState('');
-  const [customerName, setCustomerName] = useState('');
+  const [customerName, setCustomerName] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const url = new URLSearchParams(window.location.search);
+        const qName = url.get('name') || url.get('customerName');
+        if (qName && qName.trim()) {
+          localStorage.setItem('ecukur_customer_name', qName.trim());
+          return qName.trim();
+        }
+        const saved = localStorage.getItem('ecukur_customer_name');
+        if (saved && saved.trim()) return saved.trim();
+      } catch {}
+    }
+    return '';
+  });
   const [savingCustomerName, setSavingCustomerName] = useState(false);
   const [customerNameSaveFailed, setCustomerNameSaveFailed] = useState(false);
   const [isBarberAccountDetected, setIsBarberAccountDetected] = useState(false);
@@ -172,7 +186,7 @@ export default function Messages({ barberMode = false }) {
     typeof window !== 'undefined' && window.visualViewport ? window.visualViewport.height : null
   ));
 
-  // WhatsApp-style feature states (Cleaned & Focused)
+  // Modern chat feature states (Cleaned & Focused)
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isQuickReplyOpen, setIsQuickReplyOpen] = useState(false);
@@ -220,7 +234,8 @@ export default function Messages({ barberMode = false }) {
     (conversation) => conversation.id === requestedConversationId
   ) ? requestedConversationId : '';
   const customerNameError = validateCustomerName(customerName);
-  const savedCustomerName = authUser?.user_metadata?.name || account?.name || '';
+  const localSavedCustomerName = (typeof localStorage !== 'undefined' ? localStorage.getItem('ecukur_customer_name') : '') || customerName || '';
+  const savedCustomerName = authUser?.user_metadata?.name || account?.name || localSavedCustomerName || '';
   const isCustomerNameValid = Boolean(savedCustomerName)
     && savedCustomerName.trim().toLowerCase() !== 'pelanggan'
     && !validateCustomerName(savedCustomerName);
@@ -335,8 +350,24 @@ export default function Messages({ barberMode = false }) {
         setIsBarberAccountDetected(false);
         if (authUser.is_anonymous) {
           if (active) {
-            setCustomerName((currentName) => currentName || authUser.user_metadata?.name || '');
-            setAccount({ name: authUser.user_metadata?.name || 'Pelanggan', role: 'CUSTOMER', userId: authUser.id });
+            let anonName = authUser.user_metadata?.name || '';
+            if (!anonName || anonName.toLowerCase() === 'pelanggan') {
+              const localName = (typeof localStorage !== 'undefined' ? localStorage.getItem('ecukur_customer_name') : '') || customerName || '';
+              if (localName && !validateCustomerName(localName)) {
+                anonName = localName;
+                supabase.auth.updateUser({
+                  data: { ...authUser.user_metadata, name: localName, role: 'customer' }
+                }).then(({ data }) => {
+                  if (data?.user) useStore.setState({ authUser: data.user });
+                }).catch(() => {});
+                supabase.rpc('update_my_chat_display_name', { display_name: localName }).then(() => {}).catch(() => {});
+              }
+            }
+            setCustomerName((currentName) => currentName || anonName);
+            setAccount({ name: anonName || 'Pelanggan', role: 'CUSTOMER', userId: authUser.id });
+            if (anonName && typeof localStorage !== 'undefined') {
+              localStorage.setItem('ecukur_customer_name', anonName);
+            }
           }
         } else {
           const { data: userProfile } = await supabase
@@ -360,9 +391,24 @@ export default function Messages({ barberMode = false }) {
             return;
           }
           if (active) {
-            const customerDisplayName = userProfile?.name || authUser.user_metadata?.name || '';
+            let customerDisplayName = userProfile?.name || authUser.user_metadata?.name || '';
+            if (!customerDisplayName || customerDisplayName.toLowerCase() === 'pelanggan') {
+              const localName = (typeof localStorage !== 'undefined' ? localStorage.getItem('ecukur_customer_name') : '') || customerName || '';
+              if (localName && !validateCustomerName(localName)) {
+                customerDisplayName = localName;
+                supabase.auth.updateUser({
+                  data: { ...authUser.user_metadata, name: localName, role: 'customer' }
+                }).then(({ data }) => {
+                  if (data?.user) useStore.setState({ authUser: data.user });
+                }).catch(() => {});
+                supabase.rpc('update_my_chat_display_name', { display_name: localName }).then(() => {}).catch(() => {});
+              }
+            }
             setCustomerName((currentName) => currentName || customerDisplayName);
             setAccount({ name: customerDisplayName || 'Pelanggan', role: role || 'CUSTOMER', userId: authUser.id });
+            if (customerDisplayName && typeof localStorage !== 'undefined') {
+              localStorage.setItem('ecukur_customer_name', customerDisplayName);
+            }
           }
         }
       }

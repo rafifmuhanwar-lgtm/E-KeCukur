@@ -12,8 +12,7 @@ import {
   ArrowLeft, 
   ExternalLink,
   Printer,
-  Sparkles,
-  Phone
+  Sparkles
 } from 'lucide-react';
 import { useStore, dbToUiStatus } from '../../store';
 import { isSupabaseConfigured } from '../../lib/supabase';
@@ -155,23 +154,6 @@ export default function CustomerTicket() {
     navigator.clipboard.writeText(currentUrl);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
-  };
-
-  const shareToWhatsApp = () => {
-    if (!booking) return;
-    const text = 
-      `💈 *TIKET RESERVASI E-CUKUR*\n` +
-      `━━━━━━━━━━━━━━━━━━━\n` +
-      `📌 *No. Tiket:* ${shortCode}\n` +
-      `👤 *Nama:* ${booking.customerName}\n` +
-      `✂️ *Layanan:* ${booking.serviceName}\n` +
-      `💈 *Barber:* ${booking.barberName}\n` +
-      (booking.capsterName ? `🧑‍🦱 *Capster:* ${booking.capsterName}\n` : '') +
-      `📅 *Jadwal:* ${booking.date} pukul ${booking.time} WIB\n` +
-      `💰 *Total:* ${formatRupiah(booking.price)} (${isPaid ? 'LUNAS' : booking.status})\n\n` +
-      `🔗 *Buka Tiket Digital:* ${currentUrl}`;
-    
-    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   };
 
   if (loading) {
@@ -354,11 +336,6 @@ export default function CustomerTicket() {
               </div>
 
               <div className="flex justify-between items-center py-1 border-b border-neutral-100">
-                <span className="text-neutral-500">No. WhatsApp</span>
-                <strong className="font-mono text-neutral-900">{booking.customerPhone}</strong>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-neutral-100">
                 <span className="text-neutral-500">Layanan Dipilih</span>
                 <strong className="text-neutral-900 font-bold text-right">{booking.serviceName}</strong>
               </div>
@@ -429,25 +406,15 @@ export default function CustomerTicket() {
           </div>
         </motion.div>
 
-        {/* ─── ACTION BUTTONS (WHATSAPP, PRINT, BOOKING LAIN) ─── */}
+        {/* ─── ACTION BUTTONS (PRINT, BOOKING LAIN) ─── */}
         <div className="space-y-2.5 pt-2">
-          {/* Tombol Simpan ke WhatsApp */}
-          <button
-            type="button"
-            onClick={shareToWhatsApp}
-            className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-          >
-            <Phone className="w-4 h-4" />
-            <span>Kirim Ringkasan Tiket ke WhatsApp Saya</span>
-          </button>
-
           {/* Tombol Cetak / Simpan PDF */}
           <button
             type="button"
             onClick={() => window.print()}
-            className="w-full py-3 bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+            className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
           >
-            <Printer className="w-3.5 h-3.5" />
+            <Printer className="w-4 h-4" />
             <span>Unduh / Cetak Tiket</span>
           </button>
 
