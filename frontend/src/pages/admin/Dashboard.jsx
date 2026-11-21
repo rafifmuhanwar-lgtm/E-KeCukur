@@ -24,7 +24,6 @@ import {
   ShieldCheck,
   CreditCard,
   Download,
-  BadgeCheck,
   Zap,
   X,
   Lock,
@@ -35,6 +34,7 @@ import {
   Database
 } from 'lucide-react';
 import SupabaseStudio from './SupabaseStudio';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
@@ -1782,6 +1782,9 @@ export default function AdminMasterDashboard() {
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
                             <h4 className="font-bold text-xs text-neutral-900 truncate">{barber.name}</h4>
+                            {(barber?.plan === 'barber' || barber?.plan === 'capster') && (
+                              <VerifiedBadge className="w-3.5 h-3.5" title={barber?.plan === 'barber' ? 'Studio Barber' : 'Capster Pro'} />
+                            )}
                             <select
                               value={barber?.plan || (typeof localStorage !== 'undefined' ? (localStorage.getItem(`ecukur_plan_${barber?.id}`) || localStorage.getItem(`ecukur_plan_${barber?.slug}`)) : null) || 'free'}
                               onChange={(e) => handleChangeBarberPlan(barber.id, e.target.value)}
@@ -2008,7 +2011,12 @@ export default function AdminMasterDashboard() {
                                     <div className="w-8 h-8 rounded-full bg-neutral-100 border border-neutral-200 shrink-0 flex items-center justify-center font-bold text-xs text-[#285844]">
                                       {(u.name || u.email || 'U').charAt(0).toUpperCase()}
                                     </div>
-                                    <span className="font-bold text-neutral-900 block truncate">{u.name || 'Pengguna Tanpa Nama'}</span>
+                                    <div className="flex items-center gap-1 min-w-0">
+                                      <span className="font-bold text-neutral-900 block truncate">{u.name || 'Pengguna Tanpa Nama'}</span>
+                                      {(currentPlan === 'barber' || currentPlan === 'capster') && (
+                                        <VerifiedBadge className="w-3.5 h-3.5" title={currentPlan === 'barber' ? 'Studio Barber' : 'Capster Pro'} />
+                                      )}
+                                    </div>
                                   </div>
                                 </td>
 
@@ -2189,8 +2197,12 @@ export default function AdminMasterDashboard() {
                                     <div className="min-w-0">
                                       <div className="flex items-center gap-1">
                                         <span className="font-bold text-neutral-900 block truncate">{b.name}</span>
-                                        {currentPlan === 'barber' && <BadgeCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />}
-                                        {currentPlan === 'capster' && <BadgeCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />}
+                                        {(currentPlan === 'barber' || currentPlan === 'capster') && (
+                                          <VerifiedBadge 
+                                            className="w-3.5 h-3.5" 
+                                            title={currentPlan === 'barber' ? 'Studio Barber Resmi (99K)' : 'Capster Pro (49K)'} 
+                                          />
+                                        )}
                                       </div>
                                     </div>
                                   </div>

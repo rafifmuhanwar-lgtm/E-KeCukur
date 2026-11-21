@@ -31,6 +31,7 @@ import {
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
 import Logo from '../../components/Logo';
+import VerifiedBadge from '../../components/VerifiedBadge';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { createQrisPayment, checkQrisPaymentStatus, getDynamicQrisImageUrl } from '../../lib/qrisPayment';
 import { fetchBookingTracking } from '../../lib/bookingTracking';
@@ -1115,11 +1116,16 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               </div>
             </div>
 
-            {/* Name with Verified Badge */}
+            {/* Name with Verified Badge (Hanya untuk Capster Pro & Barber Pro) */}
             <div className="flex flex-col items-center justify-center mt-2.5">
               <h1 className={`font-display font-black ${isPreview ? 'text-base' : 'text-xl sm:text-2xl'} tracking-tight flex items-center justify-center gap-1.5`}>
                 <span>{barber.name}</span>
-                <CheckCircle2 className={`${isPreview ? 'w-4 h-4' : 'w-5 h-5'} text-[#285844] fill-[#285844] stroke-white inline-block shrink-0`} />
+                {(barber?.plan === 'capster' || barber?.plan === 'barber') && (
+                  <VerifiedBadge
+                    className={isPreview ? 'w-4 h-4' : 'w-5 h-5'}
+                    title={barber?.plan === 'barber' ? 'Official Studio Barbershop Terverifikasi' : 'Capster Pro Terverifikasi'}
+                  />
+                )}
               </h1>
 
               {/* Plan Badge: Capster Pro / Official Studio */}
@@ -1131,7 +1137,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               ) : barber?.plan === 'capster' ? (
                 <span className="mt-1.5 inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-900 border border-emerald-300 shadow-2xs" title="Capster Terverifikasi Pro">
                   <Sparkles className="w-3 h-3 text-emerald-600 shrink-0" />
-                  <span>Verified Capster Pro</span>
+                  <span>Capster Terverifikasi</span>
                 </span>
               ) : null}
             </div>
@@ -1615,7 +1621,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                               <div className="min-w-0">
                                 <div className="flex items-center gap-1">
                                   <span className="font-display font-bold text-xs text-neutral-900 truncate">{barber.name}</span>
-                                  <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" />
+                                  {(barber?.plan === 'capster' || barber?.plan === 'barber') && (
+                                    <VerifiedBadge className="w-3.5 h-3.5 shrink-0" title="Akun Terverifikasi" />
+                                  )}
                                 </div>
                                 <span className="text-[9.5px] text-neutral-400 block -mt-0.5 truncate">{barber.locationCity || 'Studio Barber'}</span>
                               </div>
@@ -2450,7 +2458,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   <div>
                     <div className="flex items-center gap-1">
                       <span className="font-display font-bold text-xs text-neutral-900">{barber.name}</span>
-                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                      {(barber?.plan === 'capster' || barber?.plan === 'barber') && (
+                        <VerifiedBadge className="w-3.5 h-3.5 shrink-0" title="Akun Terverifikasi" />
+                      )}
                     </div>
                     <span className="text-[10px] text-neutral-400 block -mt-0.5">{barber.locationCity || 'Studio Barber'}</span>
                   </div>

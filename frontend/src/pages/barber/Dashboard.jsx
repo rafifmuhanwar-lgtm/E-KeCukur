@@ -3196,7 +3196,7 @@ export default function BarberDashboard() {
                     {isFreePlan ? (
                       <>Kuota Menu Layanan: <strong className="font-bold">{serviceCount}/5</strong> digunakan (Paket Free)</>
                     ) : (
-                      <>Menu Layanan <strong>Unlimited</strong> (${serviceCount} aktif pada Paket ${isBarberPlan ? 'Barber' : 'Capster'})</>
+                      <>Menu Layanan <strong>Unlimited aktif</strong></>
                     )}
                   </span>
                 </div>
@@ -3330,7 +3330,7 @@ export default function BarberDashboard() {
                     {isFreePlan ? (
                       <>Kuota Feed & Portofolio: <strong className="font-bold">{lookbookCount}/10</strong> diunggah (Paket Free)</>
                     ) : (
-                      <>Feed Postingan <strong>Unlimited</strong> ({lookbookCount} foto pada Paket {isBarberPlan ? 'Barber' : 'Capster'})</>
+                      <>Feed Postingan <strong>Unlimited aktif</strong></>
                     )}
                   </span>
                 </div>
