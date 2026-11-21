@@ -352,7 +352,7 @@ export default function Messages({ barberMode = false }) {
           if (active) {
             let anonName = authUser.user_metadata?.name || '';
             if (!anonName || anonName.toLowerCase() === 'pelanggan') {
-              const localName = (typeof localStorage !== 'undefined' ? localStorage.getItem('ecukur_customer_name') : '') || customerName || '';
+              const localName = typeof localStorage !== 'undefined' ? (localStorage.getItem('ecukur_customer_name') || '') : '';
               if (localName && !validateCustomerName(localName)) {
                 anonName = localName;
                 supabase.auth.updateUser({
@@ -393,7 +393,7 @@ export default function Messages({ barberMode = false }) {
           if (active) {
             let customerDisplayName = userProfile?.name || authUser.user_metadata?.name || '';
             if (!customerDisplayName || customerDisplayName.toLowerCase() === 'pelanggan') {
-              const localName = (typeof localStorage !== 'undefined' ? localStorage.getItem('ecukur_customer_name') : '') || customerName || '';
+              const localName = typeof localStorage !== 'undefined' ? (localStorage.getItem('ecukur_customer_name') || '') : '';
               if (localName && !validateCustomerName(localName)) {
                 customerDisplayName = localName;
                 supabase.auth.updateUser({

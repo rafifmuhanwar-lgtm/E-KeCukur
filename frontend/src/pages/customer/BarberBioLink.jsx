@@ -1,18 +1,18 @@
 import React, { useCallback, useMemo, useState, useEffect, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Scissors, 
-  Clock, 
-  Sparkles, 
-  Share2, 
-  Check, 
-  Coffee, 
-  MapPin, 
-  CheckCircle2, 
-  X, 
-  ChevronRight, 
-  MessageCircle, 
+import {
+  Scissors,
+  Clock,
+  Sparkles,
+  Share2,
+  Check,
+  Coffee,
+  MapPin,
+  CheckCircle2,
+  X,
+  ChevronRight,
+  MessageCircle,
   ExternalLink,
   Users,
   Crown,
@@ -25,7 +25,6 @@ import {
   Send,
   Camera,
   Ticket,
-  Phone,
   ChevronLeft
 } from 'lucide-react';
 import { useStore } from '../../store';
@@ -35,14 +34,14 @@ import VerifiedBadge from '../../components/VerifiedBadge';
 import { supabase, isSupabaseConfigured } from '../../lib/supabase';
 import { createQrisPayment, checkQrisPaymentStatus, getDynamicQrisImageUrl } from '../../lib/qrisPayment';
 import { fetchBookingTracking } from '../../lib/bookingTracking';
-import { 
-  DEFAULT_OPERATING_HOURS, 
-  generateTimeSlots, 
-  timeToMinutes, 
-  minutesToTime, 
-  parseServiceDurationMinutes, 
+import {
+  DEFAULT_OPERATING_HOURS,
+  generateTimeSlots,
+  timeToMinutes,
+  minutesToTime,
+  parseServiceDurationMinutes,
   formatDurationLabel,
-  isSlotInBreakTime 
+  isSlotInBreakTime
 } from '../../lib/operatingHours';
 
 const getJakartaDateKey = (date = new Date()) => {
@@ -105,7 +104,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
   // Find barber matching slug or id or name from Supabase / Active Session / Local Cache
   const targetSlug = (id || '').toLowerCase().replace('@', '');
-  
+
   const DEFAULT_FALLBACK_BARBER = {
     id: targetSlug || 'barber',
     slug: targetSlug || 'barber',
@@ -153,9 +152,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   }
   if (!matchedBarber) {
     matchedBarber = barbers.find(
-      (b) => (b.slug && b.slug.toLowerCase() === targetSlug) || 
-             (b.id && b.id.toLowerCase() === targetSlug) || 
-             (b.name && b.name.toLowerCase() === targetSlug)
+      (b) => (b.slug && b.slug.toLowerCase() === targetSlug) ||
+        (b.id && b.id.toLowerCase() === targetSlug) ||
+        (b.name && b.name.toLowerCase() === targetSlug)
     );
   }
 
@@ -163,17 +162,17 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   let cachedData = null;
   if (typeof localStorage !== 'undefined' && targetSlug) {
     try {
-      const cStr = localStorage.getItem(`ecukur_barber_cache_${targetSlug}`) || 
-                   (matchedBarber?.id ? localStorage.getItem(`ecukur_barber_cache_${matchedBarber.id}`) : null);
+      const cStr = localStorage.getItem(`ecukur_barber_cache_${targetSlug}`) ||
+        (matchedBarber?.id ? localStorage.getItem(`ecukur_barber_cache_${matchedBarber.id}`) : null);
       if (cStr) cachedData = JSON.parse(cStr);
 
       const directBanner = localStorage.getItem(`ecukur_banner_${targetSlug}`) ||
-                           (matchedBarber?.id ? localStorage.getItem(`ecukur_banner_${matchedBarber.id}`) : null);
+        (matchedBarber?.id ? localStorage.getItem(`ecukur_banner_${matchedBarber.id}`) : null);
       if (directBanner) {
         if (!cachedData) cachedData = {};
         cachedData.bannerImage = directBanner;
       }
-    } catch {}
+    } catch { }
   }
 
   let mergedBarber = matchedBarber ? { ...matchedBarber } : null;
@@ -219,7 +218,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
         const stored = localStorage.getItem(`ecukur_likes_${targetSlug}`);
         return stored ? JSON.parse(stored) : {};
       }
-    } catch {}
+    } catch { }
     return {};
   });
 
@@ -229,7 +228,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
         const stored = localStorage.getItem(`ecukur_saves_${targetSlug}`);
         return stored ? JSON.parse(stored) : {};
       }
-    } catch {}
+    } catch { }
     return {};
   });
 
@@ -241,7 +240,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       if (typeof window !== 'undefined' && targetSlug) {
         localStorage.setItem(`ecukur_likes_${targetSlug}`, JSON.stringify(likedPosts));
       }
-    } catch {}
+    } catch { }
   }, [likedPosts, targetSlug]);
 
   // Synchronize Saves to LocalStorage
@@ -250,7 +249,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       if (typeof window !== 'undefined' && targetSlug) {
         localStorage.setItem(`ecukur_saves_${targetSlug}`, JSON.stringify(savedPosts));
       }
-    } catch {}
+    } catch { }
   }, [savedPosts, targetSlug]);
 
   const toggleLikePost = (postId, e) => {
@@ -314,7 +313,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
         const stored = localStorage.getItem(`ecukur_comments_${targetSlug}`);
         if (stored) return { ...defaultComments, ...JSON.parse(stored) };
       }
-    } catch {}
+    } catch { }
     return defaultComments;
   });
 
@@ -341,7 +340,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       if (typeof window !== 'undefined' && targetSlug) {
         localStorage.setItem(`ecukur_comments_${targetSlug}`, JSON.stringify(updated));
       }
-    } catch {}
+    } catch { }
   };
 
   // Booking Modal State
@@ -408,7 +407,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
           if (parsed?.id) return parsed;
         }
       }
-    } catch {}
+    } catch { }
     return null;
   });
 
@@ -417,7 +416,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     try {
       const saved = localStorage.getItem('ecukur_platform_settings');
       if (saved) return JSON.parse(saved);
-    } catch {}
+    } catch { }
     return null;
   });
 
@@ -426,7 +425,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       try {
         const saved = localStorage.getItem('ecukur_platform_settings');
         setBroadcastInfo(saved ? JSON.parse(saved) : null);
-      } catch {}
+      } catch { }
     };
     window.addEventListener('storage', handleStorage);
     return () => window.removeEventListener('storage', handleStorage);
@@ -582,16 +581,16 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       try {
         const { data, error } = teamBookingEnabled && selectedCapsterId
           ? await supabase.rpc('get_public_capster_booking_availability', {
-              p_barber_id: barberId,
-              p_booking_date: selectedDate,
-              p_barber_name: barber?.name || null,
-              p_capster_id: selectedCapsterId
-            })
+            p_barber_id: barberId,
+            p_booking_date: selectedDate,
+            p_barber_name: barber?.name || null,
+            p_capster_id: selectedCapsterId
+          })
           : await supabase.rpc('get_public_booking_availability', {
-              p_barber_id: barberId,
-              p_booking_date: selectedDate,
-              p_barber_name: barber?.name || null
-            });
+            p_barber_id: barberId,
+            p_booking_date: selectedDate,
+            p_barber_name: barber?.name || null
+          });
         if (error) throw error;
         if (active) {
           setAvailabilityBookings(Array.isArray(data) ? data : []);
@@ -667,7 +666,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               if (typeof localStorage !== 'undefined') {
                 localStorage.setItem('ecukur_active_ticket', JSON.stringify(successPayload));
               }
-            } catch {}
+            } catch { }
             setBookingStep('success');
           }
         }
@@ -806,8 +805,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
         data: { ...authUser.user_metadata, name: trimmedName, role: 'customer' }
       }).then(({ data }) => {
         if (data?.user) useStore.setState({ authUser: data.user });
-      }).catch(() => {});
-      supabase?.rpc('update_my_chat_display_name', { display_name: trimmedName }).then(() => {}).catch(() => {});
+      }).catch(() => { });
+      supabase?.rpc('update_my_chat_display_name', { display_name: trimmedName }).then(() => { }).catch(() => { });
     }
 
     if (teamBookingEnabled && (
@@ -885,9 +884,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
             qris_image_url: getDynamicQrisImageUrl(finalPrice),
             status: 'PENDING',
             expires_at: new Date(Date.now() + 15 * 60 * 1000).toISOString()
-          }).then(() => {}).catch((err) => console.warn('qris_payments insert notice:', err.message));
+          }).then(() => { }).catch((err) => console.warn('qris_payments insert notice:', err.message));
         }
-      } catch {}
+      } catch { }
     }
 
     setBookingQrisData({
@@ -917,8 +916,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
             {isLoading ? 'Memuat Profil...' : 'Profil Belum Terdaftar'}
           </h2>
           <p className="text-xs text-neutral-500 mt-1.5 mb-6 leading-relaxed">
-            {isLoading 
-              ? 'Menghubungkan ke database...' 
+            {isLoading
+              ? 'Menghubungkan ke database...'
               : `Alamat "${appDomain}/${id}" belum dimiliki oleh siapa pun. Kamu bisa langsung mendaftar dan mengklaim link ini sekarang!`}
           </p>
           <Link
@@ -1362,17 +1361,17 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
   return (
     <div className={`w-full ${isPreview ? 'min-h-0' : 'min-h-screen'} ${theme.pageBg} ${theme.textPrimary} font-sans selection:bg-[#285844] selection:text-white relative`}>
-      
+
       {/* Toast Notification */}
       <AnimatePresence>
         {copiedToast && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -20 }}
             className="fixed top-5 left-1/2 -translate-x-1/2 z-50 bg-[#171717] text-white px-5 py-2.5 text-xs font-semibold rounded-full shadow-2xl flex items-center gap-2 border border-neutral-700"
           >
-            <Check className="w-4 h-4 text-emerald-400" /> 
+            <Check className="w-4 h-4 text-emerald-400" />
             <span>Link Bio Berhasil Disalin!</span>
           </motion.div>
         )}
@@ -1381,7 +1380,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       {/* Main Container Shell */}
       <div className={`relative z-10 max-w-md mx-auto ${isPreview ? 'min-h-0' : 'min-h-screen sm:py-6'} flex flex-col justify-between`}>
         <div className={`w-full ${theme.cardBg} ${isPreview ? 'rounded-[32px]' : 'min-h-screen sm:min-h-0 sm:rounded-[36px] sm:shadow-xl sm:border ' + theme.cardBorder} overflow-hidden flex flex-col flex-1`}>
-          
+
           {/* Siaran Pengumuman Global dari SuperAdmin */}
           {Boolean(broadcastInfo?.isBroadcastActive && broadcastInfo?.broadcastMessage) && (
             <div className="bg-[#285844] text-white px-4 py-2 text-[11px] font-semibold flex items-center justify-between gap-2 shadow-xs">
@@ -1395,8 +1394,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
           {/* ─── 1. HEADER (BANNER IF PRESENT, OR CLEAN CARD HEADER IF NO BANNER) ─── */}
           {barber.bannerImage ? (
             <div className={`relative w-full ${isPreview ? 'h-36' : 'h-48 sm:h-56'} overflow-hidden bg-neutral-900 select-none shrink-0 group`}>
-              <img 
-                src={barber.bannerImage} 
+              <img
+                src={barber.bannerImage}
                 alt="Header Banner"
                 className="w-full h-full object-cover"
               />
@@ -1410,8 +1409,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     <Logo variant="compact" size="sm" className="text-white drop-shadow-md" />
                   </div>
                 ) : (
-                  <Link 
-                    to="/" 
+                  <Link
+                    to="/"
                     className="flex items-center gap-1.5 opacity-95 hover:opacity-100 transition-opacity"
                     title="Ditenagai oleh E Cukur"
                   >
@@ -1419,7 +1418,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   </Link>
                 )}
 
-                <button 
+                <button
                   type="button"
                   onClick={handleShare}
                   className="px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full bg-black/40 hover:bg-black/60 text-white backdrop-blur-md border border-white/20 text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-sm cursor-pointer"
@@ -1439,8 +1438,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     <Logo variant="compact" size="sm" theme={theme.logoTheme} className={theme.textPrimary} />
                   </div>
                 ) : (
-                  <Link 
-                    to="/" 
+                  <Link
+                    to="/"
                     className="flex items-center gap-1.5 hover:opacity-80 transition-opacity"
                     title="Ditenagai oleh E Cukur"
                   >
@@ -1448,7 +1447,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   </Link>
                 )}
 
-                <button 
+                <button
                   type="button"
                   onClick={handleShare}
                   className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} text-xs font-semibold flex items-center gap-1.5 transition-all active:scale-95 shadow-xs cursor-pointer`}
@@ -1463,16 +1462,15 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
           {/* ─── 2. PROFILE HEADER (AVATAR & INFO) ─── */}
           <div className={`relative flex flex-col items-center px-4 ${barber.bannerImage ? '-mt-12 sm:-mt-14' : 'mt-2 sm:mt-3'} z-20 text-center`}>
-            
+
             {/* Avatar Circle */}
             <div className="relative">
-              <div className={`${isPreview ? 'w-20 h-20' : 'w-24 h-24 sm:w-28 sm:h-28'} rounded-full overflow-hidden ${
-                barber.bannerImage ? 'border-4 border-white shadow-lg' : 'border-4 border-white shadow-md ring-1 ring-neutral-200/70'
-              } bg-neutral-100 flex items-center justify-center`}>
+              <div className={`${isPreview ? 'w-20 h-20' : 'w-24 h-24 sm:w-28 sm:h-28'} rounded-full overflow-hidden ${barber.bannerImage ? 'border-4 border-white shadow-lg' : 'border-4 border-white shadow-md ring-1 ring-neutral-200/70'
+                } bg-neutral-100 flex items-center justify-center`}>
                 {barber.photo ? (
-                  <img 
-                    src={barber.photo} 
-                    alt={barber.name} 
+                  <img
+                    src={barber.photo}
+                    alt={barber.name}
                     referrerPolicy="no-referrer"
                     onError={(e) => {
                       e.currentTarget.onerror = null;
@@ -1488,7 +1486,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               </div>
 
               {/* Online Green Status Dot (Bottom-Right) */}
-              <div 
+              <div
                 className={`absolute bottom-0.5 right-0.5 ${isPreview ? 'w-4 h-4' : 'w-5 h-5'} rounded-full border-2 border-white bg-[#00BA88] flex items-center justify-center shadow-xs`}
                 title={isAvailable ? 'Siap Menerima Booking' : 'Sedang Istirahat'}
               >
@@ -1543,7 +1541,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
             {/* ─── 3. HORIZONTAL PILL ROW FOR LINKS & TAGS (AS SHOWN IN REFERENCE IMAGE) ─── */}
             <div className={`flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 ${isPreview ? 'mt-2.5 mb-2.5' : 'mt-3.5 mb-3.5'} w-full px-2`}>
-              
+
               {/* Location Pill */}
               {(barber.locationCity || barber.address) && (
                 <span className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-medium flex items-center gap-1.5 ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} shadow-2xs transition-colors`}>
@@ -1554,9 +1552,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
               {/* Instagram Pill */}
               {barber.instagram && (
-                <a 
-                  href={barber.instagram.startsWith('http') ? barber.instagram : `https://instagram.com/${barber.instagram.replace('@', '')}`} 
-                  target="_blank" 
+                <a
+                  href={barber.instagram.startsWith('http') ? barber.instagram : `https://instagram.com/${barber.instagram.replace('@', '')}`}
+                  target="_blank"
                   rel="noreferrer"
                   className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} shadow-2xs transition-all hover:scale-[1.02]`}
                 >
@@ -1567,9 +1565,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
               {/* TikTok Pill */}
               {barber.tiktok && (
-                <a 
-                  href={barber.tiktok.startsWith('http') ? barber.tiktok : `https://tiktok.com/@${barber.tiktok.replace('@', '')}`} 
-                  target="_blank" 
+                <a
+                  href={barber.tiktok.startsWith('http') ? barber.tiktok : `https://tiktok.com/@${barber.tiktok.replace('@', '')}`}
+                  target="_blank"
                   rel="noreferrer"
                   className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} shadow-2xs transition-all hover:scale-[1.02]`}
                 >
@@ -1635,7 +1633,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               if (navTabs.length <= 1) return null;
 
               return (
-                <div 
+                <div
                   className={`flex items-center justify-between p-1 rounded-2xl border ${theme.navBg} ${theme.navBorder} shadow-xs`}
                 >
                   {navTabs.map((tab, idx) => {
@@ -1649,11 +1647,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                         <button
                           type="button"
                           onClick={() => setActiveTab(tab.id)}
-                          className={`flex-1 py-2 sm:py-2.5 px-2 rounded-xl font-bold active:scale-95 transition-all duration-75 flex items-center justify-center gap-1.5 cursor-pointer select-none ${
-                            isActive 
-                              ? `${theme.tabActiveBg} shadow-xs` 
-                              : `${theme.tabInactiveText}`
-                          } ${isPreview ? 'text-[10px]' : 'text-xs'}`}
+                          className={`flex-1 py-2 sm:py-2.5 px-2 rounded-xl font-bold active:scale-95 transition-all duration-75 flex items-center justify-center gap-1.5 cursor-pointer select-none ${isActive
+                            ? `${theme.tabActiveBg} shadow-xs`
+                            : `${theme.tabInactiveText}`
+                            } ${isPreview ? 'text-[10px]' : 'text-xs'}`}
                         >
                           <Icon className={`${isPreview ? 'w-3 h-3' : 'w-3.5 h-3.5'} ${isActive ? theme.tabActiveIcon : theme.tabInactiveIcon}`} />
                           <span>{tab.label}</span>
@@ -1669,607 +1666,603 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
           {/* Main Tab Content Wrapper with padding */}
           <div className="px-3 sm:px-4 flex-1 flex flex-col">
 
-        {/* ─── TAB CONTENT ─── */}
-        <div className={`space-y-3 ${isPreview ? 'mb-4' : 'mb-8'} flex-1`}>
+            {/* ─── TAB CONTENT ─── */}
+            <div className={`space-y-3 ${isPreview ? 'mb-4' : 'mb-8'} flex-1`}>
 
-          {/* TAB 1: SERVICES & PRICING */}
-          {activeTab === 'services' && (
-            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-2 transform-gpu will-change-transform">
-              
-              <div className="flex items-center justify-between px-1 mb-1">
-                <span className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} font-mono font-bold uppercase tracking-wider ${theme.textSecondary}`}>
-                  Pilih Layanan untuk Booking
-                </span>
-                <span className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} text-neutral-400 font-mono`}>
-                  {activeServices.length} Menu
-                </span>
-              </div>
+              {/* TAB 1: SERVICES & PRICING */}
+              {activeTab === 'services' && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-2 transform-gpu will-change-transform">
 
-              {activeServices.length === 0 ? (
-                <div className={`${isPreview ? 'p-4 rounded-xl' : 'p-8 rounded-2xl'} text-center border border-dashed ${theme.cardBorder} text-neutral-400`}>
-                  <Scissors className={`${isPreview ? 'w-5 h-5 mb-1.5' : 'w-8 h-8 mb-2'} mx-auto opacity-40`} />
-                  <p className={`${isPreview ? 'text-[11px]' : 'text-xs'} font-semibold`}>Belum ada layanan yang ditambahkan</p>
-                  <p className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} opacity-75 mt-0.5`}>Barber ini belum mengatur menu layanan potong rambut.</p>
-                </div>
-              ) : (
-                activeServices.map((item) => (
-                <div 
-                  key={item.id}
-                  onClick={() => handleOpenBooking(item)}
-                  className={`w-full text-left ${isPreview ? 'p-2.5 rounded-xl' : 'p-4 rounded-2xl'} border transition-all cursor-pointer group flex items-center justify-between ${theme.serviceCardBg} ${theme.cardBorder} ${theme.serviceCardHover} shadow-2xs`}
-                >
-                  <div className="pr-2 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5">
-                      <h3 className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-sm'} tracking-tight truncate ${theme.textPrimary}`}>{item.name}</h3>
-                      {item.tag && (
-                        <span className={`text-[8.5px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${theme.badgeBg} ${theme.badgeText}`}>
-                          {item.tag}
-                        </span>
-                      )}
-                    </div>
-                    {item.desc && (
-                      <p className={`text-[10px] font-normal line-clamp-1 mb-1.5 ${theme.textSecondary}`}>
-                        {item.desc}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-2 text-xs font-mono">
-                      <span className={`font-bold ${theme.servicePrice} ${isPreview ? 'text-[11px]' : 'text-xs'}`}>{formatRupiah(item.price)}</span>
-                      <span className={theme.isDark ? 'text-neutral-600' : 'text-neutral-400'}>•</span>
-                      <span className={`flex items-center gap-1 ${isPreview ? 'text-[9.5px]' : 'text-xs'} ${theme.textSecondary}`}>
-                        <Clock className={`${isPreview ? 'w-2.5 h-2.5' : 'w-3 h-3'}`} /> {item.duration || '45m'}
-                      </span>
-                    </div>
+                  <div className="flex items-center justify-between px-1 mb-1">
+                    <span className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} font-mono font-bold uppercase tracking-wider ${theme.textSecondary}`}>
+                      Pilih Layanan untuk Booking
+                    </span>
+                    <span className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} text-neutral-400 font-mono`}>
+                      {activeServices.length} Menu
+                    </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                    <span className={`text-[10px] font-bold ${theme.servicePrice} hidden sm:inline-block`}>Pilih Jam</span>
-                    <button
-                      type="button"
-                      className={`${isPreview ? 'p-1.5 rounded-lg' : 'p-2.5 rounded-xl'} ${theme.serviceArrowBg} transition-colors`}
-                      title="Booking Layanan Ini"
-                    >
-                      <ChevronRight className={`${isPreview ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${theme.serviceArrowText}`} />
-                    </button>
-                  </div>
-                </div>
-              )))}
-
-              {/* Custom External Links */}
-              {(barber.customLinks || []).filter(l => l.active).map((lnk) => (
-                <a
-                  key={lnk.id}
-                  href={lnk.url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className={`block ${isPreview ? 'p-2.5 text-[11px]' : 'p-3.5 text-xs'} text-center font-bold border transition-all shadow-2xs ${theme.cardBg} ${theme.cardBorder} hover:border-[#285844] rounded-2xl`}
-                >
-                  {lnk.title}
-                </a>
-              ))}
-            </motion.div>
-          )}
-
-          {/* TAB: TIM CAPSTER (JIKA FITUR TEAM DIAKTIFKAN) */}
-          {activeTab === 'team' && (
-            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-3 transform-gpu will-change-transform">
-              <div className="flex items-center justify-between px-1 mb-1">
-                <span className={`text-[11px] font-mono font-bold uppercase tracking-wider ${theme.textSecondary}`}>
-                  Status Capster
-                </span>
-                <span className="text-[11px] text-neutral-400 font-mono">
-                  {teamMembers.length} Capster
-                </span>
-              </div>
-
-              {teamMembers.length === 0 ? (
-                <div className={`${isPreview ? 'p-4 rounded-xl' : 'p-8 rounded-2xl'} text-center border border-dashed ${theme.cardBorder} text-neutral-400`}>
-                  <Users className={`${isPreview ? 'w-5 h-5 mb-1.5' : 'w-8 h-8 mb-2'} mx-auto opacity-40`} />
-                  <p className={`${isPreview ? 'text-[11px]' : 'text-xs'} font-semibold`}>Belum ada capster yang didaftarkan</p>
-                  <p className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} opacity-75 mt-0.5`}>Owner belum menambahkan anggota tim capster di studio ini.</p>
-                </div>
-              ) : (
-                teamMembers.map((member) => {
-                  const status = getCapsterStatus(member);
-                  const statusLabel = status === 'CUTTING'
-                    ? 'Sedang cukur'
-                    : status === 'OFF' ? 'Libur' : 'Free';
-                  const isAvailable = status === 'AVAILABLE';
-                  return (
-                  <div 
-                    key={member.id}
-                    className={`${isPreview ? 'p-2.5 rounded-xl' : 'p-3.5 rounded-2xl'} border flex items-center justify-between gap-2 shadow-2xs ${theme.cardBg} ${theme.cardBorder}`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className={`${isPreview ? 'w-8 h-8' : 'w-12 h-12'} rounded-full overflow-hidden bg-neutral-100 border border-neutral-200 shrink-0`}>
-                        {member.photo ? (
-                          <img src={member.photo} alt={member.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className={`w-full h-full flex items-center justify-center font-bold ${isPreview ? 'text-xs' : 'text-sm'} text-neutral-400`}>
-                            {member.name?.charAt(0) || 'C'}
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1">
-                          <h4 className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-sm'} tracking-tight truncate`}>{member.name}</h4>
-                        </div>
-                        <p className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} truncate ${theme.textSecondary}`}>{member.specialty || 'Capster'}</p>
-                        <span className={`inline-flex items-center gap-1 text-[10px] font-semibold mt-1 ${
-                          status === 'CUTTING' ? 'text-amber-700' : status === 'OFF' ? 'text-neutral-400' : 'text-emerald-700'
-                        }`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${status === 'CUTTING' ? 'bg-amber-500' : status === 'OFF' ? 'bg-neutral-400' : 'bg-emerald-500'}`} />
-                          {statusLabel}
-                        </span>
-                        {member.schedule && (
-                          <span className="text-[9px] text-neutral-400 font-mono block mt-0.5">{member.schedule}</span>
-                        )}
-                      </div>
+                  {activeServices.length === 0 ? (
+                    <div className={`${isPreview ? 'p-4 rounded-xl' : 'p-8 rounded-2xl'} text-center border border-dashed ${theme.cardBorder} text-neutral-400`}>
+                      <Scissors className={`${isPreview ? 'w-5 h-5 mb-1.5' : 'w-8 h-8 mb-2'} mx-auto opacity-40`} />
+                      <p className={`${isPreview ? 'text-[11px]' : 'text-xs'} font-semibold`}>Belum ada layanan yang ditambahkan</p>
+                      <p className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} opacity-75 mt-0.5`}>Barber ini belum mengatur menu layanan potong rambut.</p>
                     </div>
-
-                    {features.booking !== false && activeServices.length > 0 && (
-                      <button
-                        type="button"
-                        onClick={() => handleOpenBooking(activeServices[0], member.id)}
-                        disabled={!isAvailable}
-                        className={`${isPreview ? 'px-2 py-1 text-[10px] rounded-lg' : 'px-3 py-2 text-[11px] rounded-xl'} text-white font-bold shrink-0 transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${theme.accentBg}`}
+                  ) : (
+                    activeServices.map((item) => (
+                      <div
+                        key={item.id}
+                        onClick={() => handleOpenBooking(item)}
+                        className={`w-full text-left ${isPreview ? 'p-2.5 rounded-xl' : 'p-4 rounded-2xl'} border transition-all cursor-pointer group flex items-center justify-between ${theme.serviceCardBg} ${theme.cardBorder} ${theme.serviceCardHover} shadow-2xs`}
                       >
-                        {isAvailable ? 'Pilih' : statusLabel}
-                      </button>
-                    )}
-                  </div>
-                );
-                })
-              )}
-            </motion.div>
-          )}
-
-          {/* TAB 2: FEED PORTOFOLIO / BEBAS POSTING */}
-          {activeTab === 'lookbook' && (
-            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-3 transform-gpu will-change-transform">
-              
-              {/* Header Info */}
-              <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2">
-                  <div className={`w-6 h-6 rounded-lg ${theme.accentBg} flex items-center justify-center ${theme.accentText} shadow-2xs`}>
-                    <Sparkles className="w-3.5 h-3.5" />
-                  </div>
-                  <div>
-                    <span className={`font-display font-bold text-xs ${theme.textPrimary} block leading-tight`}>
-                      Feed & Galeri
-                    </span>
-                    <span className={`text-[10px] ${theme.textSecondary} opacity-75 font-mono`}>
-                      {((barber.lookbook && barber.lookbook.length > 0) ? barber.lookbook : [1,2,3,4,5,6]).length} Postingan
-                    </span>
-                  </div>
-                </div>
-
-                {/* View Mode Toggle: Grid ▦ vs Feed ☰ */}
-                <div className="flex items-center bg-neutral-100 p-0.5 rounded-xl border border-neutral-200">
-                  <button
-                    type="button"
-                    onClick={() => setLookbookViewMode('grid')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all duration-75 cursor-pointer select-none ${
-                      lookbookViewMode === 'grid' 
-                        ? 'bg-white shadow-2xs text-neutral-900' 
-                        : 'text-neutral-400 hover:text-neutral-700'
-                    }`}
-                    title="Grid 3 Kolom"
-                  >
-                    <Grid className="w-3.5 h-3.5" />
-                    <span className="text-[10px]">Grid</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLookbookViewMode('feed')}
-                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all duration-75 cursor-pointer select-none ${
-                      lookbookViewMode === 'feed' 
-                        ? 'bg-white shadow-2xs text-neutral-900' 
-                        : 'text-neutral-400 hover:text-neutral-700'
-                    }`}
-                    title="Feed Scroll"
-                  >
-                    <List className="w-3.5 h-3.5" />
-                    <span className="text-[10px]">Feed</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Photos List: Custom or Default Samples (0 Likes Start, Versatile Posts) */}
-              {(() => {
-                const sampleFeedPosts = [
-                  {
-                    id: 'sample-1',
-                    title: 'Fresh fade haircut untuk awal pekan yang rapi 🔥',
-                    img: 'https://images.unsplash.com/photo-1593702275687-f8b402bf1fb5?q=80&w=800',
-                    tag: 'Haircut',
-                    likes: 0
-                  },
-                  {
-                    id: 'sample-2',
-                    title: 'Senjata harian capster ✂️ Kebersihan & ketajaman clipper selalu nomor satu',
-                    img: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=800',
-                    tag: 'Tools',
-                    likes: 0
-                  },
-                  {
-                    id: 'sample-3',
-                    title: 'Suasana studio hari ini. Terima kasih untuk semua pelanggan yang sudah mampir!',
-                    img: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?q=80&w=800',
-                    tag: 'StudioVibe',
-                    likes: 0
-                  },
-                  {
-                    id: 'sample-4',
-                    title: 'Classic executive contour side part pompadour',
-                    img: 'https://images.unsplash.com/photo-1621644158485-649016e3eb3b?q=80&w=800',
-                    tag: 'Classic',
-                    likes: 0
-                  },
-                  {
-                    id: 'sample-5',
-                    title: 'Secangkir kopi hangat sebelum mulai sesi grooming pertama ☕',
-                    img: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?q=80&w=800',
-                    tag: 'BarberLife',
-                    likes: 0
-                  },
-                  {
-                    id: 'sample-6',
-                    title: 'French crop textured dengan razor line up rapih',
-                    img: 'https://images.unsplash.com/photo-1517832606299-7ae9b720a186?q=80&w=800',
-                    tag: 'Trending',
-                    likes: 0
-                  }
-                ];
-
-                const isDemoBarber = barber?.slug === 'reza' || barber?.slug === 'demo';
-                const posts = (Array.isArray(barber?.lookbook) && barber.lookbook.length > 0)
-                  ? barber.lookbook
-                  : (isDemoBarber ? sampleFeedPosts : []);
-
-                if (posts.length === 0) {
-                  return (
-                    <div className="py-12 px-4 text-center rounded-2xl bg-neutral-50/70 border border-neutral-200/80">
-                      <Camera className="w-8 h-8 text-neutral-400 mx-auto mb-2 opacity-50" />
-                      <p className="text-xs font-semibold text-neutral-700">Belum Ada Postingan Feed</p>
-                      <p className="text-[11px] text-neutral-400 mt-1 max-w-xs mx-auto">
-                        Capster ini belum mengunggah foto portofolio atau suasana studio.
-                      </p>
-                    </div>
-                  );
-                }
-
-                return lookbookViewMode === 'grid' ? (
-                  /* ─── 3-COLUMN UNCROPPED GRID ─── */
-                  <div className="grid grid-cols-3 gap-1 rounded-2xl overflow-hidden bg-white border border-neutral-200/80 p-1 shadow-2xs">
-                    {posts.map((look) => {
-                      const isLiked = likedPosts[look.id];
-                      const likesCount = (Number(look.likes) || 0) + (isLiked ? 1 : 0);
-                      const commentsCount = (postComments[look.id] || []).length;
-                      return (
-                        <div 
-                          key={look.id}
-                          onClick={() => setSelectedLookPost(look)}
-                          className="group relative aspect-square bg-neutral-950/90 overflow-hidden cursor-pointer rounded-lg select-none flex items-center justify-center p-0.5"
-                        >
-                          <img 
-                            src={look.img} 
-                            alt={look.title}
-                            className="max-w-full max-h-full w-auto h-auto object-contain transition-transform duration-300 group-hover:scale-105"
-                            loading="lazy"
-                          />
-                          {/* Tag Pill in top-right */}
-                          {look.tag && (
-                            <div className="absolute top-1 right-1 pointer-events-none">
-                              <span className="px-1.5 py-0.5 rounded-sm bg-black/70 backdrop-blur-xs text-[8px] font-semibold text-white">
-                                #{look.tag}
+                        <div className="pr-2 min-w-0">
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <h3 className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-sm'} tracking-tight truncate ${theme.textPrimary}`}>{item.name}</h3>
+                            {item.tag && (
+                              <span className={`text-[8.5px] font-mono px-1.5 py-0.5 rounded font-bold shrink-0 ${theme.badgeBg} ${theme.badgeText}`}>
+                                {item.tag}
                               </span>
-                            </div>
+                            )}
+                          </div>
+                          {item.desc && (
+                            <p className={`text-[10px] font-normal line-clamp-1 mb-1.5 ${theme.textSecondary}`}>
+                              {item.desc}
+                            </p>
                           )}
-                          {/* Hover / Tap Overlay */}
-                          <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 text-white text-xs font-bold">
-                            <div className="flex items-center gap-1">
-                              <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500 text-red-500' : 'fill-white'}`} />
-                              <span className="text-[10px] font-mono">{likesCount}</span>
+                          <div className="flex items-center gap-2 text-xs font-mono">
+                            <span className={`font-bold ${theme.servicePrice} ${isPreview ? 'text-[11px]' : 'text-xs'}`}>{formatRupiah(item.price)}</span>
+                            <span className={theme.isDark ? 'text-neutral-600' : 'text-neutral-400'}>•</span>
+                            <span className={`flex items-center gap-1 ${isPreview ? 'text-[9.5px]' : 'text-xs'} ${theme.textSecondary}`}>
+                              <Clock className={`${isPreview ? 'w-2.5 h-2.5' : 'w-3 h-3'}`} /> {item.duration || '45m'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                          <span className={`text-[10px] font-bold ${theme.servicePrice} hidden sm:inline-block`}>Pilih Jam</span>
+                          <button
+                            type="button"
+                            className={`${isPreview ? 'p-1.5 rounded-lg' : 'p-2.5 rounded-xl'} ${theme.serviceArrowBg} transition-colors`}
+                            title="Booking Layanan Ini"
+                          >
+                            <ChevronRight className={`${isPreview ? 'w-3.5 h-3.5' : 'w-4 h-4'} ${theme.serviceArrowText}`} />
+                          </button>
+                        </div>
+                      </div>
+                    )))}
+
+                  {/* Custom External Links */}
+                  {(barber.customLinks || []).filter(l => l.active).map((lnk) => (
+                    <a
+                      key={lnk.id}
+                      href={lnk.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`block ${isPreview ? 'p-2.5 text-[11px]' : 'p-3.5 text-xs'} text-center font-bold border transition-all shadow-2xs ${theme.cardBg} ${theme.cardBorder} hover:border-[#285844] rounded-2xl`}
+                    >
+                      {lnk.title}
+                    </a>
+                  ))}
+                </motion.div>
+              )}
+
+              {/* TAB: TIM CAPSTER (JIKA FITUR TEAM DIAKTIFKAN) */}
+              {activeTab === 'team' && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-3 transform-gpu will-change-transform">
+                  <div className="flex items-center justify-between px-1 mb-1">
+                    <span className={`text-[11px] font-mono font-bold uppercase tracking-wider ${theme.textSecondary}`}>
+                      Status Capster
+                    </span>
+                    <span className="text-[11px] text-neutral-400 font-mono">
+                      {teamMembers.length} Capster
+                    </span>
+                  </div>
+
+                  {teamMembers.length === 0 ? (
+                    <div className={`${isPreview ? 'p-4 rounded-xl' : 'p-8 rounded-2xl'} text-center border border-dashed ${theme.cardBorder} text-neutral-400`}>
+                      <Users className={`${isPreview ? 'w-5 h-5 mb-1.5' : 'w-8 h-8 mb-2'} mx-auto opacity-40`} />
+                      <p className={`${isPreview ? 'text-[11px]' : 'text-xs'} font-semibold`}>Belum ada capster yang didaftarkan</p>
+                      <p className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} opacity-75 mt-0.5`}>Owner belum menambahkan anggota tim capster di studio ini.</p>
+                    </div>
+                  ) : (
+                    teamMembers.map((member) => {
+                      const status = getCapsterStatus(member);
+                      const statusLabel = status === 'CUTTING'
+                        ? 'Sedang cukur'
+                        : status === 'OFF' ? 'Libur' : 'Free';
+                      const isAvailable = status === 'AVAILABLE';
+                      return (
+                        <div
+                          key={member.id}
+                          className={`${isPreview ? 'p-2.5 rounded-xl' : 'p-3.5 rounded-2xl'} border flex items-center justify-between gap-2 shadow-2xs ${theme.cardBg} ${theme.cardBorder}`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className={`${isPreview ? 'w-8 h-8' : 'w-12 h-12'} rounded-full overflow-hidden bg-neutral-100 border border-neutral-200 shrink-0`}>
+                              {member.photo ? (
+                                <img src={member.photo} alt={member.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className={`w-full h-full flex items-center justify-center font-bold ${isPreview ? 'text-xs' : 'text-sm'} text-neutral-400`}>
+                                  {member.name?.charAt(0) || 'C'}
+                                </div>
+                              )}
                             </div>
-                            <div className="flex items-center gap-1">
-                              <MessageSquare className="w-3.5 h-3.5 fill-white/80" />
-                              <span className="text-[10px] font-mono">{commentsCount}</span>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1">
+                                <h4 className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-sm'} tracking-tight truncate`}>{member.name}</h4>
+                              </div>
+                              <p className={`${isPreview ? 'text-[9.5px]' : 'text-[11px]'} truncate ${theme.textSecondary}`}>{member.specialty || 'Capster'}</p>
+                              <span className={`inline-flex items-center gap-1 text-[10px] font-semibold mt-1 ${status === 'CUTTING' ? 'text-amber-700' : status === 'OFF' ? 'text-neutral-400' : 'text-emerald-700'
+                                }`}>
+                                <span className={`w-1.5 h-1.5 rounded-full ${status === 'CUTTING' ? 'bg-amber-500' : status === 'OFF' ? 'bg-neutral-400' : 'bg-emerald-500'}`} />
+                                {statusLabel}
+                              </span>
+                              {member.schedule && (
+                                <span className="text-[9px] text-neutral-400 font-mono block mt-0.5">{member.schedule}</span>
+                              )}
                             </div>
                           </div>
+
+                          {features.booking !== false && activeServices.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleOpenBooking(activeServices[0], member.id)}
+                              disabled={!isAvailable}
+                              className={`${isPreview ? 'px-2 py-1 text-[10px] rounded-lg' : 'px-3 py-2 text-[11px] rounded-xl'} text-white font-bold shrink-0 transition-transform active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed ${theme.accentBg}`}
+                            >
+                              {isAvailable ? 'Pilih' : statusLabel}
+                            </button>
+                          )}
                         </div>
                       );
-                    })}
-                  </div>
-                ) : (
-                  /* ─── SINGLE-COLUMN FEED CARDS (100% UNCROPPED, NO BOOKING) ─── */
-                  <div className="space-y-3.5">
-                    {posts.map((look) => {
-                      const isLiked = likedPosts[look.id];
-                      const isSaved = savedPosts[look.id];
-                      const likesCount = (Number(look.likes) || 0) + (isLiked ? 1 : 0);
-                      const isAnimating = animatingHeartPostId === look.id;
-                      const commentsList = postComments[look.id] || [];
+                    })
+                  )}
+                </motion.div>
+              )}
 
+              {/* TAB 2: FEED PORTOFOLIO / BEBAS POSTING */}
+              {activeTab === 'lookbook' && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-3 transform-gpu will-change-transform">
+
+                  {/* Header Info */}
+                  <div className="flex items-center justify-between px-1">
+                    <div className="flex items-center gap-2">
+                      <div className={`w-6 h-6 rounded-lg ${theme.accentBg} flex items-center justify-center ${theme.accentText} shadow-2xs`}>
+                        <Sparkles className="w-3.5 h-3.5" />
+                      </div>
+                      <div>
+                        <span className={`font-display font-bold text-xs ${theme.textPrimary} block leading-tight`}>
+                          Feed & Galeri
+                        </span>
+                        <span className={`text-[10px] ${theme.textSecondary} opacity-75 font-mono`}>
+                          {((barber.lookbook && barber.lookbook.length > 0) ? barber.lookbook : [1, 2, 3, 4, 5, 6]).length} Postingan
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* View Mode Toggle: Grid ▦ vs Feed ☰ */}
+                    <div className="flex items-center bg-neutral-100 p-0.5 rounded-xl border border-neutral-200">
+                      <button
+                        type="button"
+                        onClick={() => setLookbookViewMode('grid')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all duration-75 cursor-pointer select-none ${lookbookViewMode === 'grid'
+                          ? 'bg-white shadow-2xs text-neutral-900'
+                          : 'text-neutral-400 hover:text-neutral-700'
+                          }`}
+                        title="Grid 3 Kolom"
+                      >
+                        <Grid className="w-3.5 h-3.5" />
+                        <span className="text-[10px]">Grid</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setLookbookViewMode('feed')}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold flex items-center gap-1 active:scale-95 transition-all duration-75 cursor-pointer select-none ${lookbookViewMode === 'feed'
+                          ? 'bg-white shadow-2xs text-neutral-900'
+                          : 'text-neutral-400 hover:text-neutral-700'
+                          }`}
+                        title="Feed Scroll"
+                      >
+                        <List className="w-3.5 h-3.5" />
+                        <span className="text-[10px]">Feed</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Photos List: Custom or Default Samples (0 Likes Start, Versatile Posts) */}
+                  {(() => {
+                    const sampleFeedPosts = [
+                      {
+                        id: 'sample-1',
+                        title: 'Fresh fade haircut untuk awal pekan yang rapi 🔥',
+                        img: 'https://images.unsplash.com/photo-1593702275687-f8b402bf1fb5?q=80&w=800',
+                        tag: 'Haircut',
+                        likes: 0
+                      },
+                      {
+                        id: 'sample-2',
+                        title: 'Senjata harian capster ✂️ Kebersihan & ketajaman clipper selalu nomor satu',
+                        img: 'https://images.unsplash.com/photo-1503951914875-452162b0f3f1?q=80&w=800',
+                        tag: 'Tools',
+                        likes: 0
+                      },
+                      {
+                        id: 'sample-3',
+                        title: 'Suasana studio hari ini. Terima kasih untuk semua pelanggan yang sudah mampir!',
+                        img: 'https://images.unsplash.com/photo-1585747860715-2ba37e788b70?q=80&w=800',
+                        tag: 'StudioVibe',
+                        likes: 0
+                      },
+                      {
+                        id: 'sample-4',
+                        title: 'Classic executive contour side part pompadour',
+                        img: 'https://images.unsplash.com/photo-1621644158485-649016e3eb3b?q=80&w=800',
+                        tag: 'Classic',
+                        likes: 0
+                      },
+                      {
+                        id: 'sample-5',
+                        title: 'Secangkir kopi hangat sebelum mulai sesi grooming pertama ☕',
+                        img: 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?q=80&w=800',
+                        tag: 'BarberLife',
+                        likes: 0
+                      },
+                      {
+                        id: 'sample-6',
+                        title: 'French crop textured dengan razor line up rapih',
+                        img: 'https://images.unsplash.com/photo-1517832606299-7ae9b720a186?q=80&w=800',
+                        tag: 'Trending',
+                        likes: 0
+                      }
+                    ];
+
+                    const isDemoBarber = barber?.slug === 'reza' || barber?.slug === 'demo';
+                    const posts = (Array.isArray(barber?.lookbook) && barber.lookbook.length > 0)
+                      ? barber.lookbook
+                      : (isDemoBarber ? sampleFeedPosts : []);
+
+                    if (posts.length === 0) {
                       return (
-                        <div 
-                          key={look.id} 
-                          className="bg-white rounded-2xl border border-neutral-200 overflow-hidden shadow-2xs"
-                        >
-                          {/* Post Header: Avatar, Name, Location */}
-                          <div className="p-2.5 sm:p-3 flex items-center justify-between border-b border-neutral-50">
-                            <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-full overflow-hidden bg-neutral-100 border border-neutral-200 shrink-0">
-                                {barber.photo ? (
-                                  <img src={barber.photo} alt={barber.name} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center font-bold text-xs text-neutral-400">
-                                    {barber.name?.charAt(0) || 'B'}
+                        <div className="py-12 px-4 text-center rounded-2xl bg-neutral-50/70 border border-neutral-200/80">
+                          <Camera className="w-8 h-8 text-neutral-400 mx-auto mb-2 opacity-50" />
+                          <p className="text-xs font-semibold text-neutral-700">Belum Ada Postingan Feed</p>
+                          <p className="text-[11px] text-neutral-400 mt-1 max-w-xs mx-auto">
+                            Capster ini belum mengunggah foto portofolio atau suasana studio.
+                          </p>
+                        </div>
+                      );
+                    }
+
+                    return lookbookViewMode === 'grid' ? (
+                      /* ─── 3-COLUMN UNCROPPED GRID ─── */
+                      <div className="grid grid-cols-3 gap-1 rounded-2xl overflow-hidden bg-white border border-neutral-200/80 p-1 shadow-2xs">
+                        {posts.map((look) => {
+                          const isLiked = likedPosts[look.id];
+                          const likesCount = (Number(look.likes) || 0) + (isLiked ? 1 : 0);
+                          const commentsCount = (postComments[look.id] || []).length;
+                          return (
+                            <div
+                              key={look.id}
+                              onClick={() => setSelectedLookPost(look)}
+                              className="group relative aspect-square bg-neutral-950/90 overflow-hidden cursor-pointer rounded-lg select-none flex items-center justify-center p-0.5"
+                            >
+                              <img
+                                src={look.img}
+                                alt={look.title}
+                                className="max-w-full max-h-full w-auto h-auto object-contain transition-transform duration-300 group-hover:scale-105"
+                                loading="lazy"
+                              />
+                              {/* Tag Pill in top-right */}
+                              {look.tag && (
+                                <div className="absolute top-1 right-1 pointer-events-none">
+                                  <span className="px-1.5 py-0.5 rounded-sm bg-black/70 backdrop-blur-xs text-[8px] font-semibold text-white">
+                                    #{look.tag}
+                                  </span>
+                                </div>
+                              )}
+                              {/* Hover / Tap Overlay */}
+                              <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 text-white text-xs font-bold">
+                                <div className="flex items-center gap-1">
+                                  <Heart className={`w-3.5 h-3.5 ${isLiked ? 'fill-red-500 text-red-500' : 'fill-white'}`} />
+                                  <span className="text-[10px] font-mono">{likesCount}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <MessageSquare className="w-3.5 h-3.5 fill-white/80" />
+                                  <span className="text-[10px] font-mono">{commentsCount}</span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      /* ─── SINGLE-COLUMN FEED CARDS (100% UNCROPPED, NO BOOKING) ─── */
+                      <div className="space-y-3.5">
+                        {posts.map((look) => {
+                          const isLiked = likedPosts[look.id];
+                          const isSaved = savedPosts[look.id];
+                          const likesCount = (Number(look.likes) || 0) + (isLiked ? 1 : 0);
+                          const isAnimating = animatingHeartPostId === look.id;
+                          const commentsList = postComments[look.id] || [];
+
+                          return (
+                            <div
+                              key={look.id}
+                              className="bg-white rounded-2xl border border-neutral-200 overflow-hidden shadow-2xs"
+                            >
+                              {/* Post Header: Avatar, Name, Location */}
+                              <div className="p-2.5 sm:p-3 flex items-center justify-between border-b border-neutral-50">
+                                <div className="flex items-center gap-2">
+                                  <div className="w-7 h-7 rounded-full overflow-hidden bg-neutral-100 border border-neutral-200 shrink-0">
+                                    {barber.photo ? (
+                                      <img src={barber.photo} alt={barber.name} className="w-full h-full object-cover" />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center font-bold text-xs text-neutral-400">
+                                        {barber.name?.charAt(0) || 'B'}
+                                      </div>
+                                    )}
+                                  </div>
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-1">
+                                      <span className="font-display font-bold text-xs text-neutral-900 truncate">{barber.name}</span>
+                                      {(barber?.plan === 'capster' || barber?.plan === 'barber') && (
+                                        <VerifiedBadge className="w-3.5 h-3.5 shrink-0" title="Akun Terverifikasi" />
+                                      )}
+                                    </div>
+                                    <span className="text-[9.5px] text-neutral-400 block -mt-0.5 truncate">{barber.locationCity || 'Studio Barber'}</span>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedLookPost(look)}
+                                  className="text-[10px] font-semibold text-[#285844] hover:underline cursor-pointer"
+                                >
+                                  Detail Foto
+                                </button>
+                              </div>
+
+                              {/* Post Image with Double-Tap to Like - 100% UNCROPPED */}
+                              <div
+                                className="relative w-full bg-neutral-950 cursor-pointer overflow-hidden select-none flex items-center justify-center min-h-[260px]"
+                                onDoubleClick={() => handleDoubleTapLike(look.id)}
+                                title="Klik ganda untuk menyukai"
+                              >
+                                <img
+                                  src={look.img}
+                                  alt={look.title}
+                                  className="w-full h-auto max-h-[620px] object-contain mx-auto block"
+                                />
+
+                                {/* Double tap heart animation */}
+                                <AnimatePresence>
+                                  {isAnimating && (
+                                    <motion.div
+                                      initial={{ scale: 0, opacity: 0 }}
+                                      animate={{ scale: [0, 1.25, 1], opacity: [0, 1, 0.95] }}
+                                      exit={{ scale: 1.4, opacity: 0 }}
+                                      transition={{ duration: 0.6 }}
+                                      className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+                                    >
+                                      <Heart className="w-20 h-20 text-white fill-white drop-shadow-2xl" />
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+
+                                {/* Tag badge */}
+                                {look.tag && (
+                                  <div className="absolute top-2.5 right-2.5 pointer-events-none">
+                                    <span className="px-2 py-0.5 rounded-full bg-black/70 text-white text-[9.5px] font-semibold backdrop-blur-xs">
+                                      #{look.tag}
+                                    </span>
                                   </div>
                                 )}
                               </div>
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-1">
-                                  <span className="font-display font-bold text-xs text-neutral-900 truncate">{barber.name}</span>
-                                  {(barber?.plan === 'capster' || barber?.plan === 'barber') && (
-                                    <VerifiedBadge className="w-3.5 h-3.5 shrink-0" title="Akun Terverifikasi" />
-                                  )}
+
+                              {/* Action Bar (Heart, Comment, Share, Bookmark) */}
+                              <div className="px-3 pt-2.5 pb-1 flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={(e) => toggleLikePost(look.id, e)}
+                                    className="cursor-pointer active:scale-125 transition-transform"
+                                    title={isLiked ? 'Batal Suka' : 'Suka'}
+                                  >
+                                    <Heart className={`w-5 h-5 ${isLiked ? 'text-red-500 fill-red-500' : 'text-neutral-700 hover:text-black'}`} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setCommentModalPost(look)}
+                                    className="cursor-pointer active:scale-110 transition-transform relative"
+                                    title="Lihat & Tulis Komentar"
+                                  >
+                                    <MessageSquare className="w-5 h-5 text-neutral-700 hover:text-black" />
+                                    {commentsList.length > 0 && (
+                                      <span className="absolute -top-1 -right-1.5 px-1 py-0.2 min-w-[14px] text-[8.5px] font-bold rounded-full bg-neutral-900 text-white flex items-center justify-center leading-tight">
+                                        {commentsList.length}
+                                      </span>
+                                    )}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={handleShare}
+                                    className="cursor-pointer active:scale-110 transition-transform"
+                                    title="Bagikan"
+                                  >
+                                    <Share2 className="w-4.5 h-4.5 text-neutral-700 hover:text-black" />
+                                  </button>
                                 </div>
-                                <span className="text-[9.5px] text-neutral-400 block -mt-0.5 truncate">{barber.locationCity || 'Studio Barber'}</span>
-                              </div>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedLookPost(look)}
-                              className="text-[10px] font-semibold text-[#285844] hover:underline cursor-pointer"
-                            >
-                              Detail Foto
-                            </button>
-                          </div>
-
-                          {/* Post Image with Double-Tap to Like - 100% UNCROPPED */}
-                          <div 
-                            className="relative w-full bg-neutral-950 cursor-pointer overflow-hidden select-none flex items-center justify-center min-h-[260px]"
-                            onDoubleClick={() => handleDoubleTapLike(look.id)}
-                            title="Klik ganda untuk menyukai"
-                          >
-                            <img 
-                              src={look.img} 
-                              alt={look.title} 
-                              className="w-full h-auto max-h-[620px] object-contain mx-auto block" 
-                            />
-
-                            {/* Double tap heart animation */}
-                            <AnimatePresence>
-                              {isAnimating && (
-                                <motion.div 
-                                  initial={{ scale: 0, opacity: 0 }}
-                                  animate={{ scale: [0, 1.25, 1], opacity: [0, 1, 0.95] }}
-                                  exit={{ scale: 1.4, opacity: 0 }}
-                                  transition={{ duration: 0.6 }}
-                                  className="absolute inset-0 flex items-center justify-center pointer-events-none z-10"
+                                <button
+                                  type="button"
+                                  onClick={(e) => toggleSavePost(look.id, e)}
+                                  className="cursor-pointer active:scale-110 transition-transform"
+                                  title={isSaved ? 'Tersimpan' : 'Simpan'}
                                 >
-                                  <Heart className="w-20 h-20 text-white fill-white drop-shadow-2xl" />
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                                  <Bookmark className={`w-5 h-5 ${isSaved ? 'text-neutral-900 fill-neutral-900' : 'text-neutral-700 hover:text-black'}`} />
+                                </button>
+                              </div>
 
-                            {/* Tag badge */}
-                            {look.tag && (
-                              <div className="absolute top-2.5 right-2.5 pointer-events-none">
-                                <span className="px-2 py-0.5 rounded-full bg-black/70 text-white text-[9.5px] font-semibold backdrop-blur-xs">
-                                  #{look.tag}
+                              {/* Likes Count */}
+                              <div className="px-3 py-0.5">
+                                <span className="text-[11px] font-bold text-neutral-900">
+                                  {likesCount.toLocaleString('id-ID')} suka
                                 </span>
                               </div>
-                            )}
-                          </div>
 
-                          {/* Action Bar (Heart, Comment, Share, Bookmark) */}
-                          <div className="px-3 pt-2.5 pb-1 flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <button 
-                                type="button" 
-                                onClick={(e) => toggleLikePost(look.id, e)}
-                                className="cursor-pointer active:scale-125 transition-transform"
-                                title={isLiked ? 'Batal Suka' : 'Suka'}
-                              >
-                                <Heart className={`w-5 h-5 ${isLiked ? 'text-red-500 fill-red-500' : 'text-neutral-700 hover:text-black'}`} />
-                              </button>
-                              <button 
-                                type="button" 
-                                onClick={() => setCommentModalPost(look)}
-                                className="cursor-pointer active:scale-110 transition-transform relative"
-                                title="Lihat & Tulis Komentar"
-                              >
-                                <MessageSquare className="w-5 h-5 text-neutral-700 hover:text-black" />
-                                {commentsList.length > 0 && (
-                                  <span className="absolute -top-1 -right-1.5 px-1 py-0.2 min-w-[14px] text-[8.5px] font-bold rounded-full bg-neutral-900 text-white flex items-center justify-center leading-tight">
-                                    {commentsList.length}
-                                  </span>
-                                )}
-                              </button>
-                              <button 
-                                type="button" 
-                                onClick={handleShare}
-                                className="cursor-pointer active:scale-110 transition-transform"
-                                title="Bagikan"
-                              >
-                                <Share2 className="w-4.5 h-4.5 text-neutral-700 hover:text-black" />
-                              </button>
+                              {/* Caption */}
+                              <div className="px-3 pt-0.5 pb-1 text-xs leading-relaxed">
+                                <span className="font-bold text-neutral-900 mr-1.5">{barber.name}</span>
+                                <span className="text-neutral-700 font-medium">{look.title}</span>
+                              </div>
+
+                              {/* Comments Preview Link */}
+                              <div className="px-3 pb-3">
+                                <button
+                                  type="button"
+                                  onClick={() => setCommentModalPost(look)}
+                                  className="text-[11px] text-neutral-400 hover:text-neutral-700 transition-colors block text-left cursor-pointer"
+                                >
+                                  {commentsList.length > 0
+                                    ? `Lihat semua ${commentsList.length} komentar...`
+                                    : 'Tulis komentar untuk postingan ini...'}
+                                </button>
+                              </div>
                             </div>
-                            <button 
-                              type="button" 
-                              onClick={(e) => toggleSavePost(look.id, e)}
-                              className="cursor-pointer active:scale-110 transition-transform"
-                              title={isSaved ? 'Tersimpan' : 'Simpan'}
-                            >
-                              <Bookmark className={`w-5 h-5 ${isSaved ? 'text-neutral-900 fill-neutral-900' : 'text-neutral-700 hover:text-black'}`} />
-                            </button>
-                          </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+                </motion.div>
+              )}
 
-                          {/* Likes Count */}
-                          <div className="px-3 py-0.5">
-                            <span className="text-[11px] font-bold text-neutral-900">
-                              {likesCount.toLocaleString('id-ID')} suka
-                            </span>
-                          </div>
-
-                          {/* Caption */}
-                          <div className="px-3 pt-0.5 pb-1 text-xs leading-relaxed">
-                            <span className="font-bold text-neutral-900 mr-1.5">{barber.name}</span>
-                            <span className="text-neutral-700 font-medium">{look.title}</span>
-                          </div>
-
-                          {/* Comments Preview Link */}
-                          <div className="px-3 pb-3">
-                            <button 
-                              type="button"
-                              onClick={() => setCommentModalPost(look)}
-                              className="text-[11px] text-neutral-400 hover:text-neutral-700 transition-colors block text-left cursor-pointer"
-                            >
-                              {commentsList.length > 0 
-                                ? `Lihat semua ${commentsList.length} komentar...` 
-                                : 'Tulis komentar untuk postingan ini...'}
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })}
+              {/* TAB 3: TIPPING / TRAKTIR KOPI */}
+              {activeTab === 'tipping' && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className={`transform-gpu will-change-transform ${isPreview ? 'p-3.5 rounded-xl' : 'p-6 rounded-2xl'} border text-center shadow-xs ${theme.cardBg} ${theme.cardBorder}`}>
+                  <div className={`${isPreview ? 'w-9 h-9 rounded-xl mb-1.5' : 'w-12 h-12 rounded-2xl mb-3'} bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-600`}>
+                    <Coffee className={`${isPreview ? 'w-4 h-4' : 'w-6 h-6'}`} />
                   </div>
-                );
-              })()}
-            </motion.div>
-          )}
+                  <h3 className={`font-display font-extrabold ${isPreview ? 'text-xs mb-0.5' : 'text-base mb-1'} tracking-tight`}>
+                    {barber.tippingConfig?.title || 'Traktir Kopi Capster'}
+                  </h3>
+                  <p className={`${isPreview ? 'text-[10px] mb-2.5 line-clamp-2' : 'text-xs mb-5'} max-w-xs mx-auto ${theme.textSecondary}`}>
+                    {barber.tippingConfig?.message || `Puas dengan hasil potongan ${barber.name}? Beri sedikit apresiasi agar makin semangat!`}
+                  </p>
 
-          {/* TAB 3: TIPPING / TRAKTIR KOPI */}
-          {activeTab === 'tipping' && (
-            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className={`transform-gpu will-change-transform ${isPreview ? 'p-3.5 rounded-xl' : 'p-6 rounded-2xl'} border text-center shadow-xs ${theme.cardBg} ${theme.cardBorder}`}>
-              <div className={`${isPreview ? 'w-9 h-9 rounded-xl mb-1.5' : 'w-12 h-12 rounded-2xl mb-3'} bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-600`}>
-                <Coffee className={`${isPreview ? 'w-4 h-4' : 'w-6 h-6'}`} />
-              </div>
-              <h3 className={`font-display font-extrabold ${isPreview ? 'text-xs mb-0.5' : 'text-base mb-1'} tracking-tight`}>
-                {barber.tippingConfig?.title || 'Traktir Kopi Capster'}
-              </h3>
-              <p className={`${isPreview ? 'text-[10px] mb-2.5 line-clamp-2' : 'text-xs mb-5'} max-w-xs mx-auto ${theme.textSecondary}`}>
-                {barber.tippingConfig?.message || `Puas dengan hasil potongan ${barber.name}? Beri sedikit apresiasi agar makin semangat!`}
-              </p>
+                  <div className={`grid grid-cols-3 ${isPreview ? 'gap-1.5 mb-2.5' : 'gap-2 mb-4'}`}>
+                    {(barber.tippingConfig?.presets || [
+                      { amount: 5000, label: 'Kopi Tubruk', price: '5K', active: true, emoji: '☕' },
+                      { amount: 10000, label: 'Es Kopi Susu', price: '10K', active: true, emoji: '🥤' },
+                      { amount: 20000, label: 'Roti & Kopi', price: '20K', active: true, emoji: '🥐' },
+                      { amount: 35000, label: 'Paket Siang', price: '35K', active: true, emoji: '🍱' },
+                      { amount: 50000, label: 'Traktir Sultan', price: '50K', active: true, emoji: '👑' },
+                      { amount: 100000, label: 'Super Fan', price: '100K', active: false, emoji: '🔥' },
+                    ])
+                      .filter(p => p.active !== false)
+                      .map((preset) => (
+                        <button
+                          key={preset.id || preset.amount}
+                          type="button"
+                          onClick={() => {
+                            setTipAmount(preset.amount);
+                            setSelectedCoffeeLabel(preset.label || 'Kopi');
+                            setIsTippingOpen(true);
+                          }}
+                          className={`${isPreview ? 'p-1.5 rounded-lg' : 'p-3 rounded-xl'} border text-center transition-all cursor-pointer ${tipAmount === preset.amount
+                            ? `${theme.tabActiveBg} scale-[1.02] shadow-xs`
+                            : `${theme.serviceCardBg} ${theme.cardBorder} hover:opacity-80`
+                            }`}
+                        >
+                          <span className="text-sm block mb-0.5">{preset.emoji || '☕'}</span>
+                          <p className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-base'} ${tipAmount === preset.amount ? '' : 'text-amber-600'}`}>
+                            {preset.price || `${Math.round((preset.amount || 0) / 1000)}K`}
+                          </p>
+                          <p className={`text-[8.5px] sm:text-[10px] uppercase font-semibold truncate ${tipAmount === preset.amount ? 'opacity-90' : theme.textSecondary}`}>{preset.label}</p>
+                        </button>
+                      ))}
+                  </div>
 
-              <div className={`grid grid-cols-3 ${isPreview ? 'gap-1.5 mb-2.5' : 'gap-2 mb-4'}`}>
-                {(barber.tippingConfig?.presets || [
-                  { amount: 5000, label: 'Kopi Tubruk', price: '5K', active: true, emoji: '☕' },
-                  { amount: 10000, label: 'Es Kopi Susu', price: '10K', active: true, emoji: '🥤' },
-                  { amount: 20000, label: 'Roti & Kopi', price: '20K', active: true, emoji: '🥐' },
-                  { amount: 35000, label: 'Paket Siang', price: '35K', active: true, emoji: '🍱' },
-                  { amount: 50000, label: 'Traktir Sultan', price: '50K', active: true, emoji: '👑' },
-                  { amount: 100000, label: 'Super Fan', price: '100K', active: false, emoji: '🔥' },
-                ])
-                .filter(p => p.active !== false)
-                .map((preset) => (
                   <button
-                    key={preset.id || preset.amount}
                     type="button"
-                    onClick={() => { 
-                      setTipAmount(preset.amount); 
-                      setSelectedCoffeeLabel(preset.label || 'Kopi');
-                      setIsTippingOpen(true); 
-                    }}
-                    className={`${isPreview ? 'p-1.5 rounded-lg' : 'p-3 rounded-xl'} border text-center transition-all cursor-pointer ${
-                      tipAmount === preset.amount 
-                        ? `${theme.tabActiveBg} scale-[1.02] shadow-xs` 
-                        : `${theme.serviceCardBg} ${theme.cardBorder} hover:opacity-80`
-                    }`}
+                    onClick={() => setIsTippingOpen(true)}
+                    className={`w-full ${isPreview ? 'py-2 text-[11px] rounded-lg' : 'py-3.5 text-xs rounded-xl'} ${theme.accentText} font-bold shadow-sm transition-transform active:scale-98 flex items-center justify-center gap-1.5 cursor-pointer ${theme.accentBg}`}
                   >
-                    <span className="text-sm block mb-0.5">{preset.emoji || '☕'}</span>
-                    <p className={`font-display font-bold ${isPreview ? 'text-xs' : 'text-base'} ${tipAmount === preset.amount ? '' : 'text-amber-600'}`}>
-                      {preset.price || `${Math.round((preset.amount || 0) / 1000)}K`}
-                    </p>
-                    <p className={`text-[8.5px] sm:text-[10px] uppercase font-semibold truncate ${tipAmount === preset.amount ? 'opacity-90' : theme.textSecondary}`}>{preset.label}</p>
+                    <Coffee className="w-3.5 h-3.5" />
+                    <span>Kirim Tip Apresiasi</span>
                   </button>
-                ))}
-              </div>
+                </motion.div>
+              )}
 
-              <button 
-                type="button"
-                onClick={() => setIsTippingOpen(true)}
-                className={`w-full ${isPreview ? 'py-2 text-[11px] rounded-lg' : 'py-3.5 text-xs rounded-xl'} ${theme.accentText} font-bold shadow-sm transition-transform active:scale-98 flex items-center justify-center gap-1.5 cursor-pointer ${theme.accentBg}`}
+              {/* TAB 4: LOCATION & OPERATIONAL INFO */}
+              {activeTab === 'info' && (
+                <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-2.5 transform-gpu will-change-transform">
+                  <div className={`${isPreview ? 'p-2.5 rounded-xl' : 'p-4 rounded-2xl'} border shadow-2xs ${theme.cardBg} ${theme.cardBorder}`}>
+                    <span className={`font-display font-bold ${isPreview ? 'text-[11px]' : 'text-xs'} ${theme.textPrimary} block mb-0.5`}>📍 Alamat Studio:</span>
+                    <p className={`${isPreview ? 'text-[10px]' : 'text-xs'} leading-relaxed ${theme.textSecondary}`}>
+                      {barber.address || 'Alamat belum diatur oleh barber.'}
+                    </p>
+                    {barber.mapsUrl && (
+                      <a
+                        href={barber.mapsUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={`mt-2 inline-flex items-center gap-1 ${isPreview ? 'text-[10px]' : 'text-xs'} ${theme.servicePrice} font-bold hover:underline`}
+                      >
+                        <MapPin className="w-3 h-3" />
+                        <span>Petunjuk Arah Google Maps ↗</span>
+                      </a>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+
+            </div>
+          </div>
+
+          {/* ─── Decorative Aesthetic Accent (Sesuai Referensi Gambar untuk Tema Premium & Pink) ─── */}
+          {theme.hasGoldWave && (
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 overflow-hidden opacity-35 select-none z-0">
+              <svg viewBox="0 0 500 150" preserveAspectRatio="none" className="h-full w-full">
+                <path d="M0,85 C140,140 330,10 500,70 L500,150 L0,150 Z" fill="url(#premiumGoldGrad)" />
+                <defs>
+                  <linearGradient id="premiumGoldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                    <stop offset="0%" stopColor="#D4AF37" />
+                    <stop offset="50%" stopColor="#F59E0B" />
+                    <stop offset="100%" stopColor="#AA7C11" />
+                  </linearGradient>
+                </defs>
+              </svg>
+            </div>
+          )}
+          {theme.id === 'pink' && (
+            <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 overflow-hidden opacity-30 select-none z-0">
+              <svg viewBox="0 0 500 150" preserveAspectRatio="none" className="h-full w-full">
+                <path d="M0,70 C160,135 340,15 500,70 L500,150 L0,150 Z" fill="#F472B6" />
+              </svg>
+            </div>
+          )}
+
+          {/* ─── Footer (Pure Public Link in Bio - Responsive & Clean on Mobile) ─── */}
+          <footer className={`w-full text-center ${isPreview ? 'py-2.5 px-3' : 'pt-6 pb-8 px-4'} ${theme.footerBorder} shrink-0 select-none mt-auto relative z-10`}>
+            <div className="flex flex-col items-center justify-center gap-1.5 text-center">
+              <Link
+                to="/"
+                className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full ${theme.footerBadgeBg} border ${theme.footerBadgeBorder} text-[10.5px] font-medium tracking-tight transition-all active:scale-95 shadow-2xs`}
+                title="Ditenagai oleh E Cukur"
               >
-                <Coffee className="w-3.5 h-3.5" /> 
-                <span>Kirim Tip Apresiasi</span>
-              </button>
-            </motion.div>
-          )}
-
-          {/* TAB 4: LOCATION & OPERATIONAL INFO */}
-          {activeTab === 'info' && (
-            <motion.div initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.12, ease: 'easeOut' }} className="space-y-2.5 transform-gpu will-change-transform">
-              <div className={`${isPreview ? 'p-2.5 rounded-xl' : 'p-4 rounded-2xl'} border shadow-2xs ${theme.cardBg} ${theme.cardBorder}`}>
-                <span className={`font-display font-bold ${isPreview ? 'text-[11px]' : 'text-xs'} ${theme.textPrimary} block mb-0.5`}>📍 Alamat Studio:</span>
-                <p className={`${isPreview ? 'text-[10px]' : 'text-xs'} leading-relaxed ${theme.textSecondary}`}>
-                  {barber.address || 'Alamat belum diatur oleh barber.'}
-                </p>
-                {barber.mapsUrl && (
-                  <a 
-                    href={barber.mapsUrl} 
-                    target="_blank" 
-                    rel="noreferrer"
-                    className={`mt-2 inline-flex items-center gap-1 ${isPreview ? 'text-[10px]' : 'text-xs'} ${theme.servicePrice} font-bold hover:underline`}
-                  >
-                    <MapPin className="w-3 h-3" />
-                    <span>Petunjuk Arah Google Maps ↗</span>
-                  </a>
-                )}
-              </div>
-            </motion.div>
-          )}
-
-          </div>
-        </div>
-
-        {/* ─── Decorative Aesthetic Accent (Sesuai Referensi Gambar untuk Tema Premium & Pink) ─── */}
-        {theme.hasGoldWave && (
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-16 overflow-hidden opacity-35 select-none z-0">
-            <svg viewBox="0 0 500 150" preserveAspectRatio="none" className="h-full w-full">
-              <path d="M0,85 C140,140 330,10 500,70 L500,150 L0,150 Z" fill="url(#premiumGoldGrad)" />
-              <defs>
-                <linearGradient id="premiumGoldGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                  <stop offset="0%" stopColor="#D4AF37" />
-                  <stop offset="50%" stopColor="#F59E0B" />
-                  <stop offset="100%" stopColor="#AA7C11" />
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-        )}
-        {theme.id === 'pink' && (
-          <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-14 overflow-hidden opacity-30 select-none z-0">
-            <svg viewBox="0 0 500 150" preserveAspectRatio="none" className="h-full w-full">
-              <path d="M0,70 C160,135 340,15 500,70 L500,150 L0,150 Z" fill="#F472B6" />
-            </svg>
-          </div>
-        )}
-
-        {/* ─── Footer (Pure Public Link in Bio - Responsive & Clean on Mobile) ─── */}
-        <footer className={`w-full text-center ${isPreview ? 'py-2.5 px-3' : 'pt-6 pb-8 px-4'} ${theme.footerBorder} shrink-0 select-none mt-auto relative z-10`}>
-          <div className="flex flex-col items-center justify-center gap-1.5 text-center">
-            <Link 
-              to="/"
-              className={`inline-flex items-center justify-center gap-1.5 px-3 py-1 rounded-full ${theme.footerBadgeBg} border ${theme.footerBadgeBorder} text-[10.5px] font-medium tracking-tight transition-all active:scale-95 shadow-2xs`}
-              title="Ditenagai oleh E Cukur"
-            >
-              <span className={theme.footerBadgeText}>
-                Ditenagai oleh
+                <span className={theme.footerBadgeText}>
+                  Ditenagai oleh
+                </span>
+                <Logo
+                  variant="compact"
+                  size="xs"
+                  theme={theme.logoTheme}
+                  className="scale-85"
+                />
+              </Link>
+              <span className={`text-[10px] ${theme.textSecondary} opacity-70 tracking-wide font-medium`}>
+                Link-in-Bio Barbershop Indonesia
               </span>
-              <Logo 
-                variant="compact" 
-                size="xs" 
-                theme={theme.logoTheme}
-                className="scale-85" 
-              />
-            </Link>
-            <span className={`text-[10px] ${theme.textSecondary} opacity-70 tracking-wide font-medium`}>
-              Link-in-Bio Barbershop Indonesia
-            </span>
-          </div>
-        </footer>
+            </div>
+          </footer>
 
         </div>
       </div>
@@ -2280,7 +2273,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       <AnimatePresence>
         {isBookingOpen && (
           <div className={`${isPreview ? 'absolute' : 'fixed'} inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-2 bg-black/60 backdrop-blur-xs`}>
-            <motion.div 
+            <motion.div
               initial={{ y: '100%', opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: '100%', opacity: 0 }}
@@ -2295,7 +2288,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     {bookingStep === 'success' ? 'Tunjukkan tiket ini saat tiba di lokasi' : bookingStep === 'qris' ? 'Nominal otomatis terisi saat di-scan' : `Dengan ${barber.name}`}
                   </p>
                 </div>
-                <button 
+                <button
                   type="button"
                   onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); setBookingQrisData(null); setBookingStep('form'); }}
                   className="p-1.5 rounded-full hover:bg-neutral-100 text-neutral-500"
@@ -2307,13 +2300,13 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               {/* ── STEP 1: QRIS PAYMENT SCREEN ── */}
               {bookingStep === 'qris' && bookingQrisData ? (
                 <div className="space-y-4 text-center py-1">
-                  
+
                   {/* Dynamic QRIS Image Container */}
                   <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-200 text-center space-y-3">
                     <div className="w-44 h-44 mx-auto rounded-2xl bg-white p-2.5 border border-neutral-200 flex items-center justify-center overflow-hidden shadow-xs">
-                      <img 
-                        src={bookingQrisData.qrisImageUrl} 
-                        alt="QRIS Dinamis E-CUKUR" 
+                      <img
+                        src={bookingQrisData.qrisImageUrl}
+                        alt="QRIS Dinamis E-CUKUR"
                         className="w-full h-full object-contain"
                       />
                     </div>
@@ -2430,7 +2423,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               ) : (
                 /* ── STEP 3: BOOKING FORM ── */
                 <form onSubmit={handleSubmitBooking} className="space-y-4 text-left">
-                  
+
                   {/* Select service dropdown / pill */}
                   <div>
                     <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Layanan Dipilih:{isServiceLocked && <span className="ml-1 text-[10px] text-emerald-700 font-bold">(Terkunci)</span>}</label>
@@ -2520,13 +2513,12 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                               onClick={() => setSelectedDate(dateKey)}
                               disabled={isPast}
                               aria-pressed={selectedDate === dateKey}
-                              className={`mx-auto h-8 w-8 rounded-full text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:text-neutral-300 ${
-                                selectedDate === dateKey
-                                  ? 'bg-[#285844] text-white'
-                                  : dateKey === todayIso
+                              className={`mx-auto h-8 w-8 rounded-full text-[11px] font-semibold transition-colors disabled:cursor-not-allowed disabled:text-neutral-300 ${selectedDate === dateKey
+                                ? 'bg-[#285844] text-white'
+                                : dateKey === todayIso
                                   ? 'border border-[#285844] text-[#285844]'
                                   : 'text-neutral-700 hover:bg-neutral-100'
-                              }`}
+                                }`}
                             >
                               {Number(dateKey.slice(-2))}
                             </button>
@@ -2562,13 +2554,12 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                             onClick={() => setSelectedTime(slot)}
                             disabled={!available}
                             title={isBreak ? 'Waktu Istirahat Studio' : !available ? 'Slot tidak tersedia' : `Pilih jam ${slot} WIB`}
-                            className={`py-2 px-1 rounded-xl border text-center text-xs font-mono font-semibold transition-all relative ${
-                              !available
-                                ? 'border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed line-through opacity-70'
-                                : selectedTime === slot
-                                ? 'border-[#285844] bg-[#285844] text-white shadow-xs' 
+                            className={`py-2 px-1 rounded-xl border text-center text-xs font-mono font-semibold transition-all relative ${!available
+                              ? 'border-neutral-200 bg-neutral-100 text-neutral-400 cursor-not-allowed line-through opacity-70'
+                              : selectedTime === slot
+                                ? 'border-[#285844] bg-[#285844] text-white shadow-xs'
                                 : 'border-neutral-200 bg-white hover:border-neutral-300 text-neutral-700'
-                            }`}
+                              }`}
                           >
                             <span>{slot}</span>
                             {isBreak && <span className="no-underline ml-1 text-[10px]">☕</span>}
@@ -2599,7 +2590,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   <div className="space-y-2.5 pt-2">
                     <div>
                       <label className="text-xs font-semibold text-neutral-700 block mb-1">Nama Lengkap Pemesan *</label>
-                      <input 
+                      <input
                         type="text"
                         required
                         value={customerName}
@@ -2616,7 +2607,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-neutral-700 block mb-1">Catatan Khusus (Opsional)</label>
-                      <input 
+                      <input
                         type="text"
                         value={noteStyle}
                         onChange={(e) => setNoteStyle(e.target.value)}
@@ -2647,8 +2638,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     disabled={isSubmitting || (isSupabaseConfigured && (!availabilityReady || !isSlotAvailable(selectedTime)))}
                     className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm transition-transform active:scale-95 disabled:opacity-50 cursor-pointer"
                   >
-                    {isSubmitting 
-                      ? 'Memproses Reservasi...' 
+                    {isSubmitting
+                      ? 'Memproses Reservasi...'
                       : `Lanjut Bayar QRIS (${formatRupiah(selectedService?.price || activeServices[0].price)})`}
                   </button>
                 </form>
@@ -2664,13 +2655,13 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       <AnimatePresence>
         {isTippingOpen && (
           <div className={`${isPreview ? 'absolute' : 'fixed'} inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs`}>
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.95, opacity: 0 }}
               className={`bg-white rounded-3xl p-5 sm:p-6 ${isPreview ? 'max-h-[460px]' : 'max-h-[90vh]'} overflow-y-auto max-w-sm w-full border border-neutral-200 shadow-2xl text-center relative`}
             >
-              <button 
+              <button
                 onClick={() => { setIsTippingOpen(false); setTipPaid(false); }}
                 className="absolute top-4 right-4 p-1.5 text-neutral-400 hover:text-black rounded-full cursor-pointer z-10"
               >
@@ -2714,59 +2705,59 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       {tipQrisError}
                     </p>
                   ) : tipQrisData ? (
-                  <div className="p-3.5 bg-neutral-50 rounded-2xl border border-neutral-200 text-center space-y-2.5">
-                    <div className="w-36 h-36 mx-auto rounded-xl bg-white p-2 border border-neutral-200 flex items-center justify-center overflow-hidden shadow-2xs">
-                      <img 
-                        src={tipQrisData.qrisImageUrl || getDynamicQrisImageUrl(tipQrisData.totalAmount)}
-                        alt="QRIS" 
-                        className="w-full h-full object-contain"
-                      />
-                    </div>
-
-                    {/* Banner Nominal + Kode Unik */}
-                    <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2 text-center">
-                      <span className="text-[10px] font-semibold text-amber-800 block">
-                        Transfer TEPAT termasuk 3 digit kode unik:
-                      </span>
-                      <div className="flex items-center justify-center gap-2 mt-0.5">
-                        <span className="font-display font-extrabold text-base text-neutral-900 font-mono">
-                          Rp {tipQrisData.totalAmount.toLocaleString('id-ID')}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(String(tipQrisData.totalAmount));
-                            setCopiedTipAmount(true);
-                            setTimeout(() => setCopiedTipAmount(false), 2000);
-                          }}
-                          className="px-2 py-0.5 rounded-md bg-neutral-900 text-white text-[10px] font-bold cursor-pointer hover:bg-neutral-800 transition-colors"
-                        >
-                          {copiedTipAmount ? '✓ Disalin' : 'Salin'}
-                        </button>
+                    <div className="p-3.5 bg-neutral-50 rounded-2xl border border-neutral-200 text-center space-y-2.5">
+                      <div className="w-36 h-36 mx-auto rounded-xl bg-white p-2 border border-neutral-200 flex items-center justify-center overflow-hidden shadow-2xs">
+                        <img
+                          src={tipQrisData.qrisImageUrl || getDynamicQrisImageUrl(tipQrisData.totalAmount)}
+                          alt="QRIS"
+                          className="w-full h-full object-contain"
+                        />
                       </div>
-                      <span className="text-[9px] text-amber-700 block mt-0.5">
-                        *Kode unik acak: +Rp {tipQrisData.uniqueCode} agar diverifikasi otomatis
-                      </span>
-                    </div>
 
-                    {/* Status Polling Animation */}
-                    <div className="flex items-center justify-center gap-1.5 text-[11px] text-neutral-500 font-medium pt-0.5">
-                      <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                      </span>
-                      <span>Menunggu pembayaran otomatis...</span>
-                    </div>
+                      {/* Banner Nominal + Kode Unik */}
+                      <div className="bg-amber-50/80 border border-amber-200 rounded-xl p-2 text-center">
+                        <span className="text-[10px] font-semibold text-amber-800 block">
+                          Transfer TEPAT termasuk 3 digit kode unik:
+                        </span>
+                        <div className="flex items-center justify-center gap-2 mt-0.5">
+                          <span className="font-display font-extrabold text-base text-neutral-900 font-mono">
+                            Rp {tipQrisData.totalAmount.toLocaleString('id-ID')}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              navigator.clipboard.writeText(String(tipQrisData.totalAmount));
+                              setCopiedTipAmount(true);
+                              setTimeout(() => setCopiedTipAmount(false), 2000);
+                            }}
+                            className="px-2 py-0.5 rounded-md bg-neutral-900 text-white text-[10px] font-bold cursor-pointer hover:bg-neutral-800 transition-colors"
+                          >
+                            {copiedTipAmount ? '✓ Disalin' : 'Salin'}
+                          </button>
+                        </div>
+                        <span className="text-[9px] text-amber-700 block mt-0.5">
+                          *Kode unik acak: +Rp {tipQrisData.uniqueCode} agar diverifikasi otomatis
+                        </span>
+                      </div>
 
-                  </div>
+                      {/* Status Polling Animation */}
+                      <div className="flex items-center justify-center gap-1.5 text-[11px] text-neutral-500 font-medium pt-0.5">
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span>Menunggu pembayaran otomatis...</span>
+                      </div>
+
+                    </div>
                   ) : null}
 
                   {/* Input fields for customer */}
                   <div className="space-y-2">
                     <div>
                       <label className="text-[11px] font-medium text-neutral-600 block mb-0.5">Nama Kamu (Opsional)</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={tipperName}
                         onChange={(e) => setTipperName(e.target.value)}
                         placeholder="Nama kamu"
@@ -2775,8 +2766,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     </div>
                     <div>
                       <label className="text-[11px] font-medium text-neutral-600 block mb-0.5">Pesan (Opsional)</label>
-                      <input 
-                        type="text" 
+                      <input
+                        type="text"
                         value={tipperMessage}
                         onChange={(e) => setTipperMessage(e.target.value)}
                         placeholder="Tulis pesan untuk capster..."
@@ -2843,21 +2834,21 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               </div>
 
               {/* Photo - 100% UNCROPPED */}
-              <div 
+              <div
                 className="relative w-full bg-neutral-950 select-none cursor-pointer overflow-hidden flex items-center justify-center min-h-[260px] max-h-[68vh]"
                 onDoubleClick={() => handleDoubleTapLike(selectedLookPost.id)}
                 title="Klik ganda untuk menyukai"
               >
-                <img 
-                  src={selectedLookPost.img} 
-                  alt={selectedLookPost.title} 
-                  className="w-full h-auto max-h-[68vh] object-contain mx-auto block" 
+                <img
+                  src={selectedLookPost.img}
+                  alt={selectedLookPost.title}
+                  className="w-full h-auto max-h-[68vh] object-contain mx-auto block"
                 />
-                
+
                 {/* Double-tap heart animation */}
                 <AnimatePresence>
                   {animatingHeartPostId === selectedLookPost.id && (
-                    <motion.div 
+                    <motion.div
                       initial={{ scale: 0, opacity: 0 }}
                       animate={{ scale: [0, 1.25, 1], opacity: [0, 1, 0.95] }}
                       exit={{ scale: 1.4, opacity: 0 }}
@@ -2881,16 +2872,16 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               {/* Actions */}
               <div className="px-3 pt-2.5 pb-1 flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={(e) => toggleLikePost(selectedLookPost.id, e)}
                     className="cursor-pointer active:scale-125 transition-transform"
                     title={likedPosts[selectedLookPost.id] ? 'Batal Suka' : 'Suka'}
                   >
                     <Heart className={`w-5 h-5 ${likedPosts[selectedLookPost.id] ? 'text-red-500 fill-red-500' : 'text-neutral-700 hover:text-black'}`} />
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={() => {
                       const look = selectedLookPost;
                       setSelectedLookPost(null);
@@ -2906,8 +2897,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       </span>
                     )}
                   </button>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     onClick={handleShare}
                     className="cursor-pointer active:scale-110 transition-transform"
                     title="Bagikan"
@@ -2915,8 +2906,8 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     <Share2 className="w-4.5 h-4.5 text-neutral-700 hover:text-black" />
                   </button>
                 </div>
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   onClick={(e) => toggleSavePost(selectedLookPost.id, e)}
                   className="cursor-pointer active:scale-110 transition-transform"
                   title={savedPosts[selectedLookPost.id] ? 'Tersimpan' : 'Simpan'}
@@ -3002,11 +2993,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                 ) : (
                   (postComments[commentModalPost.id] || []).map((cmt) => (
                     <div key={cmt.id} className="flex gap-2.5 text-xs">
-                      <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center font-bold text-[11px] ${
-                        cmt.isBarber 
-                          ? 'bg-[#285844] text-white border border-[#1E4334]' 
-                          : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
-                      }`}>
+                      <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center font-bold text-[11px] ${cmt.isBarber
+                        ? 'bg-[#285844] text-white border border-[#1E4334]'
+                        : 'bg-neutral-100 text-neutral-700 border border-neutral-200'
+                        }`}>
                         {cmt.name.charAt(0).toUpperCase()}
                       </div>
                       <div className="flex-1 bg-neutral-50 rounded-2xl p-2.5 border border-neutral-150">
@@ -3029,7 +3019,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               </div>
 
               {/* Add Comment Input Form */}
-              <form 
+              <form
                 onSubmit={(e) => handleAddComment(commentModalPost.id, e)}
                 className="p-3 border-t border-neutral-200 bg-white space-y-2"
               >
