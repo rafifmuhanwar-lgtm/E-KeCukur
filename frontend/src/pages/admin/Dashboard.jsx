@@ -399,14 +399,8 @@ export default function AdminMasterDashboard() {
   const [isAddBarberModalOpen, setIsAddBarberModalOpen] = useState(false);
   const [newBarberName, setNewBarberName] = useState('');
   const [newBarberSlug, setNewBarberSlug] = useState('');
-  const [newBarberEmail, setNewBarberEmail] = useState('');
-  const [newBarberPhone, setNewBarberPhone] = useState('');
-  const [newBarberType, setNewBarberType] = useState('capster'); // 'capster' | 'barber'
-  const [newBarberPlan, setNewBarberPlan] = useState('free');
-  const [newBarberSpecialty, setNewBarberSpecialty] = useState('');
   const [newBarberCity, setNewBarberCity] = useState('');
-  const [newBarberAddress, setNewBarberAddress] = useState('');
-  const [newBarberBio, setNewBarberBio] = useState('');
+  const [newBarberPlan, setNewBarberPlan] = useState('free');
 
   // Gateway QRIS & Webhook States
   const [copiedWebhook, setCopiedWebhook] = useState(false);
@@ -1180,26 +1174,16 @@ export default function AdminMasterDashboard() {
       return;
     }
 
-    const cleanEmail = newBarberEmail.trim() || `${cleanSlug}@ecukur.biz.id`;
-    const cleanPhone = newBarberPhone.trim() || '';
-    const cleanSpecialty = newBarberSpecialty.trim() || (newBarberType === 'capster' ? 'Fade Master & Hair Styling' : 'Official Barbershop & Studio');
-    const cleanBio = newBarberBio.trim() || `Profil resmi ${newBarberType === 'capster' ? 'Capster Mandiri' : 'Studio Barber'} terverifikasi oleh Admin E-Cukur.`;
-    const cleanAddress = newBarberAddress.trim() || '';
-    const cleanCity = newBarberCity.trim() || '';
-
     const newBarberObj = {
       id: `barber-${Date.now()}`,
       name: cleanName,
       slug: cleanSlug,
       handle: `@${cleanSlug}`,
-      locationCity: cleanCity,
-      address: cleanAddress,
-      email: cleanEmail,
-      phone: cleanPhone,
+      locationCity: newBarberCity.trim() || '',
       plan: newBarberPlan,
-      profileType: newBarberType,
-      specialty: cleanSpecialty,
-      bio: cleanBio,
+      profileType: newBarberPlan === 'capster' ? 'capster' : 'barber',
+      specialty: '',
+      bio: `Profil resmi ${newBarberPlan === 'capster' ? 'Capster' : 'Studio Barber'} terverifikasi oleh Admin E-Cukur.`,
       photo: '',
       bannerImage: '',
       status: 'AVAILABLE',
@@ -1214,7 +1198,7 @@ export default function AdminMasterDashboard() {
         lookbook: true,
         location: true,
         tipping: true,
-        team: newBarberType === 'barber'
+        team: newBarberPlan === 'barber'
       },
       tippingConfig: {
         title: `Traktir Kopi ${cleanName}`,
@@ -1235,20 +1219,18 @@ export default function AdminMasterDashboard() {
         let insertPayload = {
           name: newBarberObj.name,
           slug: newBarberObj.slug,
-          email: cleanEmail,
-          phone: cleanPhone,
-          specialty: cleanSpecialty,
-          bio: cleanBio,
+          email: `${cleanSlug}@ecukur.biz.id`,
+          specialty: '',
+          bio: newBarberObj.bio,
           plan: newBarberPlan,
-          profile_type: newBarberType,
+          profile_type: newBarberObj.profileType,
           features: {
             ...newBarberObj.features,
             plan: newBarberPlan
           },
           services: newBarberObj.services,
           tipping_config: newBarberObj.tippingConfig,
-          location_city: cleanCity || null,
-          address: cleanAddress || null,
+          location_city: newBarberObj.locationCity || null,
           account_status: 'ACTIVE',
           availability_status: 'AVAILABLE'
         };
@@ -1259,19 +1241,6 @@ export default function AdminMasterDashboard() {
           error = retry.error;
         }
         if (error) throw error;
-
-        // Otomatis catat di public.users agar akun terdaftar dalam daftar pengguna sistem
-        if (cleanEmail) {
-          try {
-            await supabase.from('users').upsert({
-              email: cleanEmail,
-              name: cleanName,
-              role: 'barber',
-              created_at: new Date().toISOString()
-            }, { onConflict: 'email' });
-          } catch {}
-        }
-
         if (typeof fetchBarbersFromSupabase === 'function') {
           await fetchBarbersFromSupabase();
         }
@@ -1284,13 +1253,6 @@ export default function AdminMasterDashboard() {
     setNewBarberName('');
     setNewBarberSlug('');
     setNewBarberCity('');
-    setNewBarberEmail('');
-    setNewBarberPhone('');
-    setNewBarberSpecialty('');
-    setNewBarberBio('');
-    setNewBarberAddress('');
-    setNewBarberType('capster');
-    setNewBarberPlan('free');
     showToast(`Barber ${newBarberObj.name} berhasil dibuat! Bio link: ${appDomain}/${newBarberObj.slug}`);
   };
 
@@ -3092,282 +3054,104 @@ export default function AdminMasterDashboard() {
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <AnimatePresence>
         {isAddBarberModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/70 backdrop-blur-xs">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 bg-black/60 backdrop-blur-xs">
             <motion.div
-              initial={{ scale: 0.95, opacity: 0, y: 10 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.95, opacity: 0, y: 10 }}
-              className="bg-white rounded-3xl max-w-2xl w-full border border-neutral-200 shadow-2xl relative flex flex-col max-h-[92vh] overflow-hidden"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 max-w-md w-full border border-neutral-200 shadow-2xl relative space-y-4"
             >
-              {/* Modal Header */}
-              <div className="flex items-center justify-between px-6 py-4 border-b border-neutral-100 shrink-0 bg-neutral-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-[#285844] text-white flex items-center justify-center shadow-xs">
-                    <Scissors className="w-5 h-5" />
+              <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-[#285844] text-white flex items-center justify-center">
+                    <Scissors className="w-4 h-4" />
                   </div>
                   <div>
-                    <h3 className="font-display font-bold text-base text-neutral-900">
-                      Tambah Mitra Barber & Pengguna Baru
-                    </h3>
-                    <p className="text-xs text-neutral-500">
-                      Buat bio link, akun login, dan konfigurasi profil kemitraan dari Admin.
-                    </p>
+                    <h3 className="font-display font-bold text-sm text-neutral-900">Tambah Barber / Pengguna Baru</h3>
+                    <p className="text-[11px] text-neutral-500">Buat link-in-bio baru secara instan dari Admin.</p>
                   </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setIsAddBarberModalOpen(false)}
-                  className="p-1.5 rounded-full hover:bg-neutral-200/60 text-neutral-400 hover:text-black cursor-pointer transition-colors"
+                  className="p-1 rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-black cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Modal Body: Scrollable Bento Form */}
-              <form onSubmit={handleCreateBarber} className="p-6 overflow-y-auto space-y-5 custom-scrollbar text-left">
-                
-                {/* 1. Mode Akun (Visual Toggle) */}
+              <form onSubmit={handleCreateBarber} className="space-y-3.5">
                 <div>
-                  <label className="text-xs font-bold text-neutral-800 block mb-2">
-                    Pilih Tipe / Mode Akun
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewBarberType('capster');
-                        if (newBarberPlan === 'barber') setNewBarberPlan('capster');
-                      }}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
-                        newBarberType === 'capster'
-                          ? 'bg-emerald-50/90 border-[#285844] ring-2 ring-[#285844]/20 shadow-xs'
-                          : 'bg-white border-neutral-200 hover:border-neutral-300'
-                      }`}
-                    >
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                        newBarberType === 'capster' ? 'bg-[#285844] text-white' : 'bg-neutral-100 text-neutral-600'
-                      }`}>
-                        ✂️
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-neutral-900">Capster Mandiri</span>
-                          {newBarberType === 'capster' && (
-                            <span className="text-[9px] font-bold text-[#285844] bg-[#D9E5DC] px-1.5 py-0.2 rounded-full">Aktif</span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-neutral-500 leading-tight mt-0.5">
-                          Solo barber / freelance perorangan tanpa sistem tim kursi banyak.
-                        </p>
-                      </div>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setNewBarberType('barber');
-                        if (newBarberPlan === 'free') setNewBarberPlan('barber');
-                      }}
-                      className={`p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-start gap-3 ${
-                        newBarberType === 'barber'
-                          ? 'bg-amber-50/90 border-amber-600 ring-2 ring-amber-600/20 shadow-xs'
-                          : 'bg-white border-neutral-200 hover:border-neutral-300'
-                      }`}
-                    >
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                        newBarberType === 'barber' ? 'bg-amber-600 text-white' : 'bg-neutral-100 text-neutral-600'
-                      }`}>
-                        🏢
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-xs font-bold text-neutral-900">Barbershop & Studio</span>
-                          {newBarberType === 'barber' && (
-                            <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded-full">Aktif</span>
-                          )}
-                        </div>
-                        <p className="text-[11px] text-neutral-500 leading-tight mt-0.5">
-                          Studio pangkas dengan banyak kursi, manajemen tim capster, dan kasir.
-                        </p>
-                      </div>
-                    </button>
-                  </div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1">Nama Barber / Usaha</label>
+                  <input 
+                    type="text"
+                    required
+                    value={newBarberName}
+                    onChange={(e) => {
+                      setNewBarberName(e.target.value);
+                      if (!newBarberSlug) {
+                        setNewBarberSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                      }
+                    }}
+                    placeholder="e.g. Dimas Fade / BarberKing Studio"
+                    className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844]"
+                  />
                 </div>
 
-                {/* 2. Nama & Slug URL */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                      Nama Barber / Usaha <span className="text-red-500">*</span>
-                    </label>
+                <div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1">Username / Slug URL</label>
+                  <div className="flex items-center bg-neutral-50 border border-neutral-300 rounded-xl px-3 focus-within:border-[#285844] focus-within:bg-white">
+                    <span className="text-xs font-mono text-neutral-400">ecukur.biz.id/</span>
                     <input 
                       type="text"
                       required
-                      value={newBarberName}
-                      onChange={(e) => {
-                        setNewBarberName(e.target.value);
-                        if (!newBarberSlug) {
-                          setNewBarberSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ''));
-                        }
-                      }}
-                      placeholder="e.g. Dimas Fade / BarberKing Studio"
-                      className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white transition-colors"
+                      value={newBarberSlug}
+                      onChange={(e) => setNewBarberSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                      placeholder="dimasfade"
+                      className="w-full p-2.5 bg-transparent text-xs font-mono font-medium outline-none"
                     />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                      Username / Slug URL <span className="text-red-500">*</span>
-                    </label>
-                    <div className="flex items-center bg-neutral-50 border border-neutral-300 rounded-xl px-3 focus-within:border-[#285844] focus-within:bg-white transition-colors">
-                      <span className="text-xs font-mono text-neutral-400 shrink-0">ecukur.biz.id/</span>
-                      <input 
-                        type="text"
-                        required
-                        value={newBarberSlug}
-                        onChange={(e) => setNewBarberSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
-                        placeholder="dimasfade"
-                        className="w-full p-2.5 bg-transparent text-xs font-mono font-medium outline-none"
-                      />
-                    </div>
                   </div>
                 </div>
 
-                {/* 3. Paket Langganan */}
-                <div>
-                  <label className="text-xs font-bold text-neutral-800 block mb-2">
-                    Pilih Paket Langganan Kemitraan
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                    {[
-                      { id: 'free', label: 'Free (Gratis)', price: 'Rp 0', desc: 'Akses bio link dasar & reservasi cukur' },
-                      { id: 'capster', label: 'Capster Pro', price: 'Rp 49.000/bln', desc: 'Tip digital, portofolio, konsultasi chat' },
-                      { id: 'barber', label: 'Official Studio', price: 'Rp 99.000/bln', desc: 'Multi-capster, QRIS studio, full analytics' },
-                    ].map((plan) => (
-                      <button
-                        key={plan.id}
-                        type="button"
-                        onClick={() => setNewBarberPlan(plan.id)}
-                        className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                          newBarberPlan === plan.id
-                            ? 'bg-[#285844]/5 border-[#285844] ring-2 ring-[#285844]/20'
-                            : 'bg-white border-neutral-200 hover:border-neutral-300'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between mb-1">
-                          <span className="text-xs font-bold text-neutral-900">{plan.label}</span>
-                          <span className={`w-2 h-2 rounded-full ${newBarberPlan === plan.id ? 'bg-[#285844]' : 'bg-neutral-300'}`} />
-                        </div>
-                        <div className="text-[11px] font-bold text-[#285844] font-mono">{plan.price}</div>
-                        <p className="text-[10px] text-neutral-500 mt-1 leading-tight">{plan.desc}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* 4. Akun Login (Email) & Kontak (WA) */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                      Email Pengguna (Untuk Login Akun)
-                    </label>
-                    <input 
-                      type="email"
-                      value={newBarberEmail}
-                      onChange={(e) => setNewBarberEmail(e.target.value)}
-                      placeholder={newBarberSlug ? `${newBarberSlug}@ecukur.biz.id` : 'dimas@example.com'}
-                      className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white transition-colors"
-                    />
-                    <p className="text-[10px] text-neutral-400 mt-1">Kosongkan jika ingin auto-generate email sistem.</p>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1">Paket Langganan</label>
+                    <select
+                      value={newBarberPlan}
+                      onChange={(e) => setNewBarberPlan(e.target.value)}
+                      className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] cursor-pointer"
+                    >
+                      <option value="free">Free (Gratis)</option>
+                      <option value="capster">Capster Pro (49K)</option>
+                      <option value="barber">Official Studio (99K)</option>
+                    </select>
                   </div>
 
                   <div>
-                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                      Nomor Telepon / Kontak
-                    </label>
-                    <input 
-                      type="text"
-                      value={newBarberPhone}
-                      onChange={(e) => setNewBarberPhone(e.target.value)}
-                      placeholder="081234567890"
-                      className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white transition-colors"
-                    />
-                    <p className="text-[10px] text-neutral-400 mt-1">Digunakan untuk konfirmasi darurat.</p>
-                  </div>
-                </div>
-
-                {/* 5. Spesialisasi & Kota / Wilayah */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
-                  <div>
-                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                      Spesialisasi Potong Rambut
-                    </label>
-                    <input 
-                      type="text"
-                      value={newBarberSpecialty}
-                      onChange={(e) => setNewBarberSpecialty(e.target.value)}
-                      placeholder="e.g. Fade Specialist & Beard Trim"
-                      className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white transition-colors"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                      Kota / Wilayah
-                    </label>
+                    <label className="text-xs font-semibold text-neutral-700 block mb-1">Kota / Wilayah (Opsional)</label>
                     <input 
                       type="text"
                       value={newBarberCity}
                       onChange={(e) => setNewBarberCity(e.target.value)}
-                      placeholder="e.g. Bekasi Barat / Jakarta Selatan"
-                      className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white transition-colors"
+                      placeholder="Kosongkan jika belum diatur"
+                      className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844]"
                     />
                   </div>
                 </div>
 
-                {/* 6. Alamat Fisik Studio */}
-                <div>
-                  <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                    Alamat Lengkap Studio / Lokasi Praktik
-                  </label>
-                  <input 
-                    type="text"
-                    value={newBarberAddress}
-                    onChange={(e) => setNewBarberAddress(e.target.value)}
-                    placeholder="e.g. Jl. Boulevard Raya Blok A No. 12, Summarecon Bekasi"
-                    className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white transition-colors"
-                  />
-                </div>
-
-                {/* 7. Bio Singkat */}
-                <div>
-                  <label className="text-xs font-bold text-neutral-700 block mb-1.5">
-                    Bio Singkat / Tagline Profil
-                  </label>
-                  <textarea 
-                    rows={2}
-                    value={newBarberBio}
-                    onChange={(e) => setNewBarberBio(e.target.value)}
-                    placeholder="e.g. Menghadirkan potongan rambut presisi dan modern dengan kenyamanan premium."
-                    className="w-full p-2.5 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844] focus:bg-white transition-colors resize-none"
-                  />
-                </div>
-
-                {/* Modal Footer */}
-                <div className="pt-3 border-t border-neutral-100 flex items-center justify-end gap-2.5">
+                <div className="pt-2 flex items-center justify-end gap-2">
                   <button
                     type="button"
                     onClick={() => setIsAddBarberModalOpen(false)}
-                    className="px-4 py-2.5 border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-600 hover:bg-neutral-100 cursor-pointer transition-colors"
+                    className="px-4 py-2 border border-neutral-200 rounded-xl text-xs font-semibold text-neutral-600 hover:bg-neutral-100 cursor-pointer"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
-                    className="px-6 py-2.5 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-all active:scale-95 flex items-center gap-2"
+                    className="px-5 py-2 bg-[#285844] hover:bg-[#1E4334] text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer"
                   >
-                    <Scissors className="w-3.5 h-3.5" />
-                    <span>Buat & Terbitkan Bio Link</span>
+                    Buat Bio Link
                   </button>
                 </div>
               </form>

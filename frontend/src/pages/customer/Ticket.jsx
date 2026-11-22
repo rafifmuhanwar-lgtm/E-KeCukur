@@ -110,47 +110,6 @@ export default function CustomerTicket() {
     };
   }, [id, bookings, fetchBookings, location.hash, location.search]);
 
-  // Polling Realtime: Jika tiket belum Lunas (UNPAID), pantau setiap 3 detik
-  // Saat capster / admin klik "Tandai Lunas (Kasir)", status tiket otomatis berganti LUNAS realtime
-  useEffect(() => {
-    if (!booking || booking.paymentStatus === 'PAID') return;
-
-    const ticketToken = new URLSearchParams(location.hash.replace(/^#/, '')).get('t')
-      || new URLSearchParams(location.search).get('token')
-      || booking.ticketToken;
-
-    const pollTimer = setInterval(async () => {
-      // 1. Cek di store global
-      const inStore = useStore.getState().bookings?.find((b) =>
-        String(b.id).toLowerCase() === String(id).toLowerCase()
-      );
-      if (inStore && inStore.paymentStatus === 'PAID') {
-        setBooking((prev) => ({
-          ...prev,
-          paymentStatus: 'PAID',
-          status: inStore.status || prev.status
-        }));
-        return;
-      }
-
-      // 2. Cek di Supabase tracking
-      if (isSupabaseConfigured) {
-        try {
-          const { booking: latest } = await fetchBookingTracking(id, ticketToken);
-          if (latest && latest.paymentStatus === 'PAID') {
-            setBooking((prev) => ({
-              ...prev,
-              paymentStatus: 'PAID',
-              status: dbToUiStatus(latest.status)
-            }));
-          }
-        } catch {}
-      }
-    }, 3000);
-
-    return () => clearInterval(pollTimer);
-  }, [booking, id, location.hash, location.search]);
-
   // Simpan ke localStorage agar browser HP mengingat tiket ini
   useEffect(() => {
     if (booking && typeof localStorage !== 'undefined') {
@@ -274,37 +233,19 @@ export default function CustomerTicket() {
       {/* Main Container */}
       <main className="max-w-md mx-auto px-4 pt-6 sm:pt-8 w-full space-y-4">
         
-        {/* Banner Alert Sukses / Status Pembayaran */}
-        <div className={`border rounded-2xl p-3.5 flex items-center gap-3 ${
-          isPaid
-            ? 'bg-emerald-50 border-emerald-200/90'
-            : booking.paymentMethod === 'Tunai'
-            ? 'bg-amber-50 border-amber-200/90'
-            : 'bg-neutral-50 border-neutral-200'
-        }`}>
-          <div className={`w-9 h-9 rounded-full text-white flex items-center justify-center shrink-0 ${
-            isPaid ? 'bg-emerald-600' : booking.paymentMethod === 'Tunai' ? 'bg-amber-600' : 'bg-neutral-600'
-          }`}>
+        {/* Banner Alert Sukses */}
+        <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-3.5 flex items-center gap-3">
+          <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
             <CheckCircle2 className="w-5 h-5" />
           </div>
           <div className="min-w-0 flex-1">
-            <h4 className={`font-bold text-xs ${
-              isPaid ? 'text-emerald-900' : booking.paymentMethod === 'Tunai' ? 'text-amber-900' : 'text-neutral-900'
-            }`}>
-              {isPaid
-                ? 'Pembayaran Terkonfirmasi (LUNAS ✓)'
-                : booking.paymentMethod === 'Tunai'
-                ? 'Bayar di Kasir Studio (Tunai)'
-                : `Menunggu Pembayaran (${booking.status})`}
+            <h4 className="font-bold text-xs text-emerald-900">
+              {isPaid ? 'Pembayaran Terkonfirmasi' : `Status Reservasi: ${booking.status}`}
             </h4>
-            <p className={`text-[11px] ${
-              isPaid ? 'text-emerald-700' : booking.paymentMethod === 'Tunai' ? 'text-amber-700' : 'text-neutral-600'
-            }`}>
+            <p className="text-[11px] text-emerald-700">
               {isPaid
                 ? 'Tunjukkan tiket digital ini kepada capster saat Anda tiba di lokasi.'
-                : booking.paymentMethod === 'Tunai'
-                ? 'Silakan tunjukkan tiket ini dan bayar langsung di kasir studio saat tiba. Capster akan menandai lunas.'
-                : 'Selesaikan scan QRIS agar status terverifikasi otomatis.'}
+                : 'Selesaikan pembayaran sesuai instruksi agar reservasi dapat dikonfirmasi.'}
             </p>
           </div>
         </div>
@@ -328,15 +269,9 @@ export default function CustomerTicket() {
                 <span>Tiket Digital Resmi</span>
               </span>
 
-              <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                isPaid
-                  ? 'bg-emerald-400/20 text-emerald-200 border border-emerald-400/30'
-                  : booking.paymentMethod === 'Tunai'
-                  ? 'bg-amber-400/20 text-amber-200 border border-amber-400/30'
-                  : 'bg-rose-400/20 text-rose-200 border border-rose-400/30'
-              }`}>
-                <span className={`w-1.5 h-1.5 rounded-full ${isPaid ? 'bg-emerald-400' : 'bg-amber-400'} animate-pulse`} />
-                <span>{isPaid ? 'LUNAS ✓' : booking.paymentMethod === 'Tunai' ? 'BAYAR DI KASIR' : 'MENUNGGU BAYAR'}</span>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>{isPaid ? 'LUNAS' : booking.paymentStatus || 'BELUM BAYAR'}</span>
               </span>
             </div>
 
@@ -419,19 +354,6 @@ export default function CustomerTicket() {
                   <strong className="text-neutral-900 font-bold">{booking.capsterName}</strong>
                 </div>
               )}
-
-              <div className="flex justify-between items-center py-1 border-b border-neutral-100">
-                <span className="text-neutral-500">Metode Pembayaran</span>
-                <span className={`font-semibold text-xs px-2 py-0.5 rounded-md ${
-                  isPaid
-                    ? 'bg-emerald-50 text-emerald-800 font-bold'
-                    : booking.paymentMethod === 'Tunai'
-                    ? 'bg-amber-50 text-amber-800'
-                    : 'bg-neutral-100 text-neutral-700'
-                }`}>
-                  {booking.paymentMethod === 'Tunai' ? 'Bayar di Kasir (Tunai)' : 'QRIS Dinamis'}
-                </span>
-              </div>
 
               <div className="flex justify-between items-center pt-2">
                 <span className="text-neutral-500 font-medium">Total Tarif</span>

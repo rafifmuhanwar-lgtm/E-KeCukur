@@ -1307,30 +1307,6 @@ export const useStore = create((set, get) => ({
     return { success: true };
   },
 
-  // ─── UPDATE STATUS PEMBAYARAN BOOKING (PAID / UNPAID OLEH KASIR/ADMIN) ───
-  updateBookingPaymentStatus: async (id, paymentStatus) => {
-    if (isSupabaseConfigured) {
-      try {
-        const { error } = await supabase
-          .from('bookings')
-          .update({
-            payment_status: paymentStatus,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', id);
-        if (error) throw error;
-      } catch (err) {
-        console.error('Supabase update payment status failed:', err);
-        return { success: false, error: err.message };
-      }
-    }
-
-    set((state) => ({
-      bookings: state.bookings.map((b) => (b.id === id ? { ...b, paymentStatus } : b))
-    }));
-    return { success: true };
-  },
-
   // â”€â”€â”€ UPLOAD FOTO PROFIL KE SUPABASE STORAGE (KOMPRESI PERSEGI 1:1) â”€â”€â”€
   uploadBarberPhoto: async (barberId, file) => {
     try {
