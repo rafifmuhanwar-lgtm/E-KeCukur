@@ -11,7 +11,6 @@ import {
   Check, 
   Copy,
   Share2, 
-  ArrowLeft, 
   ExternalLink,
   Printer
 } from 'lucide-react';
@@ -210,7 +209,7 @@ export default function CustomerTicket() {
               <RazorEMark className="w-full h-full text-white" color="#ffffff" />
             </div>
             <span className="font-display font-black text-sm tracking-tight text-[#171717] lowercase">
-              ecukur
+              e cukur
             </span>
           </Link>
 
@@ -223,13 +222,6 @@ export default function CustomerTicket() {
               {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Share2 className="w-3.5 h-3.5" />}
               <span>{copiedLink ? 'Tersalin' : 'Bagikan'}</span>
             </button>
-            <Link
-              to="/"
-              className="px-3 py-1.5 border border-neutral-200 hover:border-neutral-300 bg-white text-neutral-700 rounded-xl text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Beranda</span>
-            </Link>
           </div>
         </div>
       </header>
@@ -254,7 +246,7 @@ export default function CustomerTicket() {
                 <RazorEMark className="w-full h-full" color="#ffffff" />
               </div>
               <span className="font-display font-black text-xl text-neutral-900 tracking-tight lowercase">
-                ecukur
+                e cukur
               </span>
             </div>
 
@@ -276,14 +268,11 @@ export default function CustomerTicket() {
             </div>
 
             <div className="relative z-10">
-              <h1 className="font-display font-black text-2xl text-neutral-900 tracking-tight leading-none">
-                eCukur
-              </h1>
               <h2 className="font-display font-black text-3xl sm:text-4xl text-[#1B4332] tracking-tight leading-tight mt-0.5">
-                Barber Pass
+                Booking Pass
               </h2>
               <p className="text-neutral-500 text-xs mt-1 font-medium">
-                Tunjukkan tiket ini saat jadwal pangkas Anda
+                Unduh & Simpan Tiket ini. Tunjukkan tiket ini nanti saat jadwal pangkas Anda tiba.
               </p>
             </div>
           </div>
