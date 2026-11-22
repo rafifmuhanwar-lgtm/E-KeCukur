@@ -42,7 +42,8 @@ import {
   Crown,
   Download,
   Send,
-  ArrowLeft
+  ArrowLeft,
+  Home
 } from 'lucide-react';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
@@ -766,11 +767,12 @@ export default function BarberDashboard() {
           services: true,
           lookbook: true,
           team: false,
-          location: true,
+          location: false,
+          homeService: true,
           tipping: true,
         }
       });
-      showToast('Mode Capster Mandiri diaktifkan');
+      showToast('Mode Capster Mandiri & Home Service diaktifkan');
     } else {
       updateBarber(barber.id, {
         profileType: 'barbershop',
@@ -1773,13 +1775,13 @@ export default function BarberDashboard() {
                             </span>
                           )}
                         </div>
-                        <h3 className="font-display font-bold text-sm text-[#171717]">Mode Capster Mandiri</h3>
+                        <h3 className="font-display font-bold text-sm text-[#171717]">Mode Capster Mandiri & Home Service</h3>
                         <p className="text-[11px] text-neutral-600 mt-1 leading-relaxed">
-                          Untuk capster / tukang cukur perorangan & freelance. Tampilkan portofolio karya, menu tarif, dan terima booking langsung ke jadwalmu.
+                          Untuk capster, stylist mandiri & barber panggilan. Tiket reservasi otomatis mendukung Layanan Home Service (Panggilan ke lokasi pelanggan) dan personal branding mandiri.
                         </p>
                       </div>
                       <span className="text-[10px] font-mono font-semibold text-[#285844] mt-3 block">
-                        Fokus Personal Branding →
+                        Mendukung Home Service & Branding →
                       </span>
                     </div>
 
@@ -1839,6 +1841,14 @@ export default function BarberDashboard() {
                       desc: 'Menampilkan menu potong rambut, durasi pengerjaan, dan harga yang jelas untuk pelanggan.',
                       icon: Scissors,
                       active: barber.features?.services !== false,
+                      isLocked: false
+                    },
+                    {
+                      key: 'homeService',
+                      name: 'Layanan Home Service (Panggilan ke Tempat Pelanggan)',
+                      desc: 'Aktifkan jika Anda melayani panggilan cukur ke rumah pelanggan. Tiket digital dan sistem booking otomatis menampilkan status Home Service.',
+                      icon: Home,
+                      active: barber.features?.homeService === true,
                       isLocked: false
                     },
                     {
@@ -2499,20 +2509,51 @@ export default function BarberDashboard() {
 
               </div>
 
-              {/* Lokasi Alamat Barbershop */}
+              {/* Lokasi Alamat Barbershop / Home Service */}
               <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-sm space-y-4">
-                <h2 className="font-display font-bold text-base text-[#171717] flex items-center gap-2">
-                  <MapPin className="w-4 h-4 text-[#285844]" />
-                  <span>Lokasi & Alamat Barbershop</span>
-                </h2>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div>
+                    <h2 className="font-display font-bold text-base text-[#171717] flex items-center gap-2">
+                      <MapPin className="w-4 h-4 text-[#285844]" />
+                      <span>Lokasi & Mode Operasional</span>
+                    </h2>
+                    <p className="text-xs text-neutral-500 mt-0.5">
+                      Atur lokasi studio fisik atau aktifkan mode panggilan Home Service untuk capster.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleToggleFeature('homeService')}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
+                      barber.features?.homeService
+                        ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                        : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:border-neutral-300'
+                    }`}
+                  >
+                    <Home className="w-3.5 h-3.5" />
+                    <span>{barber.features?.homeService ? 'Home Service: Aktif' : 'Home Service: Nonaktif'}</span>
+                  </button>
+                </div>
+
+                {barber.features?.homeService && (
+                  <div className="p-3 bg-emerald-50/70 border border-emerald-200 rounded-xl text-xs text-emerald-900 flex items-start sm:items-center gap-2.5">
+                    <CheckCircle2 className="w-4 h-4 text-[#285844] shrink-0 mt-0.5 sm:mt-0" />
+                    <span>
+                      <strong>Mode Home Service Aktif:</strong> Pada tiket digital reservasi, lokasi pangkas otomatis tertulis: <em>"Layanan Home Service (Panggilan ke lokasi pelanggan)"</em>.
+                    </span>
+                  </div>
+                )}
 
                 <div>
-                  <label className="text-xs font-semibold text-neutral-700 block mb-1.5">Alamat Lengkap Barbershop</label>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1.5">
+                    {barber.features?.homeService ? 'Wilayah Jangkauan Home Service / Alamat (Opsional)' : 'Alamat Lengkap Barbershop'}
+                  </label>
                   <input 
                     type="text"
                     value={barber.address || ''}
                     onChange={(e) => handleProfileFieldChange('address', e.target.value)}
-                    placeholder="e.g. Jl. Sudirman No. 12 / Ruko Grand Mall Blok A"
+                    placeholder={barber.features?.homeService ? "e.g. Melayani panggilan area Bandung & sekitarnya" : "e.g. Jl. Sudirman No. 12 / Ruko Grand Mall Blok A"}
                     className="w-full text-sm font-medium p-3 bg-neutral-50 border border-neutral-300 rounded-xl outline-none focus:border-[#285844]"
                   />
                 </div>

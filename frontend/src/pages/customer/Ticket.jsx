@@ -7,6 +7,7 @@ import {
   Clock,
   User,
   MapPin, 
+  Home,
   CheckCircle2, 
   Check, 
   Copy,
@@ -88,7 +89,9 @@ export default function CustomerTicket() {
               paymentStatus: data.paymentStatus || 'UNPAID',
               price: Number(data.price) || 0,
               createdAt: data.createdAt,
-              ticketToken
+              ticketToken,
+              serviceType: data.serviceType || null,
+              isHomeService: Boolean(data.isHomeService)
             });
             setLoading(false);
             return;
@@ -139,15 +142,21 @@ export default function CustomerTicket() {
       (booking.barberName && b.name && b.name.toLowerCase() === booking.barberName.toLowerCase()) ||
       (booking.barberName && b.slug && b.slug.toLowerCase() === booking.barberName.toLowerCase())
     );
-  }, [booking, barbers]);
+  }, [barbers, booking]);
 
-  const formattedBookingCode = booking?.bookingCode || (
+  const formattedBookingCode = (
     booking?.id
       ? `ECU-${String(booking.id).replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`
       : 'ECU-20251122-001'
   );
   const currentUrl = typeof window !== 'undefined' ? window.location.href : `https://ecukur.biz.id/tiket/${id}`;
   const isPaid = booking?.paymentStatus === 'PAID';
+  const isHomeService = Boolean(
+    booking?.serviceType === 'home_service' ||
+    booking?.isHomeService ||
+    matchedBarber?.features?.homeService ||
+    matchedBarber?.isHomeService
+  );
 
   const copyCode = () => {
     if (!booking) return;
@@ -283,7 +292,7 @@ export default function CustomerTicket() {
                 Barber Pass
               </h2>
               <p className="text-neutral-500 text-xs mt-1 font-medium">
-                Tunjukkan tiket ini kepada admin barbershop
+                {isHomeService ? 'Tunjukkan tiket ini saat barber tiba di lokasi Anda' : 'Tunjukkan tiket ini saat jadwal pangkas Anda'}
               </p>
             </div>
           </div>
@@ -362,8 +371,25 @@ export default function CustomerTicket() {
               </div>
             </div>
 
-            {/* 4. Lokasi Studio (Jika ada) */}
-            {(matchedBarber?.address || matchedBarber?.locationCity) && (
+            {/* 4. Lokasi Pangkas (Home Service / Studio) */}
+            {isHomeService ? (
+              <div className="bg-[#F8F9FA] rounded-2xl p-3.5 flex items-start gap-2.5 border border-neutral-100/90 shadow-3xs">
+                <div className="w-9 h-9 rounded-xl bg-emerald-100 text-[#1B4332] flex items-center justify-center shrink-0 mt-0.5">
+                  <Home className="w-4 h-4" />
+                </div>
+                <div className="text-xs min-w-0 flex-1">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Lokasi Pangkas</span>
+                  <span className="text-neutral-900 font-extrabold block text-xs mt-0.5">
+                    Layanan Home Service (Panggilan ke lokasi pelanggan)
+                  </span>
+                  {matchedBarber?.address && (
+                    <span className="text-neutral-500 block text-[11px] leading-relaxed mt-0.5">
+                      Wilayah Operasional: {matchedBarber.address}
+                    </span>
+                  )}
+                </div>
+              </div>
+            ) : (matchedBarber?.address || matchedBarber?.locationCity) ? (
               <div className="bg-[#F8F9FA] rounded-2xl p-3 flex items-start gap-2.5 border border-neutral-100/90 shadow-3xs">
                 <MapPin className="w-4 h-4 text-[#1B4332] shrink-0 mt-0.5" />
                 <div className="text-xs min-w-0 flex-1">
@@ -384,7 +410,7 @@ export default function CustomerTicket() {
                   )}
                 </div>
               </div>
-            )}
+            ) : null}
 
             {/* 5. Footer Info: Booking ID (Dengan tombol Copy) & Tagline */}
             <div className="pt-3 border-t border-neutral-100 flex items-center justify-between gap-3">

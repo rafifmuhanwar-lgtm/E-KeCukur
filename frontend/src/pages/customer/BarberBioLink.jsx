@@ -25,7 +25,8 @@ import {
   Send,
   Camera,
   Ticket,
-  ChevronLeft
+  ChevronLeft,
+  Home
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
@@ -648,6 +649,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
         if (data && (data.paymentStatus === 'PAID' || data.status === 'CONFIRMED')) {
           if (active) {
+            const isHomeService = Boolean(barber?.features?.homeService || barber?.isHomeService);
             const successPayload = {
               id: bookingQrisData.bookingId,
               ticketToken: bookingQrisData.ticketToken,
@@ -658,7 +660,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
               date: (selectedDate ? formatDateKey(selectedDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : null) || data?.date || 'Hari Ini',
               time: selectedTime || (data?.startTime ? String(data.startTime).substring(0, 5) : (data?.time || '10:00')),
               price: bookingQrisData.basePrice || bookingQrisData.totalAmount || Number(data?.price) || 0,
-              paymentMethod: 'QRIS (Lunas Otomatis)'
+              paymentMethod: 'QRIS (Lunas Otomatis)',
+              isHomeService,
+              serviceType: isHomeService ? 'home_service' : 'studio'
             };
             setBookingSuccessData(successPayload);
             setActiveTicket(successPayload);
@@ -680,7 +684,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       active = false;
       clearInterval(interval);
     };
-  }, [bookingStep, bookingQrisData, customerName, customerPhone, selectedCapster, selectedService, activeServices, selectedDate, selectedTime]);
+  }, [bookingStep, bookingQrisData, customerName, customerPhone, selectedCapster, selectedService, activeServices, selectedDate, selectedTime, barber?.features?.homeService, barber?.isHomeService]);
 
   // Tipping Modal State
   const [isTippingOpen, setIsTippingOpen] = useState(false);
@@ -832,6 +836,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     const startMin = timeToMinutes(selectedTime);
     const calculatedEndTime = minutesToTime(startMin + serviceDuration);
 
+    const isHomeService = Boolean(barber?.features?.homeService || barber?.isHomeService);
     const newBooking = {
       id: bookingCode,
       customerName: trimmedName,
@@ -851,7 +856,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       status: paymentMethod === 'QRIS' ? 'Menunggu' : 'Terkonfirmasi',
       paymentMethod,
       price: basePrice, // Nominal bersih layanan cukur (tanpa kode unik untuk dashboard barber & admin)
-      note: noteStyle.trim()
+      note: noteStyle.trim(),
+      isHomeService,
+      serviceType: isHomeService ? 'home_service' : 'studio'
     };
 
     let saved;
@@ -1541,6 +1548,14 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
             {/* ─── 3. HORIZONTAL PILL ROW FOR LINKS & TAGS (AS SHOWN IN REFERENCE IMAGE) ─── */}
             <div className={`flex flex-wrap items-center justify-center gap-1.5 sm:gap-2 ${isPreview ? 'mt-2.5 mb-2.5' : 'mt-3.5 mb-3.5'} w-full px-2`}>
+
+              {/* Home Service Pill */}
+              {barber.features?.homeService && (
+                <span className={`px-3 py-1 sm:px-3.5 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold flex items-center gap-1.5 ${theme.pillBg} ${theme.pillText} border ${theme.pillBorder} shadow-2xs transition-colors`}>
+                  <Home className={`w-3.5 h-3.5 ${theme.pillIcon}`} />
+                  <span>Home Service</span>
+                </span>
+              )}
 
               {/* Location Pill */}
               {(barber.locationCity || barber.address) && (
@@ -2401,6 +2416,14 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                         <span className="text-neutral-500">Waktu Kedatangan:</span>
                         <strong className="text-[#285844] font-bold">{bookingSuccessData.date} • {displayTime} WIB</strong>
                       </div>
+                      {(barber?.features?.homeService || bookingSuccessData?.isHomeService) && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-neutral-500">Lokasi:</span>
+                          <strong className="text-[#285844] font-semibold text-right max-w-[210px] truncate">
+                            Layanan Home Service (Panggilan)
+                          </strong>
+                        </div>
+                      )}
                       <div className="flex justify-between items-center">
                         <span className="text-neutral-500">Metode:</span>
                         <strong className="text-emerald-700 font-semibold">{bookingSuccessData.paymentMethod || 'QRIS (Lunas Otomatis)'}</strong>
