@@ -12,6 +12,7 @@ import BarberStatus from './pages/admin/BarberStatus';
 import DomainMigrationNotice from './components/DomainMigrationNotice';
 import ErrorBoundary from './components/ErrorBoundary';
 import BarberBioLink from './pages/customer/BarberBioLink';
+import GlobalBroadcastModal from './components/GlobalBroadcastModal';
 import { useStore } from './store';
 
 /* ---------- Overlay that covers the whole screen ---------- */
@@ -60,6 +61,7 @@ export default function App() {
   return (
     <ErrorBoundary>
       <Router>
+        <GlobalBroadcastModal />
         <Routes>
           {/* Public Core Routes */}
           <Route path="/" element={<Home />} />

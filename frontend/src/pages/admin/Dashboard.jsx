@@ -901,7 +901,9 @@ export default function AdminMasterDashboard() {
     };
     try {
       localStorage.setItem('ecukur_platform_settings', JSON.stringify(payload));
+      try { sessionStorage.removeItem('ecukur_dismissed_broadcast_msg'); } catch {}
       window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('ecukur_broadcast_update', { detail: payload }));
       showToast('Pengaturan platform & siaran pengumuman berhasil disimpan secara permanen!');
     } catch (err) {
       showToast('Gagal menyimpan: ' + err.message);
@@ -2987,7 +2989,7 @@ export default function AdminMasterDashboard() {
                 />
               </div>
 
-              <div className="flex items-center justify-between pt-2 border-t border-neutral-100">
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">
                 <button
                   type="button"
                   onClick={handleResetPlatformSettings}
@@ -2996,13 +2998,33 @@ export default function AdminMasterDashboard() {
                   Reset ke Default
                 </button>
 
-                <button
-                  type="button"
-                  onClick={handleSavePlatformSettings}
-                  className="px-5 py-2.5 bg-[#171717] hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer transition-colors"
-                >
-                  Simpan Pengaturan
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try { sessionStorage.removeItem('ecukur_dismissed_broadcast_msg'); } catch {}
+                      window.dispatchEvent(new CustomEvent('ecukur_broadcast_update', {
+                        detail: {
+                          isBroadcastActive: true,
+                          broadcastMessage: broadcastMessage.trim() || 'Contoh siaran pengumuman aktif sistem...',
+                          platformName
+                        }
+                      }));
+                    }}
+                    className="px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5"
+                    title="Uji tampilan pop-up iklan / pengumuman langsung"
+                  >
+                    <span>👁️ Pratinjau Pop-up</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSavePlatformSettings}
+                    className="px-5 py-2.5 bg-[#171717] hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer transition-colors"
+                  >
+                    Simpan Pengaturan
+                  </button>
+                </div>
               </div>
             </div>
 
