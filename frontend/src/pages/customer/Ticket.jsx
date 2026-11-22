@@ -431,7 +431,7 @@ export default function CustomerTicket() {
               to={`/${matchedBarber.slug}`}
               className="w-full py-3 bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 text-center shadow-2xs"
             >
-              <span>Kunjungi Profil Bio Link Barber</span>
+              <span>Kembali</span>
             </Link>
           )}
         </div>
