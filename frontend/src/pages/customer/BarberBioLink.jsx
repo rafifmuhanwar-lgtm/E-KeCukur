@@ -411,25 +411,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
     return null;
   });
 
-  // Platform Broadcast Announcement Listener
-  const [broadcastInfo, setBroadcastInfo] = useState(() => {
-    try {
-      const saved = localStorage.getItem('ecukur_platform_settings');
-      if (saved) return JSON.parse(saved);
-    } catch { }
-    return null;
-  });
-
-  useEffect(() => {
-    const handleStorage = () => {
-      try {
-        const saved = localStorage.getItem('ecukur_platform_settings');
-        setBroadcastInfo(saved ? JSON.parse(saved) : null);
-      } catch { }
-    };
-    window.addEventListener('storage', handleStorage);
-    return () => window.removeEventListener('storage', handleStorage);
-  }, []);
 
   const teamMembers = liveTeamMembers;
   const teamBookingEnabled = barber?.profileType === 'barbershop'
@@ -1381,15 +1362,6 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       <div className={`relative z-10 max-w-md mx-auto ${isPreview ? 'min-h-0' : 'min-h-screen sm:py-6'} flex flex-col justify-between`}>
         <div className={`w-full ${theme.cardBg} ${isPreview ? 'rounded-[32px]' : 'min-h-screen sm:min-h-0 sm:rounded-[36px] sm:shadow-xl sm:border ' + theme.cardBorder} overflow-hidden flex flex-col flex-1`}>
 
-          {/* Siaran Pengumuman Global dari SuperAdmin */}
-          {Boolean(broadcastInfo?.isBroadcastActive && broadcastInfo?.broadcastMessage) && (
-            <div className="bg-[#285844] text-white px-4 py-2 text-[11px] font-semibold flex items-center justify-between gap-2 shadow-xs">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span className="shrink-0">📢</span>
-                <span className="truncate">{broadcastInfo.broadcastMessage}</span>
-              </div>
-            </div>
-          )}
 
           {/* ─── 1. HEADER (BANNER IF PRESENT, OR CLEAN CARD HEADER IF NO BANNER) ─── */}
           {barber.bannerImage ? (
