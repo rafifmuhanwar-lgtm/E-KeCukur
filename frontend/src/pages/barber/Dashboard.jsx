@@ -41,9 +41,11 @@ import {
   AlertCircle,
   Crown,
   Download,
+  Printer,
   Send,
   ArrowLeft
 } from 'lucide-react';
+import { toPng, toJpeg } from 'html-to-image';
 import { useStore } from '../../store';
 import Logo from '../../components/Logo';
 import BarberBioLink from '../customer/BarberBioLink';
@@ -929,6 +931,39 @@ export default function BarberDashboard() {
   const [upgradeTargetPlan, setUpgradeTargetPlan] = useState(null);
   const [copiedUpgradeAmount, setCopiedUpgradeAmount] = useState(false);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
+
+  // ─── QR CODE PLACARD DOWNLOAD (PNG / JPG CROPPED) ───
+  const qrPlacardRef = useRef(null);
+  const [isDownloadingQr, setIsDownloadingQr] = useState(false);
+
+  const handleDownloadQr = async (format = 'png') => {
+    if (!qrPlacardRef.current) return;
+    try {
+      setIsDownloadingQr(true);
+      const isJpg = format === 'jpeg' || format === 'jpg';
+      const options = {
+        quality: 0.98,
+        pixelRatio: 3,
+        cacheBust: true,
+        backgroundColor: '#F7F6F2'
+      };
+
+      const dataUrl = isJpg
+        ? await toJpeg(qrPlacardRef.current, options)
+        : await toPng(qrPlacardRef.current, options);
+
+      const fileName = `QR_Cetak_ECUKUR_${barber?.slug || 'studio'}.${isJpg ? 'jpg' : 'png'}`;
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Failed to download QR code image:', err);
+      window.print();
+    } finally {
+      setIsDownloadingQr(false);
+    }
+  };
 
   // ─── SUBSCRIPTION PLAN & QUOTA HELPERS ───
   const currentPlan = barber?.plan || 'free';
@@ -4441,8 +4476,8 @@ export default function BarberDashboard() {
                   Cetak dan tempelkan QR Code ini di meja kasir atau cermin barber agar pelanggan langsung scan untuk pilih jam & booking.
                 </p>
 
-                {/* Simulated High-Res QR Placard */}
-                <div className="p-6 bg-[#F7F6F2] rounded-2xl border-2 border-neutral-300 inline-block shadow-inner mb-6 text-center">
+                {/* Simulated High-Res QR Placard (Terkrop Sempurna saat diunduh) */}
+                <div ref={qrPlacardRef} className="p-6 bg-[#F7F6F2] rounded-2xl border-2 border-neutral-300 inline-block shadow-inner mb-6 text-center">
                   <div className="flex items-center justify-center gap-1.5 mb-3 text-xs font-bold font-display text-[#285844]">
                     <Scissors className="w-4 h-4" />
                     <span>{barber.name}</span>
@@ -4451,6 +4486,7 @@ export default function BarberDashboard() {
                   {/* QR Code Graphic */}
                   <div className="w-44 h-44 bg-white p-3 rounded-xl border border-neutral-300 mx-auto shadow-sm flex items-center justify-center relative">
                     <img 
+                      crossOrigin="anonymous"
                       src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(publicUrl)}`} 
                       alt="QR Code" 
                       className="w-full h-full object-contain"
@@ -4463,21 +4499,49 @@ export default function BarberDashboard() {
                   <p className="text-[10px] text-neutral-500 mt-0.5">Scan untuk Menu & Booking Jadwal</p>
                 </div>
 
-                <div className="flex flex-col sm:flex-row gap-3">
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    className="flex-1 py-3 px-4 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-xs rounded-xl shadow-sm transition-transform active:scale-95"
-                  >
-                    Cetak / Simpan PDF
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCopyLink}
-                    className="flex-1 py-3 px-4 bg-neutral-100 hover:bg-neutral-200 text-[#171717] font-semibold text-xs rounded-xl border border-neutral-300 transition-colors"
-                  >
-                    Salin Tautan Bio
-                  </button>
+                {/* Tombol Unduh Format Gambar (PNG & JPG - Cropped Presisi) */}
+                <div className="space-y-2.5">
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      disabled={isDownloadingQr}
+                      onClick={() => handleDownloadQr('png')}
+                      className="py-3 px-3 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98"
+                      title="Unduh QR Code dalam format PNG transparan/tajam (terkrop presisi)"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>{isDownloadingQr ? 'Menyimpan...' : 'Unduh PNG'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      disabled={isDownloadingQr}
+                      onClick={() => handleDownloadQr('jpeg')}
+                      className="py-3 px-3 bg-[#171717] hover:bg-neutral-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50 active:scale-98"
+                      title="Unduh QR Code dalam format JPG (terkrop presisi siap cetak)"
+                    >
+                      <Download className="w-3.5 h-3.5" />
+                      <span>{isDownloadingQr ? 'Menyimpan...' : 'Unduh JPG'}</span>
+                    </button>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      className="flex-1 py-2.5 px-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl border border-neutral-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Cetak PDF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyLink}
+                      className="flex-1 py-2.5 px-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl border border-neutral-300 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <Copy className="w-3.5 h-3.5" />
+                      <span>Salin Tautan</span>
+                    </button>
+                  </div>
                 </div>
               </div>
 

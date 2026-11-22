@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation, Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
@@ -12,8 +12,10 @@ import {
   Copy,
   Share2, 
   ExternalLink,
-  Printer
+  Printer,
+  Download
 } from 'lucide-react';
+import { toPng, toJpeg } from 'html-to-image';
 import { useStore, dbToUiStatus } from '../../store';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { fetchBookingTracking } from '../../lib/bookingTracking';
@@ -30,8 +32,39 @@ export default function CustomerTicket() {
   const [loading, setLoading] = useState(true);
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const ticketCardRef = useRef(null);
 
   const formatRupiah = (val) => `Rp ${Number(val || 0).toLocaleString('id-ID')}`;
+
+  const handleDownloadTicket = async (format = 'png') => {
+    if (!ticketCardRef.current) return;
+    try {
+      setIsDownloading(true);
+      const isJpg = format === 'jpeg' || format === 'jpg';
+      const options = {
+        quality: 0.98,
+        pixelRatio: 2.5,
+        cacheBust: true,
+        backgroundColor: '#ffffff'
+      };
+
+      const dataUrl = isJpg
+        ? await toJpeg(ticketCardRef.current, options)
+        : await toPng(ticketCardRef.current, options);
+
+      const fileName = `Tiket_ECUKUR_${booking?.id || 'pass'}.${isJpg ? 'jpg' : 'png'}`;
+      const link = document.createElement('a');
+      link.download = fileName;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Failed to download ticket image:', err);
+      window.print();
+    } finally {
+      setIsDownloading(false);
+    }
+  };
 
   // 1. Cari booking di store atau fetch dari Supabase
   useEffect(() => {
@@ -231,6 +264,7 @@ export default function CustomerTicket() {
 
         {/* ─── DIGITAL BARBER PASS CARD (1:1 SESUAI REFERENSI DESAIN) ─── */}
         <motion.div
+          ref={ticketCardRef}
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
           className="relative bg-white rounded-[36px] p-6 sm:p-7 border border-neutral-200/90 shadow-2xl shadow-emerald-950/10 overflow-hidden"
@@ -413,27 +447,52 @@ export default function CustomerTicket() {
 
         </motion.div>
 
-        {/* ─── ACTION BUTTONS (PRINT & BIO LINK) ─── */}
+        {/* ─── ACTION BUTTONS (DOWNLOAD PNG/JPG & PRINT) ─── */}
         <div className="space-y-2.5 pt-2">
-          {/* Tombol Cetak / Simpan PDF */}
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="w-full py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Unduh / Cetak Tiket</span>
-          </button>
-
-          {/* Tombol Kembali ke Profil Barber */}
-          {matchedBarber?.slug && (
-            <Link
-              to={`/${matchedBarber.slug}`}
-              className="w-full py-3 bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 text-center shadow-2xs"
+          {/* Tombol Unduh Format Gambar (PNG & JPG - Cropped Presisi) */}
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={isDownloading}
+              onClick={() => handleDownloadTicket('png')}
+              className="py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+              title="Unduh tiket dalam format PNG resolusi tinggi (terpotong rapi sesuai kartu)"
             >
-              <span>Kembali</span>
-            </Link>
-          )}
+              <Download className="w-4 h-4" />
+              <span>{isDownloading ? 'Menyimpan...' : 'Unduh Tiket (PNG)'}</span>
+            </button>
+
+            <button
+              type="button"
+              disabled={isDownloading}
+              onClick={() => handleDownloadTicket('jpeg')}
+              className="py-3.5 bg-neutral-900 hover:bg-neutral-800 text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98 disabled:opacity-50"
+              title="Unduh tiket dalam format JPG tajam (terpotong rapi sesuai kartu)"
+            >
+              <Download className="w-4 h-4" />
+              <span>{isDownloading ? 'Menyimpan...' : 'Unduh Tiket (JPG)'}</span>
+            </button>
+          </div>
+
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="flex-1 py-2.5 bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-2xs"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              <span>Cetak Dokumen</span>
+            </button>
+
+            {matchedBarber?.slug && (
+              <Link
+                to={`/${matchedBarber.slug}`}
+                className="flex-1 py-2.5 bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-1.5 text-center shadow-2xs"
+              >
+                <span>Kembali</span>
+              </Link>
+            )}
+          </div>
         </div>
 
       </main>
