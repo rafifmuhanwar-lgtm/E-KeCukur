@@ -13,6 +13,7 @@ import DomainMigrationNotice from './components/DomainMigrationNotice';
 import ErrorBoundary from './components/ErrorBoundary';
 import BarberBioLink from './pages/customer/BarberBioLink';
 import GlobalBroadcastModal from './components/GlobalBroadcastModal';
+import FloatingHelpdesk from './components/FloatingHelpdesk';
 import { useStore } from './store';
 
 /* ---------- Overlay that covers the whole screen ---------- */
@@ -62,6 +63,7 @@ export default function App() {
     <ErrorBoundary>
       <Router>
         <GlobalBroadcastModal />
+        <FloatingHelpdesk />
         <Routes>
           {/* Public Core Routes */}
           <Route path="/" element={<Home />} />

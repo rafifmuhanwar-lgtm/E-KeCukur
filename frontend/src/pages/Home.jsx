@@ -17,7 +17,6 @@ import {
 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import Logo from '../components/Logo';
-import FloatingHelpdesk from '../components/FloatingHelpdesk';
 import { useStore } from '../store';
 import { getAppDomain } from '../lib/domain';
 
@@ -1378,9 +1377,6 @@ export default function Home() {
           </div>
         </div>
       </footer>
-
-      {/* ─── FLOATING HELPDESK & KONTAK (HEADPHONE WIDGET) ─── */}
-      <FloatingHelpdesk />
 
     </div>
   );
