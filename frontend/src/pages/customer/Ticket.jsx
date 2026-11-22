@@ -283,7 +283,7 @@ export default function CustomerTicket() {
                 Barber Pass
               </h2>
               <p className="text-neutral-500 text-xs mt-1 font-medium">
-                Tunjukkan tiket ini kepada admin barbershop
+                Tunjukkan tiket ini saat jadwal pangkas Anda
               </p>
             </div>
           </div>
