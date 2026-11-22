@@ -913,8 +913,17 @@ export default function BarberDashboard() {
     showToast(`Pilihan paket ${removed[0]?.label || ''} dihapus`);
   };
 
-  // ─── WITHDRAWAL / PENCAIRAN SALDO STATE (MIN. RP 15.000) ───
+  // ─── WITHDRAWAL / PENCAIRAN SALDO STATE (DINAMIS DARI SUPERADMIN SETTINGS) ───
   const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+  const minWithdrawalLimit = React.useMemo(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved && JSON.parse(saved).minWithdrawalAmount != null) {
+        return Math.max(10000, Number(JSON.parse(saved).minWithdrawalAmount));
+      }
+    } catch {}
+    return 50000;
+  }, []);
   const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
   const [upgradeQrisData, setUpgradeQrisData] = useState(null);
   const [upgradeTargetPlan, setUpgradeTargetPlan] = useState(null);
@@ -1093,8 +1102,8 @@ export default function BarberDashboard() {
   const handleSubmitWithdraw = (e) => {
     e.preventDefault();
     const amt = Number(withdrawAmount);
-    if (isNaN(amt) || amt < 15000) {
-      showToast('Minimal penarikan saldo adalah Rp 15.000');
+    if (isNaN(amt) || amt < minWithdrawalLimit) {
+      showToast(`Minimal penarikan saldo adalah ${formatRupiah(minWithdrawalLimit)}`);
       return;
     }
     if (amt > availableBalance) {
@@ -5550,9 +5559,9 @@ export default function BarberDashboard() {
                     })}
                   </div>
 
-                  {withdrawAmount && Number(withdrawAmount) < 20000 && (
-                    <p className="text-[11px] text-rose-600 mt-1.5">
-                      Batas minimal penarikan adalah Rp 20.000
+                  {withdrawAmount && Number(withdrawAmount) < minWithdrawalLimit && (
+                    <p className="text-[11px] text-rose-600 mt-1.5 font-medium">
+                      Batas minimal penarikan adalah {formatRupiah(minWithdrawalLimit)}
                     </p>
                   )}
                   {withdrawAmount && Number(withdrawAmount) > availableBalance && (
@@ -5652,7 +5661,7 @@ export default function BarberDashboard() {
                     type="submit"
                     disabled={
                       !withdrawAmount || 
-                      Number(withdrawAmount) < 20000 || 
+                      Number(withdrawAmount) < minWithdrawalLimit || 
                       Number(withdrawAmount) > availableBalance ||
                       !withdrawAccNumber.trim() || 
                       !withdrawAccHolder.trim()

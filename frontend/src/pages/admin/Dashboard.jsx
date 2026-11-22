@@ -31,7 +31,12 @@ import {
   Fingerprint,
   Terminal,
   ShieldAlert,
-  Database
+  Database,
+  Wrench,
+  Headphones,
+  MessageCircle,
+  Coins,
+  Save
 } from 'lucide-react';
 import SupabaseStudio from './SupabaseStudio';
 import VerifiedBadge from '../../components/VerifiedBadge';
@@ -461,13 +466,76 @@ export default function AdminMasterDashboard() {
     };
   }, [loadWebhookLogs]);
 
-  // Global Platform Settings State (tersimpan persisten di LocalStorage)
+  // Global Platform Settings State (tersimpan persisten di LocalStorage & Supabase)
   const [platformName, setPlatformName] = useState(() => {
     try {
       const saved = localStorage.getItem('ecukur_platform_settings');
       if (saved) return JSON.parse(saved).platformName || 'E-CUKUR Link-in-Bio';
     } catch {}
     return 'E-CUKUR Link-in-Bio';
+  });
+  const [isMaintenanceActive, setIsMaintenanceActive] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved) return Boolean(JSON.parse(saved).isMaintenanceActive);
+    } catch {}
+    return false;
+  });
+  const [maintenanceMessage, setMaintenanceMessage] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved && JSON.parse(saved).maintenanceMessage) return JSON.parse(saved).maintenanceMessage;
+    } catch {}
+    return 'Sistem E-CUKUR sedang dalam pemeliharaan berkala untuk peningkatan server. Reservasi sementara ditutup dan akan segera dibuka kembali.';
+  });
+  const [minWithdrawalAmount, setMinWithdrawalAmount] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved && JSON.parse(saved).minWithdrawalAmount != null) return Number(JSON.parse(saved).minWithdrawalAmount);
+    } catch {}
+    return 50000;
+  });
+  const [platformFeeAmount, setPlatformFeeAmount] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved && JSON.parse(saved).platformFeeAmount != null) return Number(JSON.parse(saved).platformFeeAmount);
+    } catch {}
+    return 0;
+  });
+  const [supportWhatsapp, setSupportWhatsapp] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved && JSON.parse(saved).supportWhatsapp) return JSON.parse(saved).supportWhatsapp;
+    } catch {}
+    return '6281234567890';
+  });
+  const [supportEmail, setSupportEmail] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved && JSON.parse(saved).supportEmail) return JSON.parse(saved).supportEmail;
+    } catch {}
+    return 'support@ecukur.biz.id';
+  });
+  const [registrationPolicy, setRegistrationPolicy] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved && JSON.parse(saved).registrationPolicy) return JSON.parse(saved).registrationPolicy;
+    } catch {}
+    return 'instant';
+  });
+  const [instagramUrl, setInstagramUrl] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved && JSON.parse(saved).instagramUrl) return JSON.parse(saved).instagramUrl;
+    } catch {}
+    return 'https://instagram.com/ecukur.id';
+  });
+  const [tiktokUrl, setTiktokUrl] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved && JSON.parse(saved).tiktokUrl) return JSON.parse(saved).tiktokUrl;
+    } catch {}
+    return 'https://tiktok.com/@ecukur.id';
   });
   const [broadcastMessage, setBroadcastMessage] = useState(() => {
     try {
@@ -483,6 +551,35 @@ export default function AdminMasterDashboard() {
     } catch {}
     return false;
   });
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+  // Sinkronisasi data pengaturan dari Supabase saat Super Admin login
+  useEffect(() => {
+    if (!isAdminUnlocked || !isSupabaseConfigured || !supabase) return;
+    supabase
+      .from('barbers')
+      .select('features')
+      .eq('slug', 'ecukur_system_config')
+      .maybeSingle()
+      .then(({ data }) => {
+        const cfg = data?.features?.platformSettings;
+        if (cfg) {
+          if (cfg.platformName) setPlatformName(cfg.platformName);
+          if (typeof cfg.isMaintenanceActive === 'boolean') setIsMaintenanceActive(cfg.isMaintenanceActive);
+          if (cfg.maintenanceMessage) setMaintenanceMessage(cfg.maintenanceMessage);
+          if (cfg.minWithdrawalAmount != null) setMinWithdrawalAmount(Number(cfg.minWithdrawalAmount));
+          if (cfg.platformFeeAmount != null) setPlatformFeeAmount(Number(cfg.platformFeeAmount));
+          if (cfg.supportWhatsapp) setSupportWhatsapp(cfg.supportWhatsapp);
+          if (cfg.supportEmail) setSupportEmail(cfg.supportEmail);
+          if (cfg.registrationPolicy) setRegistrationPolicy(cfg.registrationPolicy);
+          if (cfg.instagramUrl) setInstagramUrl(cfg.instagramUrl);
+          if (cfg.tiktokUrl) setTiktokUrl(cfg.tiktokUrl);
+          if (typeof cfg.isBroadcastActive === 'boolean') setIsBroadcastActive(cfg.isBroadcastActive);
+          if (cfg.broadcastMessage) setBroadcastMessage(cfg.broadcastMessage);
+        }
+      })
+      .catch(() => {});
+  }, [isAdminUnlocked]);
   const [toastMessage, setToastMessage] = useState(null);
 
   // Webhook Test Ping State
@@ -893,8 +990,18 @@ export default function AdminMasterDashboard() {
 
   // ─── HANDLE SIMPAN PENGATURAN PLATFORM SECARA PERSISTEN ───
   const handleSavePlatformSettings = async () => {
+    setIsSavingSettings(true);
     const payload = {
       platformName: platformName.trim() || 'E-CUKUR Link-in-Bio',
+      isMaintenanceActive,
+      maintenanceMessage: maintenanceMessage.trim(),
+      minWithdrawalAmount: Math.max(10000, Number(minWithdrawalAmount) || 50000),
+      platformFeeAmount: Math.max(0, Number(platformFeeAmount) || 0),
+      supportWhatsapp: supportWhatsapp.trim(),
+      supportEmail: supportEmail.trim(),
+      registrationPolicy,
+      instagramUrl: instagramUrl.trim(),
+      tiktokUrl: tiktokUrl.trim(),
       broadcastMessage: broadcastMessage.trim(),
       isBroadcastActive,
       updatedAt: new Date().toISOString()
@@ -915,16 +1022,27 @@ export default function AdminMasterDashboard() {
         }, { onConflict: 'email' });
       }
 
-      showToast('Pengaturan platform & siaran pengumuman berhasil disimpan dan aktif ke semua perangkat HP/Laptop!');
+      showToast('Seluruh pengaturan platform & kebijakan sistem berhasil disimpan dan aktif ke semua perangkat!');
     } catch (err) {
       showToast('Gagal menyimpan: ' + err.message);
+    } finally {
+      setIsSavingSettings(false);
     }
   };
 
   // ─── HANDLE RESET PENGATURAN KE DEFAULT ───
   const handleResetPlatformSettings = async () => {
-    if (!window.confirm('Kembalikan pengaturan platform ke nilai standar?')) return;
+    if (!window.confirm('Kembalikan semua pengaturan platform ke nilai standar?')) return;
     setPlatformName('E-CUKUR Link-in-Bio');
+    setIsMaintenanceActive(false);
+    setMaintenanceMessage('Sistem E-CUKUR sedang dalam pemeliharaan berkala untuk peningkatan server. Reservasi sementara ditutup dan akan segera dibuka kembali.');
+    setMinWithdrawalAmount(50000);
+    setPlatformFeeAmount(0);
+    setSupportWhatsapp('6281234567890');
+    setSupportEmail('support@ecukur.biz.id');
+    setRegistrationPolicy('instant');
+    setInstagramUrl('https://instagram.com/ecukur.id');
+    setTiktokUrl('https://tiktok.com/@ecukur.id');
     setBroadcastMessage('');
     setIsBroadcastActive(false);
     try {
@@ -2955,6 +3073,7 @@ export default function AdminMasterDashboard() {
         {activeTab === 'settings' && (
           <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-6">
             
+            {/* 1. IDENTITAS & DOMAIN UTAMA */}
             <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-2xs space-y-4">
               <h3 className="font-display font-bold text-base text-neutral-900 flex items-center gap-2 border-b border-neutral-100 pb-3">
                 <Sliders className="w-4 h-4 text-[#285844]" />
@@ -2986,68 +3105,310 @@ export default function AdminMasterDashboard() {
                   />
                 </div>
               </div>
+            </div>
 
-              {/* Broadcast Announcement Banner */}
-              <div className="pt-2 border-t border-neutral-100 space-y-2">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-semibold text-neutral-700">
-                    Pengumuman Siaran Global (Muncul di semua Link Bio)
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#285844]">
-                    <input 
-                      type="checkbox"
-                      checked={isBroadcastActive}
-                      onChange={(e) => setIsBroadcastActive(e.target.checked)}
-                      className="rounded accent-[#285844]"
-                    />
-                    <span>Aktifkan Pengumuman</span>
-                  </label>
+            {/* 2. SAKELAR MODE PEMELIHARAAN (MAINTENANCE MODE) */}
+            <div className={`p-6 rounded-2xl border transition-colors shadow-2xs space-y-4 ${
+              isMaintenanceActive ? 'bg-amber-50/50 border-amber-300' : 'bg-white border-neutral-200'
+            }`}>
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-neutral-100 pb-3">
+                <div className="flex items-center gap-2">
+                  <Wrench className={`w-4 h-4 ${isMaintenanceActive ? 'text-amber-600' : 'text-[#285844]'}`} />
+                  <h3 className="font-display font-bold text-base text-neutral-900">
+                    Mode Pemeliharaan (Maintenance Mode)
+                  </h3>
                 </div>
+                <div>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${
+                    isMaintenanceActive 
+                      ? 'bg-amber-200 text-amber-900 border border-amber-400' 
+                      : 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${isMaintenanceActive ? 'bg-amber-600 animate-pulse' : 'bg-emerald-600'}`} />
+                    {isMaintenanceActive ? 'Booking Publik Terkunci (Maintenance Aktif)' : 'Sistem Beroperasi Normal'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <label className="flex items-start gap-3 cursor-pointer p-3 rounded-xl bg-neutral-50 border border-neutral-200 hover:border-neutral-300 transition-colors">
+                  <input 
+                    type="checkbox"
+                    checked={isMaintenanceActive}
+                    onChange={(e) => setIsMaintenanceActive(e.target.checked)}
+                    className="mt-0.5 rounded accent-[#285844] w-4 h-4"
+                  />
+                  <div>
+                    <span className="text-xs font-bold text-neutral-900 block">
+                      Kunci Akses Reservasi Sementara (Aktifkan Mode Pemeliharaan)
+                    </span>
+                    <span className="text-[11px] text-neutral-500 leading-relaxed block mt-0.5">
+                      Gunakan saat Anda sedang melakukan migrasi database Supabase atau upgrade sistem. Pengunjung bio link tidak akan bisa submit booking dan melihat pesan pemeliharaan resmi.
+                    </span>
+                  </div>
+                </label>
+
+                <div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
+                    Pesan Kustom Pemeliharaan ke Pengunjung
+                  </label>
+                  <textarea 
+                    rows={2}
+                    value={maintenanceMessage}
+                    onChange={(e) => setMaintenanceMessage(e.target.value)}
+                    placeholder="Contoh: Sistem E-CUKUR sedang dalam pemeliharaan berkala untuk peningkatan server..."
+                    className="w-full p-3 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-normal outline-none focus:border-[#285844]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* 3. PENGUMUMAN SIARAN GLOBAL POP-UP */}
+            <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-2xs space-y-4">
+              <div className="flex items-center justify-between border-b border-neutral-100 pb-3">
+                <h3 className="font-display font-bold text-base text-neutral-900 flex items-center gap-2">
+                  <span className="text-lg">📢</span>
+                  <span>Pengumuman Siaran Global (Pop-up Modal)</span>
+                </h3>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-semibold text-[#285844]">
+                  <input 
+                    type="checkbox"
+                    checked={isBroadcastActive}
+                    onChange={(e) => setIsBroadcastActive(e.target.checked)}
+                    className="rounded accent-[#285844]"
+                  />
+                  <span>Aktifkan Pengumuman</span>
+                </label>
+              </div>
+
+              <div className="space-y-2">
                 <textarea 
                   rows={2}
                   value={broadcastMessage}
                   onChange={(e) => setBroadcastMessage(e.target.value)}
-                  placeholder="Contoh: Pemeliharaan server dijadwalkan pada hari Senin pukul 02:00 WIB..."
+                  placeholder="Contoh: Kami sedang menambahkan fitur pembayaran baru, terima kasih atas kesabaran Anda..."
                   className="w-full p-3 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-normal outline-none focus:border-[#285844]"
                 />
+                <p className="text-[11px] text-neutral-400">
+                  Pengumuman ini otomatis muncul sebagai pop-up resmi berlogo E-CUKUR di semua perangkat pengunjung (HP & Laptop) saat membuka platform.
+                </p>
               </div>
+            </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-neutral-100">
+            {/* 4. KEBIJAKAN FINANSIAL & PENARIKAN SALDO (FINANCIAL RULES) */}
+            <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-2xs space-y-4">
+              <h3 className="font-display font-bold text-base text-neutral-900 flex items-center gap-2 border-b border-neutral-100 pb-3">
+                <Coins className="w-4 h-4 text-[#285844]" />
+                <span>Kebijakan Finansial Platform & Penarikan Saldo</span>
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
+                    Batas Minimum Penarikan Saldo Barber (IDR)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-500">Rp</span>
+                    <input 
+                      type="number"
+                      min={10000}
+                      step={5000}
+                      value={minWithdrawalAmount}
+                      onChange={(e) => setMinWithdrawalAmount(Number(e.target.value) || 0)}
+                      className="w-full pl-10 pr-3 py-3 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-bold text-neutral-900 outline-none focus:border-[#285844]"
+                    />
+                  </div>
+                  <span className="text-[11px] text-neutral-500 block mt-1">
+                    Batas minimal saldo yang harus dicapai barber sebelum dapat mengajukan transfer pencairan dana (Default: Rp 50.000).
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
+                    Biaya Layanan Platform per Reservasi (IDR)
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-neutral-500">Rp</span>
+                    <input 
+                      type="number"
+                      min={0}
+                      step={500}
+                      value={platformFeeAmount}
+                      onChange={(e) => setPlatformFeeAmount(Number(e.target.value) || 0)}
+                      className="w-full pl-10 pr-3 py-3 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-bold text-neutral-900 outline-none focus:border-[#285844]"
+                    />
+                  </div>
+                  <span className="text-[11px] text-neutral-500 block mt-1">
+                    Biaya admin transaksi per booking (Isi 0 jika tidak ada biaya platform tambahan).
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 5. KEBIJAKAN AKUN & PENDAFTARAN BARBER */}
+            <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-2xs space-y-4">
+              <h3 className="font-display font-bold text-base text-neutral-900 flex items-center gap-2 border-b border-neutral-100 pb-3">
+                <ShieldCheck className="w-4 h-4 text-[#285844]" />
+                <span>Kebijakan Pendaftaran Barber Baru</span>
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <label className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  registrationPolicy === 'instant'
+                    ? 'border-[#285844] bg-emerald-50/40 ring-1 ring-[#285844]'
+                    : 'border-neutral-200 bg-neutral-50 hover:border-neutral-300'
+                }`}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <input 
+                      type="radio"
+                      name="registrationPolicy"
+                      value="instant"
+                      checked={registrationPolicy === 'instant'}
+                      onChange={() => setRegistrationPolicy('instant')}
+                      className="accent-[#285844]"
+                    />
+                    <strong className="text-xs text-neutral-900">⚡ Langsung Aktif (Instant Active)</strong>
+                  </div>
+                  <p className="text-[11px] text-neutral-500 leading-relaxed pl-5">
+                    Barber baru yang registrasi dapat langsung mengatur profil, menambah layanan, dan membagikan tautan bio ke publik tanpa menunggu persetujuan.
+                  </p>
+                </label>
+
+                <label className={`p-4 rounded-xl border cursor-pointer transition-all ${
+                  registrationPolicy === 'approval'
+                    ? 'border-[#285844] bg-emerald-50/40 ring-1 ring-[#285844]'
+                    : 'border-neutral-200 bg-neutral-50 hover:border-neutral-300'
+                }`}>
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <input 
+                      type="radio"
+                      name="registrationPolicy"
+                      value="approval"
+                      checked={registrationPolicy === 'approval'}
+                      onChange={() => setRegistrationPolicy('approval')}
+                      className="accent-[#285844]"
+                    />
+                    <strong className="text-xs text-neutral-900">🛡️ Perlu Persetujuan (Approval Needed)</strong>
+                  </div>
+                  <p className="text-[11px] text-neutral-500 leading-relaxed pl-5">
+                    Akun barber baru berstatus ditinjau terlebih dahulu oleh SuperAdmin di menu "Daftar Barber" sebelum dapat menerima reservasi pelanggan.
+                  </p>
+                </label>
+              </div>
+            </div>
+
+            {/* 6. PUSAT KONTAK HELPDESK & MEDIA SOSIAL RESMI */}
+            <div className="bg-white p-6 rounded-2xl border border-neutral-200 shadow-2xs space-y-4">
+              <h3 className="font-display font-bold text-base text-neutral-900 flex items-center gap-2 border-b border-neutral-100 pb-3">
+                <Headphones className="w-4 h-4 text-[#285844]" />
+                <span>Pusat Kontak Helpdesk & Media Sosial Resmi E-CUKUR</span>
+              </h3>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
+                    Nomor WhatsApp CS / Helpdesk
+                  </label>
+                  <div className="relative">
+                    <MessageCircle className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                    <input 
+                      type="text" 
+                      value={supportWhatsapp}
+                      onChange={(e) => setSupportWhatsapp(e.target.value)}
+                      placeholder="6281234567890"
+                      className="w-full pl-9 pr-3 py-3 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844]"
+                    />
+                  </div>
+                  <span className="text-[11px] text-neutral-400 block mt-1">
+                    Gunakan format nomor internasional tanpa spasi (misal: 6281234567890).
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
+                    Email Helpdesk Resmi
+                  </label>
+                  <input 
+                    type="email" 
+                    value={supportEmail}
+                    onChange={(e) => setSupportEmail(e.target.value)}
+                    placeholder="support@ecukur.biz.id"
+                    className="w-full p-3 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844]"
+                  />
+                  <span className="text-[11px] text-neutral-400 block mt-1">
+                    Alamat email resmi untuk pengaduan & bantuan teknis.
+                  </span>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
+                    Akun Instagram Resmi
+                  </label>
+                  <div className="relative">
+                    <Globe className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                    <input 
+                      type="text" 
+                      value={instagramUrl}
+                      onChange={(e) => setInstagramUrl(e.target.value)}
+                      placeholder="https://instagram.com/ecukur.id"
+                      className="w-full pl-9 pr-3 py-3 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844]"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-neutral-700 block mb-1">
+                    Akun TikTok Resmi
+                  </label>
+                  <input 
+                    type="text" 
+                    value={tiktokUrl}
+                    onChange={(e) => setTiktokUrl(e.target.value)}
+                    placeholder="https://tiktok.com/@ecukur.id"
+                    className="w-full p-3 bg-neutral-50 border border-neutral-300 rounded-xl text-xs font-medium outline-none focus:border-[#285844]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* BUTTON BAR */}
+            <div className="bg-white p-4 rounded-2xl border border-neutral-200 shadow-2xs flex flex-wrap items-center justify-between gap-3 sticky bottom-4 z-20">
+              <button
+                type="button"
+                onClick={handleResetPlatformSettings}
+                className="px-4 py-2.5 border border-neutral-200 text-neutral-600 hover:bg-neutral-100 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+              >
+                Reset ke Default
+              </button>
+
+              <div className="flex items-center gap-2">
                 <button
                   type="button"
-                  onClick={handleResetPlatformSettings}
-                  className="px-4 py-2 border border-neutral-200 text-neutral-600 hover:bg-neutral-100 rounded-xl text-xs font-semibold cursor-pointer transition-colors"
+                  onClick={() => {
+                    try { sessionStorage.removeItem('ecukur_dismissed_broadcast_msg'); } catch {}
+                    window.dispatchEvent(new CustomEvent('ecukur_broadcast_update', {
+                      detail: {
+                        isBroadcastActive: true,
+                        broadcastMessage: broadcastMessage.trim() || 'Contoh siaran pengumuman aktif sistem...',
+                        platformName
+                      }
+                    }));
+                  }}
+                  className="px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5"
+                  title="Uji tampilan pop-up iklan / pengumuman langsung"
                 >
-                  Reset ke Default
+                  <span>👁️ Pratinjau Pop-up</span>
                 </button>
 
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      try { sessionStorage.removeItem('ecukur_dismissed_broadcast_msg'); } catch {}
-                      window.dispatchEvent(new CustomEvent('ecukur_broadcast_update', {
-                        detail: {
-                          isBroadcastActive: true,
-                          broadcastMessage: broadcastMessage.trim() || 'Contoh siaran pengumuman aktif sistem...',
-                          platformName
-                        }
-                      }));
-                    }}
-                    className="px-4 py-2.5 bg-neutral-100 hover:bg-neutral-200 text-neutral-800 rounded-xl text-xs font-semibold cursor-pointer transition-colors flex items-center gap-1.5"
-                    title="Uji tampilan pop-up iklan / pengumuman langsung"
-                  >
-                    <span>👁️ Pratinjau Pop-up</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleSavePlatformSettings}
-                    className="px-5 py-2.5 bg-[#171717] hover:bg-neutral-800 text-white rounded-xl text-xs font-semibold shadow-xs cursor-pointer transition-colors"
-                  >
-                    Simpan Pengaturan
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  disabled={isSavingSettings}
+                  onClick={handleSavePlatformSettings}
+                  className="px-6 py-2.5 bg-[#285844] hover:bg-[#1E4334] disabled:opacity-50 text-white rounded-xl text-xs font-bold shadow-xs cursor-pointer transition-colors flex items-center gap-2"
+                >
+                  <Save className={`w-3.5 h-3.5 ${isSavingSettings ? 'animate-spin' : ''}`} />
+                  <span>{isSavingSettings ? 'Menyimpan...' : 'Simpan Semua Pengaturan'}</span>
+                </button>
               </div>
             </div>
 

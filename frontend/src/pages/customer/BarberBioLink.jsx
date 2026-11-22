@@ -25,7 +25,8 @@ import {
   Send,
   Camera,
   Ticket,
-  ChevronLeft
+  ChevronLeft,
+  Wrench
 } from 'lucide-react';
 import { useStore } from '../../store';
 import { getAppDomain } from '../../lib/domain';
@@ -342,6 +343,24 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
       }
     } catch { }
   };
+
+  // Global Platform Maintenance Check
+  const [showMaintenanceModal, setShowMaintenanceModal] = useState(false);
+  const [maintenanceInfo] = useState(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.isMaintenanceActive) {
+          return {
+            isActive: true,
+            message: parsed.maintenanceMessage || 'Sistem E-CUKUR sedang dalam pemeliharaan berkala untuk peningkatan server. Reservasi sementara ditutup dan akan segera dibuka kembali.'
+          };
+        }
+      }
+    } catch {}
+    return { isActive: false, message: '' };
+  });
 
   // Booking Modal State
   const [isBookingOpen, setIsBookingOpen] = useState(false);
@@ -745,6 +764,10 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
   };
 
   const handleOpenBooking = (service = null, capsterId = '') => {
+    if (maintenanceInfo.isActive) {
+      setShowMaintenanceModal(true);
+      return;
+    }
     setSelectedService(service || activeServices[0]);
     const firstAvailableCapster = teamMembers.find((member) => getCapsterStatus(member) === 'AVAILABLE');
     setSelectedCapsterId(capsterId || firstAvailableCapster?.id || '');
@@ -1653,6 +1676,15 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       {activeServices.length} Menu
                     </span>
                   </div>
+
+                  {maintenanceInfo.isActive && (
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-900 flex items-center gap-2.5 text-xs font-semibold">
+                      <Wrench className="w-4 h-4 shrink-0 text-amber-600" />
+                      <span className="text-[11px] leading-tight">
+                        Mode Pemeliharaan Sistem: Reservasi booking sementara dikunci oleh pengelola platform.
+                      </span>
+                    </div>
+                  )}
 
                   {activeServices.length === 0 ? (
                     <div className={`${isPreview ? 'p-4 rounded-xl' : 'p-8 rounded-2xl'} text-center border border-dashed ${theme.cardBorder} text-neutral-400`}>
@@ -3029,6 +3061,57 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ─── MODAL: MAINTENANCE MODE NOTICE ─── */}
+      <AnimatePresence>
+        {showMaintenanceModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              className="bg-white w-full max-w-sm rounded-[28px] overflow-hidden shadow-2xl border border-amber-200"
+            >
+              <div className="bg-gradient-to-br from-amber-500 to-amber-700 p-6 text-white text-center relative">
+                <button
+                  type="button"
+                  onClick={() => setShowMaintenanceModal(false)}
+                  className="absolute top-4 right-4 w-7 h-7 rounded-full bg-black/20 hover:bg-black/30 text-white flex items-center justify-center cursor-pointer transition-colors"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+                <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center mx-auto mb-3 shadow-inner">
+                  <Wrench className="w-7 h-7 text-white" />
+                </div>
+                <span className="px-2.5 py-0.5 rounded-full bg-white/20 text-[10px] font-bold uppercase tracking-wider">
+                  Pemeliharaan Sistem
+                </span>
+                <h3 className="font-display font-extrabold text-lg text-white mt-1">
+                  Reservasi Sementara Ditutup
+                </h3>
+              </div>
+
+              <div className="p-6 space-y-4">
+                <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 text-xs text-amber-950 leading-relaxed font-medium">
+                  {maintenanceInfo.message}
+                </div>
+
+                <p className="text-[11px] text-neutral-500 text-center leading-relaxed">
+                  Kami sedang meningkatkan performa dan keandalan sistem E-CUKUR. Harap kembali dalam beberapa saat.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowMaintenanceModal(false)}
+                  className="w-full py-3 bg-[#171717] hover:bg-neutral-800 text-white text-xs font-bold rounded-xl cursor-pointer transition-colors shadow-xs"
+                >
+                  Saya Mengerti
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

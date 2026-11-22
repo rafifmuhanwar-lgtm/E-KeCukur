@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   Scissors, 
@@ -27,6 +27,14 @@ export default function Home() {
   const navigate = useNavigate();
   const authUser = useStore((state) => state.authUser);
   const isLoggedIn = Boolean(authUser);
+
+  const platformSettings = useMemo(() => {
+    try {
+      const saved = localStorage.getItem('ecukur_platform_settings');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  }, []);
 
   const handleCreatePageAction = () => {
     if (isLoggedIn) {
@@ -1335,9 +1343,9 @@ export default function Home() {
       {/* ━━━ 12. FOOTER ━━━ */}
       {/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
       <footer className="py-12 px-4 sm:px-6 bg-[#171717] text-white text-xs">
-        <div className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-12 gap-8 pb-10 border-b border-neutral-800">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-8 pb-10 border-b border-neutral-800">
           
-          <div className="md:col-span-6 space-y-3">
+          <div className="md:col-span-4 space-y-3">
             <div className="flex items-center">
               <Logo variant="horizontal" theme="light" size="md" />
             </div>
@@ -1346,7 +1354,7 @@ export default function Home() {
             </p>
           </div>
 
-          <div className="md:col-span-3 space-y-2">
+          <div className="md:col-span-2 space-y-2">
             <h4 className="font-mono uppercase font-bold text-[11px] text-neutral-400 tracking-wider">Navigasi</h4>
             <ul className="space-y-1.5 text-neutral-300">
               <li><a href="#fitur" className="hover:text-white transition-colors">Fitur Produk</a></li>
@@ -1361,6 +1369,51 @@ export default function Home() {
             <ul className="space-y-1.5 text-neutral-300">
               <li><a href="/login" className="hover:text-white transition-colors">Masuk ke Akun Barber</a></li>
               <li><a href="/register" className="hover:text-white transition-colors">Daftar Akun Barber</a></li>
+              <li><a href="/admin" className="hover:text-white transition-colors">Portal SuperAdmin</a></li>
+            </ul>
+          </div>
+
+          <div className="md:col-span-3 space-y-2">
+            <h4 className="font-mono uppercase font-bold text-[11px] text-neutral-400 tracking-wider">Bantuan & Komunitas</h4>
+            <ul className="space-y-1.5 text-neutral-300">
+              <li>
+                <a 
+                  href={`https://wa.me/${platformSettings?.supportWhatsapp || '6281234567890'}?text=${encodeURIComponent('Halo CS E-CUKUR, saya butuh bantuan.')}`} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="hover:text-emerald-400 transition-colors flex items-center gap-1.5"
+                >
+                  <span>💬 WhatsApp Helpdesk</span>
+                </a>
+              </li>
+              <li>
+                <a 
+                  href={`mailto:${platformSettings?.supportEmail || 'support@ecukur.biz.id'}`} 
+                  className="hover:text-white transition-colors"
+                >
+                  ✉️ {platformSettings?.supportEmail || 'support@ecukur.biz.id'}
+                </a>
+              </li>
+              <li>
+                <a 
+                  href={platformSettings?.instagramUrl || 'https://instagram.com/ecukur.id'} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="hover:text-pink-400 transition-colors"
+                >
+                  📸 Instagram Resmi
+                </a>
+              </li>
+              <li>
+                <a 
+                  href={platformSettings?.tiktokUrl || 'https://tiktok.com/@ecukur.id'} 
+                  target="_blank" 
+                  rel="noreferrer" 
+                  className="hover:text-white transition-colors"
+                >
+                  🎵 TikTok Resmi
+                </a>
+              </li>
             </ul>
           </div>
 
