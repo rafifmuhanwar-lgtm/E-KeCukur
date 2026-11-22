@@ -4,19 +4,21 @@ import { motion } from 'framer-motion';
 import { 
   Scissors, 
   Calendar, 
+  Clock,
+  User,
   MapPin, 
   CheckCircle2, 
-  Copy, 
   Check, 
   Share2, 
   ArrowLeft, 
   ExternalLink,
   Printer,
-  Sparkles
+  QrCode
 } from 'lucide-react';
 import { useStore, dbToUiStatus } from '../../store';
 import { isSupabaseConfigured } from '../../lib/supabase';
 import { fetchBookingTracking } from '../../lib/bookingTracking';
+import { RazorEMark } from '../../components/Logo';
 
 export default function CustomerTicket() {
   const { id } = useParams();
@@ -80,7 +82,7 @@ export default function CustomerTicket() {
               capsterName: data.capsterName || null,
               serviceName: data.serviceName || 'Layanan Cukur',
               date: data.date || 'Hari Ini',
-              time: data.startTime ? String(data.startTime).substring(0, 5) : '10:00',
+              time: data.startTime ? String(data.startTime).substring(0, 5) : (data.time || '10:00'),
               status: dbToUiStatus(data.status),
               paymentMethod: data.paymentMethod || 'QRIS',
               paymentStatus: data.paymentStatus || 'UNPAID',
@@ -139,13 +141,17 @@ export default function CustomerTicket() {
     );
   }, [booking, barbers]);
 
-  const shortCode = booking?.id ? `#${String(booking.id).slice(-6).toUpperCase()}` : '#BK-001';
+  const formattedBookingCode = booking?.bookingCode || (
+    booking?.id
+      ? `ECU-${String(booking.id).replace(/[^a-zA-Z0-9]/g, '').slice(-8).toUpperCase()}`
+      : 'ECU-20251122-001'
+  );
   const currentUrl = typeof window !== 'undefined' ? window.location.href : `https://ecukur.biz.id/tiket/${id}`;
   const isPaid = booking?.paymentStatus === 'PAID';
 
   const copyCode = () => {
     if (!booking) return;
-    navigator.clipboard.writeText(booking.id);
+    navigator.clipboard.writeText(formattedBookingCode);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
@@ -158,9 +164,9 @@ export default function CustomerTicket() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-4">
+      <div className="min-h-screen bg-[#F2F4F7] flex items-center justify-center p-4">
         <div className="text-center space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-[#285844] flex items-center justify-center text-white mx-auto animate-pulse">
+          <div className="w-12 h-12 rounded-2xl bg-[#1B4332] flex items-center justify-center text-white mx-auto animate-pulse">
             <Scissors className="w-6 h-6 animate-spin" />
           </div>
           <p className="text-xs font-semibold text-neutral-600">Memuat tiket elektronik reservasi...</p>
@@ -171,7 +177,7 @@ export default function CustomerTicket() {
 
   if (!booking) {
     return (
-      <div className="min-h-screen bg-[#F7F6F2] flex items-center justify-center p-4 text-[#171717]">
+      <div className="min-h-screen bg-[#F2F4F7] flex items-center justify-center p-4 text-[#171717]">
         <div className="max-w-md w-full bg-white rounded-3xl p-6 sm:p-8 border border-neutral-200 text-center space-y-4 shadow-sm">
           <div className="w-14 h-14 rounded-full bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center mx-auto">
             <Calendar className="w-7 h-7" />
@@ -183,7 +189,7 @@ export default function CustomerTicket() {
           <div className="pt-2 flex flex-col gap-2">
             <Link
               to="/"
-              className="w-full py-3 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl transition-all shadow-xs"
+              className="w-full py-3 bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs rounded-xl transition-all shadow-xs"
             >
               Kembali ke Beranda
             </Link>
@@ -193,20 +199,20 @@ export default function CustomerTicket() {
     );
   }
 
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(currentUrl)}&color=28-88-68`;
+  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(currentUrl)}&color=27-67-50`;
 
   return (
-    <div className="min-h-screen bg-[#F7F6F2] text-[#171717] font-sans antialiased flex flex-col selection:bg-[#285844] selection:text-white pb-16">
+    <div className="min-h-screen bg-[#F2F4F7] text-[#171717] font-sans antialiased flex flex-col selection:bg-[#1B4332] selection:text-white pb-16">
       
       {/* Top Navbar */}
       <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-neutral-200">
         <div className="max-w-2xl mx-auto px-4 h-14 flex items-center justify-between gap-4">
-          <Link to="/" className="flex items-center gap-2 group">
-            <div className="w-7 h-7 rounded-xl bg-[#285844] flex items-center justify-center text-white shadow-2xs group-hover:scale-105 transition-transform">
-              <Scissors className="w-3.5 h-3.5" />
+          <Link to="/" className="flex items-center gap-2 group select-none">
+            <div className="w-7 h-7 rounded-full bg-black flex items-center justify-center p-1.5 shadow-2xs group-hover:scale-105 transition-transform">
+              <RazorEMark className="w-full h-full text-white" color="#ffffff" />
             </div>
-            <span className="font-display font-black text-sm tracking-tight text-[#171717]">
-              E-CUKUR
+            <span className="font-display font-black text-sm tracking-tight text-[#171717] lowercase">
+              ecukur
             </span>
           </Link>
 
@@ -232,187 +238,210 @@ export default function CustomerTicket() {
 
       {/* Main Container */}
       <main className="max-w-md mx-auto px-4 pt-6 sm:pt-8 w-full space-y-4">
-        
-        {/* Banner Alert Sukses */}
-        <div className="bg-emerald-50 border border-emerald-200/90 rounded-2xl p-3.5 flex items-center gap-3">
-          <div className="w-9 h-9 rounded-full bg-emerald-600 text-white flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-5 h-5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h4 className="font-bold text-xs text-emerald-900">
-              {isPaid ? 'Pembayaran Terkonfirmasi' : `Status Reservasi: ${booking.status}`}
-            </h4>
-            <p className="text-[11px] text-emerald-700">
-              {isPaid
-                ? 'Tunjukkan tiket digital ini kepada capster saat Anda tiba di lokasi.'
-                : 'Selesaikan pembayaran sesuai instruksi agar reservasi dapat dikonfirmasi.'}
-            </p>
-          </div>
-        </div>
 
-        {/* ─── DIGITAL BOARDING PASS CARD ─── */}
+        {/* ─── DIGITAL BARBER PASS CARD (1:1 SESUAI REFERENSI DESAIN) ─── */}
         <motion.div
           initial={{ opacity: 0, y: 15 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white rounded-3xl border border-neutral-200/80 shadow-md overflow-hidden"
+          className="relative bg-white rounded-[36px] p-6 sm:p-7 border border-neutral-200/90 shadow-2xl shadow-emerald-950/10 overflow-hidden"
         >
-          {/* Header Ticket: Forest Green */}
-          <div className="bg-[#285844] text-white p-5 sm:p-6 relative overflow-hidden">
-            <div className="absolute -right-8 -bottom-8 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
-            <div className="absolute top-2 right-4 text-white/10 font-display font-black text-6xl select-none">
-              TICKET
-            </div>
+          {/* Side Cutout Notches (Efek Fisik Tiket Sobek Samping) */}
+          <div className="absolute -left-3.5 top-32 w-7 h-7 rounded-full bg-[#F2F4F7] border border-neutral-200/80 z-20 pointer-events-none" />
+          <div className="absolute -right-3.5 top-32 w-7 h-7 rounded-full bg-[#F2F4F7] border border-neutral-200/80 z-20 pointer-events-none" />
 
-            <div className="relative z-10 flex items-center justify-between">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold tracking-wider uppercase bg-white/15 text-white backdrop-blur-xs border border-white/20">
-                <Sparkles className="w-3 h-3 text-amber-300" />
-                <span>Tiket Digital Resmi</span>
-              </span>
-
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-400/20 text-emerald-200 border border-emerald-400/30">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span>{isPaid ? 'LUNAS' : booking.paymentStatus || 'BELUM BAYAR'}</span>
-              </span>
-            </div>
-
-            <div className="mt-4 relative z-10">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-[11px] font-mono text-emerald-200/80 uppercase font-semibold">Nomor Reservasi</div>
-                  <div className="font-mono font-black text-2xl tracking-wider text-white mt-0.5">
-                    {shortCode}
-                  </div>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={copyCode}
-                  className="px-2.5 py-1 bg-white/10 hover:bg-white/20 text-white rounded-lg text-[10px] font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-                >
-                  {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                  <span>{copied ? 'Tersalin' : 'Salin ID'}</span>
-                </button>
+          {/* Top Row: Logo & Status Badge */}
+          <div className="flex items-center justify-between gap-3 relative z-10">
+            <div className="flex items-center gap-2 select-none">
+              <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center p-1.5 shadow-xs">
+                <RazorEMark className="w-full h-full" color="#ffffff" />
               </div>
+              <span className="font-display font-black text-xl text-neutral-900 tracking-tight lowercase">
+                ecukur
+              </span>
+            </div>
+
+            <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold shadow-3xs ${
+              isPaid 
+                ? 'bg-[#E8F5E9] text-[#1B4332] border border-[#C8E6C9]' 
+                : 'bg-emerald-50 text-emerald-900 border border-emerald-200'
+            }`}>
+              <CheckCircle2 className="w-3.5 h-3.5 text-[#1B4332]" />
+              <span>{isPaid ? 'Pembayaran Berhasil' : (booking.status === 'Terkonfirmasi' ? 'Terkonfirmasi' : 'Pembayaran Berhasil')}</span>
             </div>
           </div>
 
-          {/* Ticket Body */}
-          <div className="p-5 sm:p-6 space-y-5">
+          {/* Header Title with Background Watermark */}
+          <div className="relative pt-4 pb-2">
+            {/* Watermark in background on right */}
+            <div className="absolute -top-4 -right-4 w-44 h-44 text-[#1B4332]/10 pointer-events-none select-none z-0">
+              <RazorEMark className="w-full h-full" color="currentColor" />
+            </div>
+
+            <div className="relative z-10">
+              <h1 className="font-display font-black text-2xl text-neutral-900 tracking-tight leading-none">
+                eCukur
+              </h1>
+              <h2 className="font-display font-black text-3xl sm:text-4xl text-[#1B4332] tracking-tight leading-tight mt-0.5">
+                Barber Pass
+              </h2>
+              <p className="text-neutral-500 text-xs mt-1 font-medium">
+                Tunjukkan tiket ini kepada admin barbershop
+              </p>
+            </div>
+          </div>
+
+          <div className="border-b border-neutral-100 my-3" />
+
+          {/* Bento Info Cards */}
+          <div className="space-y-3 relative z-10">
             
-            {/* Waktu & Sesi Booking (Highlight Utama) */}
-            <div className="bg-neutral-50 rounded-2xl p-4 border border-neutral-200 flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-[#285844] text-white flex items-center justify-center shrink-0">
-                  <Calendar className="w-5 h-5" />
-                </div>
-                <div>
-                  <div className="text-[10px] font-mono uppercase text-neutral-400 font-bold">Jadwal Kedatangan</div>
-                  <div className="font-bold text-neutral-900 text-sm sm:text-base mt-0.5">
-                    {booking.date}
-                  </div>
-                </div>
+            {/* 1. Nama Pelanggan */}
+            <div className="bg-[#F8F9FA] rounded-2xl p-3.5 flex items-center gap-3 border border-neutral-100/90 shadow-3xs">
+              <div className="w-10 h-10 rounded-xl bg-neutral-200/70 text-neutral-700 flex items-center justify-center shrink-0">
+                <User className="w-4 h-4" />
               </div>
-
-              <div className="text-right border-l border-neutral-200 pl-4">
-                <div className="text-[10px] font-mono uppercase text-neutral-400 font-bold">Pukul</div>
-                <div className="font-mono font-black text-lg text-[#285844]">
-                  {booking.time} <span className="text-[11px] font-bold">WIB</span>
-                </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Nama Pelanggan</span>
+                <span className="text-sm sm:text-base font-extrabold text-neutral-900 block truncate mt-0.5">
+                  {booking.customerName}
+                </span>
               </div>
             </div>
 
-            {/* Perforated Divider (Efek Tiket Fisik) */}
-            <div className="relative flex items-center justify-between my-2 -mx-5 sm:-mx-6">
-              <div className="w-4 h-8 bg-[#F7F6F2] rounded-r-full border-r border-y border-neutral-200" />
-              <div className="flex-1 border-b-2 border-dashed border-neutral-200 mx-2" />
-              <div className="w-4 h-8 bg-[#F7F6F2] rounded-l-full border-l border-y border-neutral-200" />
-            </div>
-
-            {/* Rincian Pemesan & Layanan */}
-            <div className="space-y-3 text-xs">
-              <div className="flex justify-between items-center py-1 border-b border-neutral-100">
-                <span className="text-neutral-500">Nama Pelanggan</span>
-                <strong className="text-neutral-900 font-bold">{booking.customerName}</strong>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-neutral-100">
-                <span className="text-neutral-500">Layanan Dipilih</span>
-                <strong className="text-neutral-900 font-bold text-right">{booking.serviceName}</strong>
-              </div>
-
-              <div className="flex justify-between items-center py-1 border-b border-neutral-100">
-                <span className="text-neutral-500">Barber / Studio</span>
-                <div className="flex items-center gap-1.5 font-bold text-[#285844]">
-                  <Scissors className="w-3.5 h-3.5" />
-                  <span>{booking.barberName}</span>
+            {/* 2. Nama Barber & Layanan */}
+            <div className="bg-[#F8F9FA] rounded-2xl p-3.5 flex items-center justify-between gap-3 border border-neutral-100/90 shadow-3xs">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className="w-10 h-10 rounded-xl bg-neutral-200/70 text-neutral-700 flex items-center justify-center shrink-0">
+                  <Scissors className="w-4 h-4" />
                 </div>
-              </div>
-
-              {booking.capsterName && (
-                <div className="flex justify-between items-center py-1 border-b border-neutral-100">
-                  <span className="text-neutral-500">Capster</span>
-                  <strong className="text-neutral-900 font-bold">{booking.capsterName}</strong>
-                </div>
-              )}
-
-              <div className="flex justify-between items-center pt-2">
-                <span className="text-neutral-500 font-medium">Total Tarif</span>
-                <strong className="font-mono text-base font-extrabold text-[#285844]">
-                  {formatRupiah(booking.price)}
-                </strong>
-              </div>
-            </div>
-
-            {/* Alamat & Lokasi Studio */}
-            {(matchedBarber?.address || matchedBarber?.locationCity) && (
-              <div className="pt-3 border-t border-neutral-100">
-                <div className="flex items-start gap-2.5">
-                  <MapPin className="w-4 h-4 text-[#285844] shrink-0 mt-0.5" />
-                  <div className="text-xs">
-                    <span className="font-bold text-neutral-800 block">Lokasi Pangkas:</span>
-                    <span className="text-neutral-500 block leading-relaxed mt-0.5">
-                      {matchedBarber.address || matchedBarber.locationCity}
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Nama Barber</span>
+                  <span className="text-sm font-extrabold text-neutral-900 block truncate mt-0.5">
+                    {booking.barberName}
+                  </span>
+                  {booking.capsterName && (
+                    <span className="text-[11px] text-neutral-500 font-medium block mt-0.5">
+                      Capster: <strong className="text-neutral-700">{booking.capsterName}</strong>
                     </span>
-                    {matchedBarber.mapsUrl && (
-                      <a
-                        href={matchedBarber.mapsUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-[11px] font-bold text-[#285844] hover:underline mt-1.5"
-                      >
-                        <span>Buka Rute di Google Maps</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
+                  )}
+                </div>
+              </div>
+              <div className="text-right shrink-0 border-l border-neutral-200/80 pl-3">
+                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Layanan</span>
+                <span className="text-xs font-bold text-[#1B4332] block max-w-[120px] truncate mt-0.5">
+                  {booking.serviceName}
+                </span>
+                <span className="text-[11px] font-mono font-bold text-neutral-500 block mt-0.5">
+                  {formatRupiah(booking.price)}
+                </span>
+              </div>
+            </div>
+
+            {/* 3. Tanggal Booking & Waktu Booking (2 Kolom Grid) */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-[#F8F9FA] rounded-2xl p-3.5 flex items-center gap-2.5 border border-neutral-100/90 shadow-3xs">
+                <div className="w-9 h-9 rounded-xl bg-neutral-200/70 text-neutral-700 flex items-center justify-center shrink-0">
+                  <Calendar className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Tanggal Booking</span>
+                  <span className="text-xs font-bold text-neutral-900 block truncate mt-0.5">
+                    {booking.date}
+                  </span>
+                </div>
+              </div>
+
+              <div className="bg-[#F8F9FA] rounded-2xl p-3.5 flex items-center gap-2.5 border border-neutral-100/90 shadow-3xs">
+                <div className="w-9 h-9 rounded-xl bg-neutral-200/70 text-neutral-700 flex items-center justify-center shrink-0">
+                  <Clock className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Waktu Booking</span>
+                  <span className="text-xs font-bold text-neutral-900 block truncate mt-0.5">
+                    {booking.time} WIB
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* 4. Lokasi Studio (Jika ada) */}
+            {(matchedBarber?.address || matchedBarber?.locationCity) && (
+              <div className="bg-[#F8F9FA] rounded-2xl p-3 flex items-start gap-2.5 border border-neutral-100/90 shadow-3xs">
+                <MapPin className="w-4 h-4 text-[#1B4332] shrink-0 mt-0.5" />
+                <div className="text-xs min-w-0 flex-1">
+                  <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Lokasi Pangkas</span>
+                  <span className="text-neutral-700 block text-[11px] leading-relaxed mt-0.5">
+                    {matchedBarber.address || matchedBarber.locationCity}
+                  </span>
+                  {matchedBarber.mapsUrl && (
+                    <a
+                      href={matchedBarber.mapsUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-bold text-[#1B4332] hover:underline mt-1"
+                    >
+                      <span>Buka Google Maps</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
                 </div>
               </div>
             )}
 
-            {/* QR Code Check-in Verification */}
-            <div className="pt-3 border-t border-neutral-100 text-center space-y-2">
-              <div className="w-36 h-36 mx-auto rounded-2xl bg-neutral-50 p-2 border border-neutral-200 flex items-center justify-center">
+            {/* 5. QR Code Box (Matching Reference Green Border Container) */}
+            <div className="border-2 border-[#1B4332]/40 rounded-3xl p-5 bg-white text-center space-y-3.5 shadow-xs">
+              <div className="w-44 h-44 sm:w-48 sm:h-48 mx-auto flex items-center justify-center p-1">
                 <img 
                   src={qrImageUrl} 
                   alt="QR Code Check-in" 
-                  className="w-full h-full object-contain"
+                  className="w-full h-full object-contain select-none"
                 />
               </div>
-              <p className="text-[11px] text-neutral-400 font-mono">
-                Scan QR Code ini untuk verifikasi check-in di kasir
-              </p>
+              <button
+                type="button"
+                onClick={copyCode}
+                className="w-full py-3 bg-[#1B4332] hover:bg-[#143326] text-white rounded-full text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-transform active:scale-98 cursor-pointer"
+              >
+                <QrCode className="w-4 h-4" />
+                <span>{copied ? 'Kode Berhasil Disalin!' : 'Scan QR Code'}</span>
+              </button>
+            </div>
+
+            {/* 6. Footer Info: Booking ID & Tagline */}
+            <div className="pt-2 border-t border-neutral-100 flex items-center justify-between gap-3">
+              <div>
+                <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Booking ID</span>
+                <span className="font-mono font-black text-xs sm:text-sm text-neutral-900 tracking-wider block mt-0.5">
+                  {formattedBookingCode}
+                </span>
+              </div>
+              <div className="text-right">
+                <span className="font-serif italic font-bold text-neutral-900 text-xs block leading-tight">Your Barber,</span>
+                <span className="font-serif italic font-bold text-neutral-900 text-xs block leading-tight">Just One Click Away.</span>
+              </div>
             </div>
 
           </div>
+
+          {/* Bottom Emerald Wave Accent & Center Notch */}
+          <div className="relative -mx-6 sm:-mx-7 -mb-6 sm:-mb-7 mt-4 pt-10 overflow-hidden rounded-b-[36px]">
+            <div className="absolute inset-0 bg-gradient-to-tr from-[#1B4332] via-[#2D6A4F] to-[#52B788] opacity-95" />
+            <svg className="absolute bottom-0 w-full h-10 text-[#1B4332]" viewBox="0 0 400 60" preserveAspectRatio="none">
+              <path d="M0,25 C150,55 250,5 400,25 L400,60 L0,60 Z" fill="currentColor" opacity="0.35" />
+            </svg>
+            <div className="absolute -bottom-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-[#F2F4F7] z-20 pointer-events-none" />
+            <div className="h-4 relative z-10" />
+          </div>
+
         </motion.div>
 
-        {/* ─── ACTION BUTTONS (PRINT, BOOKING LAIN) ─── */}
+        {/* ─── ACTION BUTTONS (PRINT & BIO LINK) ─── */}
         <div className="space-y-2.5 pt-2">
           {/* Tombol Cetak / Simpan PDF */}
           <button
             type="button"
             onClick={() => window.print()}
-            className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+            className="w-full py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
           >
             <Printer className="w-4 h-4" />
             <span>Unduh / Cetak Tiket</span>
@@ -422,7 +451,7 @@ export default function CustomerTicket() {
           {matchedBarber?.slug && (
             <Link
               to={`/${matchedBarber.slug}`}
-              className="w-full py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 text-center"
+              className="w-full py-3 bg-white hover:bg-neutral-50 border border-neutral-200 text-neutral-700 font-semibold text-xs rounded-xl transition-all flex items-center justify-center gap-2 text-center shadow-2xs"
             >
               <span>Kunjungi Profil Bio Link Barber</span>
             </Link>

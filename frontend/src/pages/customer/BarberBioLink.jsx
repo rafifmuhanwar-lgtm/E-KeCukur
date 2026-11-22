@@ -651,13 +651,13 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
             const successPayload = {
               id: bookingQrisData.bookingId,
               ticketToken: bookingQrisData.ticketToken,
-              customerName,
-              customerPhone,
-              capsterName: selectedCapster?.name || null,
-              serviceName: selectedService?.name || activeServices[0]?.name,
-              date: formatDateKey(selectedDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }),
-              time: selectedTime,
-              price: bookingQrisData.basePrice || bookingQrisData.totalAmount,
+              customerName: customerName.trim() || data?.customerName || 'Pelanggan',
+              customerPhone: customerPhone.trim() || data?.customerPhone || '',
+              capsterName: selectedCapster?.name || data?.capsterName || null,
+              serviceName: selectedService?.name || data?.serviceName || activeServices[0]?.name || 'Layanan Cukur',
+              date: (selectedDate ? formatDateKey(selectedDate, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : null) || data?.date || 'Hari Ini',
+              time: selectedTime || (data?.startTime ? String(data.startTime).substring(0, 5) : (data?.time || '10:00')),
+              price: bookingQrisData.basePrice || bookingQrisData.totalAmount || Number(data?.price) || 0,
               paymentMethod: 'QRIS (Lunas Otomatis)'
             };
             setBookingSuccessData(successPayload);
@@ -2355,72 +2355,81 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                     </button>
                   </div>
                 </div>
-              ) : bookingStep === 'success' && bookingSuccessData ? (
-                /* ── STEP 2: BOOKING SUCCESS TICKET ── */
-                <div className="space-y-4 text-center py-2">
-                  <div className="w-14 h-14 rounded-full bg-[#D9E5DC] text-[#285844] flex items-center justify-center mx-auto">
-                    <CheckCircle2 className="w-8 h-8" />
-                  </div>
-                  <div>
-                    <span className="px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider bg-[#D9E5DC] text-[#285844]">
-                      ID: {bookingSuccessData.id}
-                    </span>
-                    <h4 className="font-display font-extrabold text-xl text-[#171717] mt-2">
-                      Jadwal Cukur Terdaftar!
-                    </h4>
-                    <p className="text-xs text-neutral-500 mt-1">
-                      Data booking kamu telah terverifikasi dan masuk ke sistem barber.
-                    </p>
-                  </div>
+              ) : bookingStep === 'success' && bookingSuccessData ? (() => {
+                const shortSuccessId = bookingSuccessData.bookingCode || (
+                  String(bookingSuccessData.id).startsWith('ECU-')
+                    ? bookingSuccessData.id
+                    : `ECU-${String(bookingSuccessData.id).replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase()}`
+                );
+                const displayTime = bookingSuccessData.time || selectedTime || '10:00';
 
-                  {/* Summary Card */}
-                  <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-200 text-left text-xs space-y-2">
-                    <div className="flex justify-between">
-                      <span className="text-neutral-500">Nama Pemesan:</span>
-                      <strong className="text-[#171717]">{bookingSuccessData.customerName}</strong>
+                return (
+                  /* ── STEP 2: BOOKING SUCCESS TICKET ── */
+                  <div className="space-y-4 text-center py-2">
+                    <div className="w-14 h-14 rounded-2xl bg-[#D9E5DC] text-[#285844] flex items-center justify-center mx-auto shadow-2xs">
+                      <CheckCircle2 className="w-8 h-8" />
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-neutral-500">Layanan:</span>
-                      <strong className="text-[#171717]">{bookingSuccessData.serviceName}</strong>
+                    <div>
+                      <span className="px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider bg-[#D9E5DC] text-[#285844] inline-block shadow-3xs">
+                        ID: {shortSuccessId}
+                      </span>
+                      <h4 className="font-display font-black text-xl text-[#171717] mt-2.5">
+                        Jadwal Cukur Terdaftar!
+                      </h4>
+                      <p className="text-xs text-neutral-500 mt-1">
+                        Data booking kamu telah terverifikasi dan masuk ke sistem barber.
+                      </p>
                     </div>
-                    {bookingSuccessData.capsterName && (
-                      <div className="flex justify-between">
-                        <span className="text-neutral-500">Capster:</span>
-                        <strong className="text-[#171717]">{bookingSuccessData.capsterName}</strong>
+
+                    {/* Summary Card */}
+                    <div className="p-4 bg-neutral-50 rounded-2xl border border-neutral-200 text-left text-xs space-y-2.5">
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-500">Nama Pemesan:</span>
+                        <strong className="text-[#171717] font-bold">{bookingSuccessData.customerName}</strong>
                       </div>
-                    )}
-                    <div className="flex justify-between">
-                      <span className="text-neutral-500">Waktu Kedatangan:</span>
-                      <strong className="text-[#285844]">{bookingSuccessData.date} • {bookingSuccessData.time} WIB</strong>
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-500">Layanan:</span>
+                        <strong className="text-[#171717] font-semibold">{bookingSuccessData.serviceName}</strong>
+                      </div>
+                      {bookingSuccessData.capsterName && (
+                        <div className="flex justify-between items-center">
+                          <span className="text-neutral-500">Capster:</span>
+                          <strong className="text-[#171717] font-semibold">{bookingSuccessData.capsterName}</strong>
+                        </div>
+                      )}
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-500">Waktu Kedatangan:</span>
+                        <strong className="text-[#285844] font-bold">{bookingSuccessData.date} • {displayTime} WIB</strong>
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-neutral-500">Metode:</span>
+                        <strong className="text-emerald-700 font-semibold">{bookingSuccessData.paymentMethod || 'QRIS (Lunas Otomatis)'}</strong>
+                      </div>
+                      <div className="flex justify-between items-center border-t border-neutral-200 pt-2.5">
+                        <span className="text-neutral-500 font-medium">Total Tarif:</span>
+                        <strong className="font-mono text-sm font-extrabold text-[#285844]">{formatRupiah(bookingSuccessData.price)}</strong>
+                      </div>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-neutral-500">Metode:</span>
-                      <strong className="text-emerald-700 font-semibold">{bookingSuccessData.paymentMethod || 'QRIS'}</strong>
-                    </div>
-                    <div className="flex justify-between border-t border-neutral-200 pt-2">
-                      <span className="text-neutral-500">Total Tarif:</span>
-                      <strong className="font-mono text-sm text-[#285844]">{formatRupiah(bookingSuccessData.price)}</strong>
-                    </div>
-                  </div>
-                  <div className="space-y-2 pt-1">
-                    <Link
-                      to={`/tiket/${bookingSuccessData.id}#t=${encodeURIComponent(bookingSuccessData.ticketToken || '')}`}
-                      className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-center"
-                    >
-                      <Ticket className="w-4 h-4 text-emerald-300" />
-                      <span>Buka & Simpan E-Tiket Digital</span>
-                    </Link>
+                    <div className="space-y-2 pt-1">
+                      <Link
+                        to={`/tiket/${bookingSuccessData.id}#t=${encodeURIComponent(bookingSuccessData.ticketToken || '')}`}
+                        className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-bold text-xs rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 text-center cursor-pointer active:scale-98"
+                      >
+                        <Ticket className="w-4 h-4 text-emerald-300" />
+                        <span>Buka & Simpan E-Tiket Digital</span>
+                      </Link>
 
-                    <button
-                      type="button"
-                      onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); setBookingQrisData(null); setBookingStep('form'); }}
-                      className="w-full py-2.5 text-neutral-500 hover:text-neutral-700 font-medium text-xs rounded-xl transition-colors cursor-pointer"
-                    >
-                      Tutup
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => { setIsBookingOpen(false); setBookingSuccessData(null); setBookingQrisData(null); setBookingStep('form'); }}
+                        className="w-full py-2.5 text-neutral-500 hover:text-neutral-700 font-semibold text-xs rounded-xl transition-colors cursor-pointer"
+                      >
+                        Tutup
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ) : (
+                );
+              })() : (
                 /* ── STEP 3: BOOKING FORM ── */
                 <form onSubmit={handleSubmitBooking} className="space-y-4 text-left">
 
