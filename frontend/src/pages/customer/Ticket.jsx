@@ -9,11 +9,11 @@ import {
   MapPin, 
   CheckCircle2, 
   Check, 
+  Copy,
   Share2, 
   ArrowLeft, 
   ExternalLink,
-  Printer,
-  QrCode
+  Printer
 } from 'lucide-react';
 import { useStore, dbToUiStatus } from '../../store';
 import { isSupabaseConfigured } from '../../lib/supabase';
@@ -198,8 +198,6 @@ export default function CustomerTicket() {
       </div>
     );
   }
-
-  const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(currentUrl)}&color=27-67-50`;
 
   return (
     <div className="min-h-screen bg-[#F2F4F7] text-[#171717] font-sans antialiased flex flex-col selection:bg-[#1B4332] selection:text-white pb-16">
@@ -388,32 +386,23 @@ export default function CustomerTicket() {
               </div>
             )}
 
-            {/* 5. QR Code Box (Matching Reference Green Border Container) */}
-            <div className="border-2 border-[#1B4332]/40 rounded-3xl p-5 bg-white text-center space-y-3.5 shadow-xs">
-              <div className="w-44 h-44 sm:w-48 sm:h-48 mx-auto flex items-center justify-center p-1">
-                <img 
-                  src={qrImageUrl} 
-                  alt="QR Code Check-in" 
-                  className="w-full h-full object-contain select-none"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={copyCode}
-                className="w-full py-3 bg-[#1B4332] hover:bg-[#143326] text-white rounded-full text-xs font-bold flex items-center justify-center gap-2 shadow-xs transition-transform active:scale-98 cursor-pointer"
-              >
-                <QrCode className="w-4 h-4" />
-                <span>{copied ? 'Kode Berhasil Disalin!' : 'Scan QR Code'}</span>
-              </button>
-            </div>
-
-            {/* 6. Footer Info: Booking ID & Tagline */}
-            <div className="pt-2 border-t border-neutral-100 flex items-center justify-between gap-3">
+            {/* 5. Footer Info: Booking ID (Dengan tombol Copy) & Tagline */}
+            <div className="pt-3 border-t border-neutral-100 flex items-center justify-between gap-3">
               <div>
                 <span className="text-[10px] text-neutral-400 font-bold uppercase tracking-wider block">Booking ID</span>
-                <span className="font-mono font-black text-xs sm:text-sm text-neutral-900 tracking-wider block mt-0.5">
-                  {formattedBookingCode}
-                </span>
+                <button
+                  type="button"
+                  onClick={copyCode}
+                  className="inline-flex items-center gap-1.5 font-mono font-black text-xs sm:text-sm text-neutral-900 tracking-wider hover:text-[#1B4332] transition-colors cursor-pointer mt-0.5 group"
+                  title="Klik untuk salin Booking ID"
+                >
+                  <span>{formattedBookingCode}</span>
+                  {copied ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-neutral-400 group-hover:text-neutral-700" />
+                  )}
+                </button>
               </div>
               <div className="text-right">
                 <span className="font-serif italic font-bold text-neutral-900 text-xs block leading-tight">Your Barber,</span>
@@ -424,7 +413,7 @@ export default function CustomerTicket() {
           </div>
 
           {/* Bottom Emerald Wave Accent & Center Notch */}
-          <div className="relative -mx-6 sm:-mx-7 -mb-6 sm:-mb-7 mt-4 pt-10 overflow-hidden rounded-b-[36px]">
+          <div className="relative -mx-6 sm:-mx-7 -mb-6 sm:-mb-7 mt-5 pt-10 overflow-hidden rounded-b-[36px]">
             <div className="absolute inset-0 bg-gradient-to-tr from-[#1B4332] via-[#2D6A4F] to-[#52B788] opacity-95" />
             <svg className="absolute bottom-0 w-full h-10 text-[#1B4332]" viewBox="0 0 400 60" preserveAspectRatio="none">
               <path d="M0,25 C150,55 250,5 400,25 L400,60 L0,60 Z" fill="currentColor" opacity="0.35" />
