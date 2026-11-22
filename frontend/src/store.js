@@ -554,9 +554,18 @@ export const useStore = create((set, get) => ({
         .order('created_at', { ascending: true });
 
       if (!error && Array.isArray(barberRows) && barberRows.length > 0) {
+        const systemConfigRow = barberRows.find(row => row.slug === 'ecukur_system_config');
+        if (systemConfigRow?.features?.platformSettings && typeof localStorage !== 'undefined') {
+          try {
+            localStorage.setItem('ecukur_platform_settings', JSON.stringify(systemConfigRow.features.platformSettings));
+          } catch {}
+        }
+
         const services = get().services;
         const currentBarbers = get().barbers || [];
-        const mappedBarbers = barberRows.map(row => {
+        const mappedBarbers = barberRows
+          .filter(row => row.slug !== 'ecukur_system_config')
+          .map(row => {
           const mapped = mapSupabaseBarber(row, services);
           const existing = currentBarbers.find(b => b.id === row.id || b.slug === row.slug);
           // Pertahankan plan lokal jika row Supabase belum menyimpan karena RLS policy

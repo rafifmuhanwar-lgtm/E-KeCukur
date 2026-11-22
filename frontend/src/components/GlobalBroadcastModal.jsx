@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Check } from 'lucide-react';
 import { RazorEMark } from './Logo';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export default function GlobalBroadcastModal() {
   const [broadcastData, setBroadcastData] = useState(() => {
@@ -19,7 +20,7 @@ export default function GlobalBroadcastModal() {
   useEffect(() => {
     const checkBroadcast = (customData = null) => {
       try {
-        const data = customData || (localStorage.getItem('ecukur_platform_settings') 
+        const data = customData || (typeof window !== 'undefined' && localStorage.getItem('ecukur_platform_settings') 
           ? JSON.parse(localStorage.getItem('ecukur_platform_settings')) 
           : null);
         
@@ -32,7 +33,7 @@ export default function GlobalBroadcastModal() {
         }
 
         // Cek apakah user sudah menutup pesan spesifik ini di sesi sekarang
-        const dismissedMsg = sessionStorage.getItem('ecukur_dismissed_broadcast_msg');
+        const dismissedMsg = typeof window !== 'undefined' ? sessionStorage.getItem('ecukur_dismissed_broadcast_msg') : null;
         if (dismissedMsg === data.broadcastMessage.trim()) {
           setIsOpen(false);
         } else {
@@ -44,6 +45,25 @@ export default function GlobalBroadcastModal() {
     };
 
     checkBroadcast();
+
+    // Fetch langsung dari database Supabase agar otomatis sinkron ke HP pengguna mana pun
+    if (isSupabaseConfigured && supabase) {
+      supabase
+        .from('barbers')
+        .select('features')
+        .eq('slug', 'ecukur_system_config')
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data?.features?.platformSettings) {
+            const settings = data.features.platformSettings;
+            try {
+              localStorage.setItem('ecukur_platform_settings', JSON.stringify(settings));
+            } catch {}
+            checkBroadcast(settings);
+          }
+        })
+        .catch(() => {});
+    }
 
     const handleStorage = () => checkBroadcast();
     window.addEventListener('storage', handleStorage);
@@ -85,18 +105,18 @@ export default function GlobalBroadcastModal() {
           className="absolute inset-0 cursor-pointer"
         />
 
-        {/* Modal Card - Clean, Official & High-End E-CUKUR Identity */}
+        {/* Modal Card - Clean, Official & High-End E-CUKUR Identity (Responsive HP & Laptop) */}
         <motion.div
           initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 10 }}
           transition={{ type: 'spring', damping: 26, stiffness: 340 }}
-          className="relative w-full max-w-md bg-white rounded-[28px] shadow-2xl border border-neutral-200/90 overflow-hidden z-10 text-neutral-900 p-6 sm:p-7 space-y-5"
+          className="relative w-full max-w-sm sm:max-w-md bg-white rounded-[28px] shadow-2xl border border-neutral-200/90 overflow-hidden z-10 text-neutral-900 p-5 sm:p-7 space-y-4 sm:space-y-5"
           role="dialog"
           aria-modal="true"
         >
           {/* Header Row: Official e cukur Logo & Close Button */}
-          <div className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-4">
+          <div className="flex items-center justify-between gap-3 border-b border-neutral-100 pb-3 sm:pb-4">
             <div className="flex items-center gap-2 select-none">
               <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center p-1.5 shadow-xs shrink-0">
                 <RazorEMark className="w-full h-full" color="#ffffff" />
@@ -122,8 +142,8 @@ export default function GlobalBroadcastModal() {
           </div>
 
           {/* Title & Announcement Body */}
-          <div className="space-y-3">
-            <h3 className="font-display font-black text-xl text-neutral-900 tracking-tight leading-snug">
+          <div className="space-y-2.5 sm:space-y-3">
+            <h3 className="font-display font-black text-lg sm:text-xl text-neutral-900 tracking-tight leading-snug">
               Informasi & Pemberitahuan
             </h3>
 
@@ -133,18 +153,18 @@ export default function GlobalBroadcastModal() {
               </p>
             </div>
 
-            <div className="text-[11px] text-neutral-400 flex items-center gap-1.5 pt-1">
+            <div className="text-[10.5px] sm:text-[11px] text-neutral-400 flex items-center gap-1.5 pt-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-[#1B4332] inline-block shrink-0" />
               <span>Disiarkan langsung oleh Administrator Sistem e cukur</span>
             </div>
           </div>
 
           {/* Action Button: Mengerti & Tutup */}
-          <div className="pt-2">
+          <div className="pt-1 sm:pt-2">
             <button
               type="button"
               onClick={handleDismiss}
-              className="w-full py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              className="w-full py-3 sm:py-3.5 bg-[#1B4332] hover:bg-[#143326] text-white font-bold text-xs sm:text-sm rounded-xl shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
             >
               <Check className="w-4 h-4 text-emerald-300" />
               <span>Saya Mengerti</span>

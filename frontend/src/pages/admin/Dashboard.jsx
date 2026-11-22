@@ -892,7 +892,7 @@ export default function AdminMasterDashboard() {
   };
 
   // ─── HANDLE SIMPAN PENGATURAN PLATFORM SECARA PERSISTEN ───
-  const handleSavePlatformSettings = () => {
+  const handleSavePlatformSettings = async () => {
     const payload = {
       platformName: platformName.trim() || 'E-CUKUR Link-in-Bio',
       broadcastMessage: broadcastMessage.trim(),
@@ -904,21 +904,44 @@ export default function AdminMasterDashboard() {
       try { sessionStorage.removeItem('ecukur_dismissed_broadcast_msg'); } catch {}
       window.dispatchEvent(new Event('storage'));
       window.dispatchEvent(new CustomEvent('ecukur_broadcast_update', { detail: payload }));
-      showToast('Pengaturan platform & siaran pengumuman berhasil disimpan secara permanen!');
+
+      // Sinkronisasi ke Supabase database agar aktif ke seluruh HP pengunjung secara global
+      if (isSupabaseConfigured && supabase) {
+        await supabase.from('barbers').upsert({
+          email: 'system@ecukur.biz.id',
+          name: 'E-CUKUR System Config',
+          slug: 'ecukur_system_config',
+          features: { platformSettings: payload }
+        }, { onConflict: 'email' });
+      }
+
+      showToast('Pengaturan platform & siaran pengumuman berhasil disimpan dan aktif ke semua perangkat HP/Laptop!');
     } catch (err) {
       showToast('Gagal menyimpan: ' + err.message);
     }
   };
 
   // ─── HANDLE RESET PENGATURAN KE DEFAULT ───
-  const handleResetPlatformSettings = () => {
+  const handleResetPlatformSettings = async () => {
     if (!window.confirm('Kembalikan pengaturan platform ke nilai standar?')) return;
     setPlatformName('E-CUKUR Link-in-Bio');
     setBroadcastMessage('');
     setIsBroadcastActive(false);
     try {
       localStorage.removeItem('ecukur_platform_settings');
+      try { sessionStorage.removeItem('ecukur_dismissed_broadcast_msg'); } catch {}
       window.dispatchEvent(new Event('storage'));
+      window.dispatchEvent(new CustomEvent('ecukur_broadcast_update', { detail: { isBroadcastActive: false, broadcastMessage: '' } }));
+
+      if (isSupabaseConfigured && supabase) {
+        await supabase.from('barbers').upsert({
+          email: 'system@ecukur.biz.id',
+          name: 'E-CUKUR System Config',
+          slug: 'ecukur_system_config',
+          features: { platformSettings: { isBroadcastActive: false, broadcastMessage: '' } }
+        }, { onConflict: 'email' });
+      }
+
       showToast('Pengaturan platform dikembalikan ke default.');
     } catch {}
   };
