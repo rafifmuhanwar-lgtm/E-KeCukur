@@ -104,7 +104,7 @@ export default function FloatingHelpdesk() {
   const ttUrl = settings?.tiktokUrl || 'https://tiktok.com/@ecukur.id';
 
   return (
-    <div ref={popoverRef} className="fixed bottom-5 right-4 sm:bottom-6 sm:right-6 z-[60] select-none font-sans">
+    <div ref={popoverRef} className="fixed bottom-5 left-4 sm:bottom-6 sm:left-6 z-[60] select-none font-sans">
       {/* ─── POPOVER MODAL: IDENTITAS RESMI E-CUKUR ─── */}
       <AnimatePresence>
         {isOpen && (
@@ -113,7 +113,7 @@ export default function FloatingHelpdesk() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.92, y: 15 }}
             transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-            className="absolute bottom-16 right-0 w-[310px] sm:w-[350px] bg-white rounded-[28px] shadow-2xl border border-neutral-200/90 overflow-hidden text-neutral-900"
+            className="absolute bottom-16 left-0 w-[310px] sm:w-[350px] bg-white rounded-[28px] shadow-2xl border border-neutral-200/90 overflow-hidden text-neutral-900"
           >
             {/* Header Resmi: Logo e cukur + Status Terverifikasi */}
             <div className="flex items-center justify-between p-4 sm:p-5 border-b border-neutral-100 bg-neutral-50/80">
@@ -263,9 +263,9 @@ export default function FloatingHelpdesk() {
       <div className="relative group">
         {/* Tooltip Hover saat tertutup */}
         {!isOpen && (
-          <div className="hidden sm:block absolute right-full top-1/2 -translate-y-1/2 mr-3 px-3 py-1.5 bg-neutral-950 text-white text-[11px] font-sora font-bold rounded-xl whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="hidden sm:block absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-neutral-950 text-white text-[11px] font-sora font-bold rounded-xl whitespace-nowrap shadow-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity">
             <span>Bantuan & Kontak Resmi</span>
-            <div className="absolute top-1/2 -right-1 -translate-y-1/2 border-4 border-transparent border-l-neutral-950" />
+            <div className="absolute top-1/2 -left-1 -translate-y-1/2 border-4 border-transparent border-r-neutral-950" />
           </div>
         )}
 
