@@ -5381,7 +5381,7 @@ export default function BarberDashboard() {
 
                       <button
                         type="button"
-                        disabled={isFreePlan || isUpgradeQrisLoading}
+                        disabled={isFreePlan}
                         onClick={() => handleSwitchPlan('free')}
                         className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           isFreePlan 
