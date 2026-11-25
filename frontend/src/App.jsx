@@ -14,25 +14,8 @@ import ErrorBoundary from './components/ErrorBoundary';
 import BarberBioLink from './pages/customer/BarberBioLink';
 import GlobalBroadcastModal from './components/GlobalBroadcastModal';
 import FloatingHelpdesk from './components/FloatingHelpdesk';
+import SplashScreen from './components/SplashScreen';
 import { useStore } from './store';
-
-/* ---------- Overlay that covers the whole screen ---------- */
-const LoadingOverlay = () => (
-  <div
-    style={{
-      position: 'fixed',
-      inset: 0,
-      backgroundColor: '#fff',
-      zIndex: 9999,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }}
-  >
-    {/* Optional spinner component */}
-    <div className="spinner" />
-  </div>
-);
 
 export default function App() {
   // State to indicate when initApp has finished
@@ -45,9 +28,9 @@ export default function App() {
     void initApp().finally(() => setIsAppReady(true));
   }, [initApp]);
 
-  // While the app is initializing, show the overlay to hide any loading text
+  // While the app is initializing, show the branded splash screen
   if (!isAppReady) {
-    return <LoadingOverlay />;
+    return <SplashScreen />;
   }
 
   // Redirect old Vercel domains without affecting preview deployments.

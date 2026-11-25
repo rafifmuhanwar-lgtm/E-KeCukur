@@ -1,36 +1,11 @@
 /**
- * QRIS Listener Payment Gateway Client Helper & Dynamic QRIS Generator
+ * QRIS Payment Gateway Client Helper & Dynamic QRIS Generator
+ * Hardened for SEC-001: No local fake payment generation, strictly server-driven.
  */
-import { isSupabaseConfigured, supabase } from './supabase';
 
 export const MASTER_QRIS_STATIC = '00020101021126570011ID.DANA.WWW011893600915303714994002090371499400303UMI51440014ID.CO.QRIS.WWW0215ID10266433150900303UMI5204481453033605802ID5922Bayar Via Qris, Konter6006Bekasi6105173206304E9AE';
 
 const API_BASE = '/api/payment/qris';
-
-// Memory & session store untuk fallback offline / local testing
-const localPayments = new Map();
-
-function saveLocalPayment(payment) {
-  if (!payment?.referenceId) return;
-  localPayments.set(payment.referenceId, payment);
-  try {
-    sessionStorage.setItem(`qris_${payment.referenceId}`, JSON.stringify(payment));
-  } catch {}
-}
-
-function getLocalPayment(referenceId) {
-  if (!referenceId) return null;
-  if (localPayments.has(referenceId)) return localPayments.get(referenceId);
-  try {
-    const raw = sessionStorage.getItem(`qris_${referenceId}`);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      localPayments.set(referenceId, parsed);
-      return parsed;
-    }
-  } catch {}
-  return null;
-}
 
 /**
  * Standard CRC16-CCITT calculation for EMVCo / ASPI QRIS
@@ -100,7 +75,8 @@ export function getDynamicQrisImageUrl(amount, staticQris = MASTER_QRIS_STATIC) 
 }
 
 /**
- * Buat tagihan QRIS baru dengan kode unik acak 3 digit
+ * Buat tagihan QRIS baru resmi melalui Backend Serverless / Express
+ * SEC-001: Seluruh transaksi WAJIB dicatat oleh backend. Tidak ada fallback lokal.
  */
 export async function createQrisPayment({
   type = 'BOOKING',
@@ -111,10 +87,9 @@ export async function createQrisPayment({
   customerPhone = '',
   qrisImageUrl = null
 }) {
-  // 1. Coba hubungi backend API (Production / Vercel Serverless / Active Backend)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2500);
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
 
     const res = await fetch(`${API_BASE}/create`, {
       method: 'POST',
@@ -131,106 +106,41 @@ export async function createQrisPayment({
       signal: controller.signal
     });
     clearTimeout(timeoutId);
+
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
       if (data?.success && data?.payment) {
         return data;
       }
+      return {
+        success: false,
+        error: 'Respons server tidak mengembalikan instruksi pembayaran yang valid.'
+      };
     }
+
+    const errData = await res.json().catch(() => ({}));
+    return {
+      success: false,
+      error: errData?.message || errData?.error || `Gagal membuat tagihan QRIS (HTTP ${res.status}).`
+    };
   } catch (err) {
-    console.error(err);
+    const isTimeout = err.name === 'AbortError';
+    console.error('[QRIS Gateway Client Error]:', err.message);
+    return {
+      success: false,
+      error: isTimeout
+        ? 'Permintaan pembuatan tagihan QRIS melebihi batas waktu (timeout). Silakan periksa koneksi Anda dan coba lagi.'
+        : 'Tidak dapat terhubung ke server pembayaran. Silakan periksa koneksi internet Anda dan coba lagi.'
+    };
   }
-
-  // 2. Fallback Otomatis: Buat tagihan QRIS dinamis di browser secara instan
-  const uniqueCode = Math.floor(100 + Math.random() * 899);
-  const totalAmount = Number(amount) + uniqueCode;
-  const dynamicQrisStr = generateDynamicQris(totalAmount);
-  const dynamicQrImg = getDynamicQrisImageUrl(totalAmount);
-
-  const localPayment = {
-    referenceId: `LOCAL-${Date.now().toString(36).toUpperCase()}-${uniqueCode}`,
-    type,
-    bookingId,
-    barberId,
-    customerName,
-    customerPhone,
-    baseAmount: Number(amount),
-    uniqueCode,
-    totalAmount,
-    formattedTotal: `Rp ${totalAmount.toLocaleString('id-ID')}`,
-    qrisString: dynamicQrisStr,
-    qrisImageUrl: dynamicQrImg,
-    status: 'PENDING',
-    createdAt: new Date().toISOString(),
-    expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
-  };
-  saveLocalPayment(localPayment);
-
-  // Jika Supabase terhubung di frontend, simpan juga ke tabel qris_payments agar sinkron
-  try {
-    if (isSupabaseConfigured && supabase) {
-      supabase.from('qris_payments').insert({
-        reference_id: localPayment.referenceId,
-        type,
-        booking_id: bookingId ? String(bookingId) : null,
-        barber_id: barberId ? String(barberId) : null,
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        base_amount: Number(amount),
-        unique_code: uniqueCode,
-        total_amount: totalAmount,
-        qris_image_url: dynamicQrImg,
-        status: 'PENDING',
-        expires_at: localPayment.expiresAt
-      }).then(() => {}).catch(() => {});
-    }
-  } catch {}
-
-  return {
-    success: true,
-    payment: localPayment
-  };
 }
 
 /**
- * Cek status tagihan QRIS (Polling)
+ * Cek status tagihan QRIS (Polling terpusat ke backend)
  */
 export async function checkQrisPaymentStatus(referenceId) {
   if (!referenceId) {
     return { success: false, error: 'Reference ID diperlukan', status: 'PENDING' };
-  }
-
-  // Jika tagihan dibuat dalam mode lokal/offline (dimulai dengan 'LOCAL-')
-  // JANGAN kirim ke proxy network agar tidak memicu AggregateError [ECONNREFUSED]
-  if (referenceId.startsWith('LOCAL-')) {
-    const local = getLocalPayment(referenceId);
-
-    // Cek juga ke Supabase jika Supabase aktif
-    try {
-      if (isSupabaseConfigured && supabase) {
-        const { data } = await supabase
-          .from('qris_payments')
-          .select('status, paid_at')
-          .eq('reference_id', referenceId)
-          .maybeSingle();
-        if (data?.status === 'PAID') {
-          if (local) {
-            local.status = 'PAID';
-            local.paidAt = data.paid_at;
-            saveLocalPayment(local);
-          }
-          return { success: true, status: 'PAID', paidAt: data.paid_at };
-        }
-      }
-    } catch {}
-
-    return {
-      success: true,
-      status: local?.status || 'PENDING',
-      paidAt: local?.paidAt || null,
-      totalAmount: local?.totalAmount || null,
-      type: local?.type || null
-    };
   }
 
   try {
@@ -238,14 +148,17 @@ export async function checkQrisPaymentStatus(referenceId) {
     if (res.ok) {
       return await res.json();
     }
-    return { success: true, status: 'PENDING' };
+    const errData = await res.json().catch(() => ({}));
+    return {
+      success: false,
+      error: errData?.message || 'Gagal memeriksa status pembayaran',
+      status: 'PENDING'
+    };
   } catch (err) {
-    console.error(err);
-
+    console.error('[QRIS Polling Error]:', err.message);
     return { success: false, error: err.message, status: 'PENDING' };
   }
 }
-
 
 // Endpoint simulasi dinonaktifkan untuk mode produksi
 export async function simulateQrisPayment() {
@@ -255,4 +168,3 @@ export async function simulateQrisPayment() {
     message: 'Fitur simulasi pembayaran telah dinonaktifkan di lingkungan produksi.'
   };
 }
-

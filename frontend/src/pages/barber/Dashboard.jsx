@@ -754,41 +754,6 @@ export default function BarberDashboard() {
     showToast(`Fitur ${featureKey} ${updated[featureKey] ? 'diaktifkan' : 'dinonaktifkan'}`);
   };
 
-  const handleApplyPreset = (type) => {
-    if (type === 'barbershop' && !isBarberPlan) {
-      setIsUpgradeModalOpen(true);
-      showToast('Mode Barbershop & Studio eksklusif untuk Paket Barber (Rp 99.000/bln)');
-      return;
-    }
-    if (type === 'barber') {
-      updateBarber(barber.id, {
-        profileType: 'barber',
-        features: {
-          booking: true,
-          services: true,
-          lookbook: true,
-          team: false,
-          location: true,
-          tipping: true,
-        }
-      });
-      showToast('Mode Capster Mandiri diaktifkan');
-    } else {
-      updateBarber(barber.id, {
-        profileType: 'barbershop',
-        features: {
-          booking: true,
-          services: true,
-          lookbook: true,
-          team: true,
-          location: true,
-          tipping: true,
-        }
-      });
-      showToast('Mode Barbershop & Studio diaktifkan');
-    }
-  };
-
   // Bio Link full URL
   const publicUrl = `${window.location.origin}/${barber?.slug || barber?.id || ''}`;
 
@@ -977,6 +942,16 @@ export default function BarberDashboard() {
   const lookbookCount = (barber?.lookbook || []).length;
   const isLookbookLimitReached = isFreePlan && lookbookCount >= 10;
 
+  // Auto-sinkronisasi mode profil jika akun adalah Barber Studio
+  useEffect(() => {
+    if (isBarberPlan && barber?.id && barber?.profileType !== 'barbershop') {
+      updateBarber(barber.id, {
+        profileType: 'barbershop',
+        features: { ...(barber.features || {}), team: true, location: true }
+      });
+    }
+  }, [isBarberPlan, barber?.id, barber?.profileType, barber?.features, updateBarber]);
+
   // Realtime Polling Status Pembayaran QRIS Upgrade Paket (Via Supabase)
   useEffect(() => {
     if (!upgradeQrisData?.referenceId || !upgradeTargetPlan) return;
@@ -995,7 +970,10 @@ export default function BarberDashboard() {
             clearInterval(interval);
             setUpgradeSuccess(true);
             const planNames = { capster: 'Paket Capster Pro (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
-            await updateBarber(barber.id, { plan: upgradeTargetPlan });
+            const planExtra = upgradeTargetPlan === 'barber'
+              ? { plan: 'barber', profileType: 'barbershop', features: { ...(barber.features || {}), team: true, location: true } }
+              : { plan: 'capster', profileType: 'barber', features: { ...(barber.features || {}), team: false } };
+            await updateBarber(barber.id, planExtra);
             showToast(`🎉 Pembayaran QRIS Dikonfirmasi! Paket ${planNames[upgradeTargetPlan] || upgradeTargetPlan} kini AKTIF!`);
 
             setTimeout(() => {
@@ -1015,7 +993,7 @@ export default function BarberDashboard() {
       isCancelled = true;
       clearInterval(interval);
     };
-  }, [upgradeQrisData?.referenceId, upgradeTargetPlan, barber?.id, updateBarber]);
+  }, [upgradeQrisData?.referenceId, upgradeTargetPlan, barber?.id, barber?.features, updateBarber]);
 
   const handleSwitchPlan = (targetPlan) => {
     if (targetPlan === 'free') {
@@ -1797,61 +1775,93 @@ export default function BarberDashboard() {
                       </div>
                     </div>
                   </div>
+                ) : isBarberPlan ? (
+                  /* KELAS 1: PAKET BARBER STUDIO - Khusus Barbershop & Studio dengan tim (Mode Capster dihilangkan) */
+                  <div className="p-5 sm:p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-50/40 to-[#285844]/5 border-2 border-amber-500/30 space-y-4 shadow-2xs">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-500 to-amber-700 text-white flex items-center justify-center shadow-md shadow-amber-600/20 shrink-0">
+                          <Crown className="w-6 h-6 text-amber-100" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-display font-black text-sm sm:text-base text-amber-950">
+                              Mode Barbershop &amp; Studio
+                            </h3>
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[10px] font-extrabold tracking-wide uppercase shadow-2xs">
+                              Paket Barber Studio Aktif
+                            </span>
+                          </div>
+                          <p className="text-xs text-neutral-600 mt-1 leading-relaxed">
+                            Akun Anda aktif penuh di <strong>Mode Barbershop &amp; Studio</strong>. Dilengkapi sistem manajemen tim multi-capster, pemesanan capster langsung oleh pelanggan, jam operasional studio, dan peta lokasi Google Maps.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-amber-200/60">
+                      <div className="p-2.5 rounded-xl bg-white/80 border border-amber-200/50 text-[11px] font-semibold text-amber-900 flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Tim Multi-Capster</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white/80 border border-amber-200/50 text-[11px] font-semibold text-amber-900 flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Pilih Capster Booking</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white/80 border border-amber-200/50 text-[11px] font-semibold text-amber-900 flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Jam Operasional &amp; Maps</span>
+                      </div>
+                      <div className="p-2.5 rounded-xl bg-white/80 border border-amber-200/50 text-[11px] font-semibold text-amber-900 flex items-center gap-2">
+                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                        <span>Unlimited Foto &amp; Tarif</span>
+                      </div>
+                    </div>
+                  </div>
                 ) : (
+                  /* KELAS 2: PAKET CAPSTER PRO - Mode Capster Mandiri & Upgrade CTA ke Barber Studio */
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-                    {/* Preset 1: Capster Mandiri */}
-                    <div 
-                      onClick={() => handleApplyPreset('barber')}
-                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                        (barber.profileType || 'barber') === 'barber'
-                          ? 'border-[#285844] bg-[#D9E5DC]/20 shadow-xs'
-                          : 'border-neutral-200 bg-neutral-50/60 hover:border-neutral-300'
-                      }`}
-                    >
+                    {/* Preset Aktif: Capster Mandiri */}
+                    <div className="p-4 rounded-xl border-2 border-[#285844] bg-[#D9E5DC]/25 shadow-xs flex flex-col justify-between">
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-2xl">💈</span>
-                          {(barber.profileType || 'barber') === 'barber' && (
-                            <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[10px] font-bold">
-                              Aktif
-                            </span>
-                          )}
+                          <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[10px] font-bold">
+                            Aktif • Paket Capster Pro
+                          </span>
                         </div>
                         <h3 className="font-display font-bold text-sm text-[#171717]">Mode Capster Mandiri</h3>
                         <p className="text-[11px] text-neutral-600 mt-1 leading-relaxed">
-                          Untuk capster / tukang cukur perorangan & freelance. Tampilkan portofolio karya, menu tarif, dan terima booking langsung ke jadwalmu.
+                          Dirancang khusus untuk personal branding capster profesional &amp; freelance. Portofolio tanpa batas, menu tarif lengkap, dan tip sawer kopi QRIS.
                         </p>
                       </div>
                       <span className="text-[10px] font-mono font-semibold text-[#285844] mt-3 block">
-                        Fokus Personal Branding →
+                        ✓ Fokus Solo &amp; Freelance
                       </span>
                     </div>
 
-                    {/* Preset 2: Barbershop & Studio */}
+                    {/* Upsell Card: Upgrade ke Barber Studio */}
                     <div 
-                      onClick={() => handleApplyPreset('barbershop')}
-                      className={`p-4 rounded-xl border-2 transition-all cursor-pointer flex flex-col justify-between ${
-                        barber.profileType === 'barbershop'
-                          ? 'border-[#285844] bg-[#D9E5DC]/20 shadow-xs'
-                          : 'border-neutral-200 bg-neutral-50/60 hover:border-neutral-300'
-                      }`}
+                      onClick={() => setIsUpgradeModalOpen(true)}
+                      className="p-4 rounded-xl border-2 border-dashed border-amber-300 hover:border-amber-500 bg-amber-50/50 transition-all cursor-pointer flex flex-col justify-between group"
                     >
                       <div>
                         <div className="flex items-center justify-between mb-2">
                           <span className="text-2xl">🏢</span>
-                          {barber.profileType === 'barbershop' && (
-                            <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[10px] font-bold">
-                              Aktif
-                            </span>
-                          )}
+                          <span className="px-2 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 text-[9.5px] font-bold group-hover:bg-amber-500 group-hover:text-white transition-colors">
+                            Upgrade Tersedia
+                          </span>
                         </div>
-                        <h3 className="font-display font-bold text-sm text-[#171717]">Mode Barbershop & Studio</h3>
+                        <h3 className="font-display font-bold text-sm text-amber-950 flex items-center gap-1.5">
+                          <span>Buka Mode Barbershop &amp; Studio</span>
+                          <Crown className="w-3.5 h-3.5 text-amber-600" />
+                        </h3>
                         <p className="text-[11px] text-neutral-600 mt-1 leading-relaxed">
-                          Untuk pemilik barbershop / studio pangkas. Dilengkapi lokasi fisik Google Maps, jam operasional toko, dan manajemen tim capster.
+                          Punya tempat usaha atau rekan pangkas? Upgrade ke Paket Barber Studio untuk mengaktifkan manajemen tim multi-capster &amp; peta lokasi Google Maps.
                         </p>
                       </div>
-                      <span className="text-[10px] font-mono font-semibold text-[#285844] mt-3 block">
-                        Dilengkapi Manajemen Tim Capster →
+                      <span className="text-[10.5px] font-bold text-amber-800 mt-3 flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                        Upgrade ke Barber Studio (Rp 99K) →
                       </span>
                     </div>
                   </div>
@@ -4592,7 +4602,7 @@ export default function BarberDashboard() {
       <button
         type="button"
         onClick={() => navigate('/barber/messages')}
-        className="fixed md:hidden right-5 bottom-[calc(1.25rem+env(safe-area-inset-bottom))] z-40 inline-flex items-center gap-2 rounded-full bg-[#285844] px-4 py-3 text-sm font-semibold text-white shadow-[0_5px_0_#173829,0_10px_22px_rgba(40,88,68,0.3)] transition hover:-translate-y-0.5 hover:bg-[#1E4334] active:translate-y-0"
+        className="fixed md:hidden right-4 sm:right-6 bottom-[calc(5.25rem+env(safe-area-inset-bottom))] z-40 inline-flex items-center gap-2 rounded-full bg-[#285844] px-4 py-3 text-sm font-semibold text-white shadow-[0_5px_0_#173829,0_10px_22px_rgba(40,88,68,0.3)] transition hover:-translate-y-0.5 hover:bg-[#1E4334] active:translate-y-0"
         aria-label={`Buka pesan${unreadChatCount > 0 ? `, ${unreadChatCount} belum dibaca` : ''}`}
       >
         <MessageCircle className="w-5 h-5" />
@@ -5381,15 +5391,17 @@ export default function BarberDashboard() {
 
                       <button
                         type="button"
-                        disabled={isFreePlan}
+                        disabled={isFreePlan || isBarberPlan}
                         onClick={() => handleSwitchPlan('free')}
                         className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                           isFreePlan 
                             ? 'bg-neutral-200 text-neutral-500 cursor-default' 
-                            : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
+                            : isBarberPlan
+                              ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed opacity-60'
+                              : 'bg-neutral-100 hover:bg-neutral-200 text-neutral-800'
                         }`}
                       >
-                        {isFreePlan ? 'Paket Aktif' : 'Pilih Free'}
+                        {isFreePlan ? 'Paket Aktif' : isBarberPlan ? 'Paket di Bawah Barber' : 'Pilih Free'}
                       </button>
                     </div>
 
@@ -5436,16 +5448,20 @@ export default function BarberDashboard() {
 
                       <button
                         type="button"
-                        disabled={isCapsterPlan}
+                        disabled={isCapsterPlan || isBarberPlan}
                         onClick={() => handleSwitchPlan('capster')}
                         className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                           isCapsterPlan 
                             ? 'bg-emerald-200 text-emerald-900 cursor-default' 
-                            : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-sm'
+                            : isBarberPlan
+                              ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed opacity-75'
+                              : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-sm'
                         }`}
                       >
                         {isCapsterPlan ? (
                           'Paket Aktif'
+                        ) : isBarberPlan ? (
+                          'Paket di Bawah Barber Studio'
                         ) : (
                           <>
                             <QrCode className="w-3.5 h-3.5" />

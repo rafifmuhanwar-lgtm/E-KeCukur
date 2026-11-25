@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Headphones, X, ArrowUpRight } from 'lucide-react';
 import { RazorEMark } from './Logo';
@@ -41,6 +42,7 @@ function MailIcon({ className = "w-5 h-5" }) {
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default function FloatingHelpdesk() {
+  const location = useLocation();
   const [isOpen, setIsOpen] = useState(false);
   const [settings, setSettings] = useState(() => {
     try {
@@ -102,6 +104,10 @@ export default function FloatingHelpdesk() {
   const mailUrl = `mailto:${settings?.supportEmail || 'support@ecukur.biz.id'}`;
   const igUrl = settings?.instagramUrl || 'https://instagram.com/ecukur.id';
   const ttUrl = settings?.tiktokUrl || 'https://tiktok.com/@ecukur.id';
+
+  // Jangan tampilkan floating widget di dalam halaman percakapan pesan/chat agar tidak menutupi input chat
+  const isChatRoute = location.pathname.startsWith('/messages') || location.pathname.startsWith('/barber/messages');
+  if (isChatRoute) return null;
 
   return (
     <div ref={popoverRef} className="fixed bottom-5 left-4 sm:bottom-6 sm:left-6 z-[60] select-none font-sans">

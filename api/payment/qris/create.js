@@ -7,6 +7,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const MASTER_QRIS_STATIC = '00020101021126570011ID.DANA.WWW011893600915303714994002090371499400303UMI51440014ID.CO.QRIS.WWW0215ID10266433150900303UMI5204481453033605802ID5922Bayar Via Qris, Konter6006Bekasi6105173206304E9AE';
 
+const ALLOWED_TRANSACTION_TYPES = new Set([
+  'BOOKING',
+  'TIP',
+  'PLAN_BARBER',
+  'PLAN_CAPSTER',
+  'PLAN_PRO'
+]);
+
 function crc16ccitt(str) {
   let crc = 0xFFFF;
   for (let i = 0; i < str.length; i++) {
@@ -62,7 +70,7 @@ export default async function handler(req, res) {
   try {
     const {
       type = 'BOOKING',
-      amount = 0,
+      amount = null,
       bookingId = null,
       barberId = null,
       customerName = 'Pelanggan',
@@ -70,30 +78,160 @@ export default async function handler(req, res) {
       _qrisImageUrl = null
     } = req.body || {};
 
-    const baseAmount = Number(amount) || 0;
+    // 1. Validasi Tipe Transaksi (Whitelist Fail-Closed)
+    if (!type || !ALLOWED_TRANSACTION_TYPES.has(type)) {
+      return res.status(400).json({
+        success: false,
+        message: `Tipe transaksi "${type}" tidak dikenal atau tidak didukung.`
+      });
+    }
 
-    // Cegah tabrakan nominal jika ada transaksi bersamaan: cari kode unik yang belum dipakai
+    let baseAmount = 0;
+    let resolvedCustomerName = customerName;
+    let resolvedCustomerPhone = customerPhone;
+    let resolvedBarberId = barberId;
+
+    // 2. Validasi & Pengambilan Harga Resmi Berdasarkan Tipe
+    if (type === 'BOOKING') {
+      if (!bookingId) {
+        return res.status(400).json({
+          success: false,
+          message: 'bookingId wajib disertakan untuk pembayaran booking.'
+        });
+      }
+
+      // Ambil data resmi langsung dari database bookings
+      const { data: bookingData, error: bookingErr } = await supabase
+        .from('bookings')
+        .select('id, total_price, booking_status, payment_status, customer_name, customer_phone, barber_id')
+        .eq('id', bookingId)
+        .maybeSingle();
+
+      if (bookingErr) {
+        console.error('[SEC-001 DB Error]: Failed to query booking:', bookingErr.message);
+        return res.status(500).json({
+          success: false,
+          message: `Gagal memverifikasi data booking dari database: ${bookingErr.message}`
+        });
+      }
+
+      if (!bookingData) {
+        return res.status(404).json({
+          success: false,
+          message: 'Data booking tidak ditemukan di sistem.'
+        });
+      }
+
+      // Verifikasi status pembayaran
+      if (bookingData.payment_status === 'PAID') {
+        return res.status(400).json({
+          success: false,
+          message: 'Tagihan booking ini sudah lunas sebelumnya.'
+        });
+      }
+
+      // Verifikasi status booking
+      const status = (bookingData.booking_status || '').trim();
+      if (status === 'CANCELLED' || status === 'Dibatalkan') {
+        return res.status(400).json({
+          success: false,
+          message: 'Booking telah dibatalkan dan tidak dapat dibayar.'
+        });
+      }
+      if (status === 'EXPIRED' || status === 'Kedaluwarsa') {
+        return res.status(400).json({
+          success: false,
+          message: 'Booking telah kedaluwarsa dan tidak dapat dibayar.'
+        });
+      }
+      if (status === 'COMPLETED' || status === 'Selesai') {
+        return res.status(400).json({
+          success: false,
+          message: 'Booking sudah selesai.'
+        });
+      }
+
+      const validBookingStatuses = new Set(['PENDING_PAYMENT', 'Menunggu Pembayaran']);
+      if (!validBookingStatuses.has(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Status booking (${status}) tidak memenuhi syarat untuk pembayaran.`
+        });
+      }
+
+      const officialPrice = Number(bookingData.total_price);
+      if (!Number.isSafeInteger(officialPrice) || officialPrice <= 0) {
+        return res.status(500).json({
+          success: false,
+          message: 'Harga resmi booking pada database tidak valid.'
+        });
+      }
+
+      // Kunci nominal dasar ke harga resmi database (abaikan input harga dari frontend)
+      baseAmount = officialPrice;
+      resolvedCustomerName = bookingData.customer_name || resolvedCustomerName;
+      resolvedCustomerPhone = bookingData.customer_phone || resolvedCustomerPhone;
+      resolvedBarberId = bookingData.barber_id || resolvedBarberId;
+    } else if (type === 'PLAN_BARBER') {
+      // Paket Langganan Barber Studio Resmi Rp 99.000
+      baseAmount = 99000;
+    } else if (type === 'PLAN_CAPSTER' || type === 'PLAN_PRO') {
+      // Paket Langganan Capster Pro Resmi Rp 49.000
+      baseAmount = 49000;
+    } else if (type === 'TIP') {
+      // Batas TIP sukarela: minimal Rp 5.000 dan maksimal Rp 10.000.000
+      const tipNum = Number(amount);
+      if (!Number.isSafeInteger(tipNum) || tipNum < 5000 || tipNum > 10000000) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nominal tip minimal Rp 5.000 dan maksimal Rp 10.000.000 (harus berupa bilangan bulat).'
+        });
+      }
+      baseAmount = tipNum;
+    }
+
+    // 3. Validasi Keamanan Angka Nominal (Safe Positive Integer)
+    if (!Number.isSafeInteger(baseAmount) || baseAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nominal transaksi tidak valid.'
+      });
+    }
+
+    // 4. Pencegahan Tabrakan Kode Unik (Anti-Collision 15 Menit)
     let occupiedTotals = new Set();
     try {
       const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-      const { data: pendingRows } = await supabase
+      const { data: pendingRows, error: pendingErr } = await supabase
         .from('qris_payments')
         .select('total_amount')
         .eq('status', 'PENDING')
         .gte('created_at', fifteenMinsAgo);
 
-      if (pendingRows && pendingRows.length > 0) {
-        pendingRows.forEach(r => occupiedTotals.add(Number(r.total_amount)));
+      if (pendingErr) {
+        console.warn('[QRIS Warning]: Failed to fetch pending total amounts:', pendingErr.message);
+      } else if (pendingRows && pendingRows.length > 0) {
+        pendingRows.forEach((r) => occupiedTotals.add(Number(r.total_amount)));
       }
-    } catch {}
+    } catch (collErr) {
+      console.warn('[QRIS Warning]: Anti-collision check exception:', collErr.message);
+    }
 
-    // Cari kode unik acak yang belum ada di transaksi PENDING lainnya
-    let uniqueCode = Math.floor(100 + Math.random() * 899);
+    // Cari kode unik acak (100 - 998) yang belum terpakai pada nominal dasar yang sama
+    let uniqueCode = null;
     for (let attempt = 0; attempt < 50; attempt++) {
-      if (!occupiedTotals.has(baseAmount + uniqueCode)) {
+      const candidateCode = Math.floor(100 + Math.random() * 899);
+      if (!occupiedTotals.has(baseAmount + candidateCode)) {
+        uniqueCode = candidateCode;
         break;
       }
-      uniqueCode = Math.floor(100 + Math.random() * 899);
+    }
+
+    if (!uniqueCode) {
+      return res.status(503).json({
+        success: false,
+        message: 'Gagal menghasilkan kode unik transaksi karena kepadatan transaksi saat ini. Silakan coba kembali beberapa saat lagi.'
+      });
     }
 
     const totalAmount = baseAmount + uniqueCode;
@@ -106,9 +244,9 @@ export default async function handler(req, res) {
       referenceId,
       type,
       bookingId,
-      barberId,
-      customerName,
-      customerPhone,
+      barberId: resolvedBarberId,
+      customerName: resolvedCustomerName,
+      customerPhone: resolvedCustomerPhone,
       baseAmount,
       uniqueCode,
       totalAmount,
@@ -119,29 +257,33 @@ export default async function handler(req, res) {
       expiresAt
     };
 
-    // Simpan ke Supabase jika tabel qris_payments tersedia
-    try {
-      await supabase.from('qris_payments').insert({
-        reference_id: referenceId,
-        type,
-        booking_id: bookingId ? String(bookingId) : null,
-        barber_id: barberId ? String(barberId) : null,
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        base_amount: baseAmount,
-        unique_code: uniqueCode,
-        total_amount: totalAmount,
-        qris_image_url: qrImageUrl,
-        status: 'PENDING',
-        expires_at: expiresAt
+    // 5. Pencatatan Transaksi ke Database (Fail-Closed: QRIS TIDAK DITERBITKAN jika insert gagal)
+    const { error: insertErr } = await supabase.from('qris_payments').insert({
+      reference_id: referenceId,
+      type,
+      booking_id: bookingId ? String(bookingId) : null,
+      barber_id: resolvedBarberId ? String(resolvedBarberId) : null,
+      customer_name: resolvedCustomerName,
+      customer_phone: resolvedCustomerPhone,
+      base_amount: baseAmount,
+      unique_code: uniqueCode,
+      total_amount: totalAmount,
+      qris_image_url: qrImageUrl,
+      status: 'PENDING',
+      expires_at: expiresAt
+    });
+
+    if (insertErr) {
+      console.error('[SEC-001 DB Error]: qris_payments table insert failed:', insertErr.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal mencatat transaksi pembayaran ke database. Instruksi QRIS dibatalkan demi keamanan transaksi.'
       });
-    } catch (dbErr) {
-      console.warn('Note: qris_payments table insert failed (fallback to client flow):', dbErr.message);
     }
 
     return res.status(200).json({ success: true, payment });
   } catch (err) {
-    return res.status(500).json({ success: false, error: err.message });
+    console.error('[SEC-001 Fatal Error]:', err.message);
+    return res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 }
-

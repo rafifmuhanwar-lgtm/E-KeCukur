@@ -90,6 +90,14 @@ function generateUniqueCode(baseAmount) {
   return Math.floor(100 + Math.random() * 899);
 }
 
+const ALLOWED_TRANSACTION_TYPES = new Set([
+  'BOOKING',
+  'TIP',
+  'PLAN_BARBER',
+  'PLAN_CAPSTER',
+  'PLAN_PRO'
+]);
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // 1. POST /api/payment/qris/create - Buat Tagihan QRIS Baru
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -97,36 +105,150 @@ router.post('/create', async (req, res) => {
   try {
     const {
       type = 'BOOKING',
-      amount,
+      amount = null,
       bookingId = null,
       barberId = null,
       customerName = 'Pelanggan E-CUKUR',
       customerPhone = '',
       qrisImageUrl = null
-    } = req.body;
+    } = req.body || {};
 
-    const baseAmount = parseInt(amount, 10);
-    if (isNaN(baseAmount) || baseAmount <= 0) {
-      return res.status(400).json({ success: false, message: 'Nominal amount tidak valid' });
+    // 1. Validasi Tipe Transaksi (Whitelist Fail-Closed)
+    if (!type || !ALLOWED_TRANSACTION_TYPES.has(type)) {
+      return res.status(400).json({
+        success: false,
+        message: `Tipe transaksi "${type}" tidak dikenal atau tidak didukung.`
+      });
+    }
+
+    let baseAmount = 0;
+    let resolvedCustomerName = customerName;
+    let resolvedCustomerPhone = customerPhone;
+    let resolvedBarberId = barberId;
+
+    // 2. Validasi & Pengambilan Harga Resmi Berdasarkan Tipe
+    if (type === 'BOOKING') {
+      if (!bookingId) {
+        return res.status(400).json({
+          success: false,
+          message: 'bookingId wajib disertakan untuk pembayaran booking.'
+        });
+      }
+
+      const { data: bookingData, error: bookingErr } = await supabase
+        .from('bookings')
+        .select('id, total_price, booking_status, payment_status, customer_name, customer_phone, barber_id')
+        .eq('id', bookingId)
+        .maybeSingle();
+
+      if (bookingErr) {
+        console.error('[SEC-001 DB Error]: Failed to query booking:', bookingErr.message);
+        return res.status(500).json({
+          success: false,
+          message: `Gagal memverifikasi data booking dari database: ${bookingErr.message}`
+        });
+      }
+
+      if (!bookingData) {
+        return res.status(404).json({
+          success: false,
+          message: 'Data booking tidak ditemukan di sistem.'
+        });
+      }
+
+      if (bookingData.payment_status === 'PAID') {
+        return res.status(400).json({
+          success: false,
+          message: 'Tagihan booking ini sudah lunas sebelumnya.'
+        });
+      }
+
+      const status = (bookingData.booking_status || '').trim();
+      if (status === 'CANCELLED' || status === 'Dibatalkan') {
+        return res.status(400).json({
+          success: false,
+          message: 'Booking telah dibatalkan dan tidak dapat dibayar.'
+        });
+      }
+      if (status === 'EXPIRED' || status === 'Kedaluwarsa') {
+        return res.status(400).json({
+          success: false,
+          message: 'Booking telah kedaluwarsa dan tidak dapat dibayar.'
+        });
+      }
+      if (status === 'COMPLETED' || status === 'Selesai') {
+        return res.status(400).json({
+          success: false,
+          message: 'Booking sudah selesai.'
+        });
+      }
+
+      const validBookingStatuses = new Set(['PENDING_PAYMENT', 'Menunggu Pembayaran']);
+      if (!validBookingStatuses.has(status)) {
+        return res.status(400).json({
+          success: false,
+          message: `Status booking (${status}) tidak memenuhi syarat untuk pembayaran.`
+        });
+      }
+
+      const officialPrice = Number(bookingData.total_price);
+      if (!Number.isSafeInteger(officialPrice) || officialPrice <= 0) {
+        return res.status(500).json({
+          success: false,
+          message: 'Harga resmi booking pada database tidak valid.'
+        });
+      }
+
+      baseAmount = officialPrice;
+      resolvedCustomerName = bookingData.customer_name || resolvedCustomerName;
+      resolvedCustomerPhone = bookingData.customer_phone || resolvedCustomerPhone;
+      resolvedBarberId = bookingData.barber_id || resolvedBarberId;
+    } else if (type === 'PLAN_BARBER') {
+      baseAmount = 99000;
+    } else if (type === 'PLAN_CAPSTER' || type === 'PLAN_PRO') {
+      baseAmount = 49000;
+    } else if (type === 'TIP') {
+      const tipNum = Number(amount);
+      if (!Number.isSafeInteger(tipNum) || tipNum < 5000 || tipNum > 10000000) {
+        return res.status(400).json({
+          success: false,
+          message: 'Nominal tip minimal Rp 5.000 dan maksimal Rp 10.000.000 (harus berupa bilangan bulat).'
+        });
+      }
+      baseAmount = tipNum;
+    }
+
+    if (!Number.isSafeInteger(baseAmount) || baseAmount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Nominal transaksi tidak valid.'
+      });
     }
 
     const uniqueCode = generateUniqueCode(baseAmount);
+    if (!uniqueCode) {
+      return res.status(503).json({
+        success: false,
+        message: 'Gagal menghasilkan kode unik transaksi karena kepadatan transaksi saat ini.'
+      });
+    }
+
     const totalAmount = baseAmount + uniqueCode;
     const now = new Date();
     const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 Menit
-
     const referenceId = `ECK-Q-${Date.now().toString(36).toUpperCase()}-${uniqueCode}`;
 
     const paymentRecord = {
       referenceId,
       type,
       bookingId,
-      barberId,
-      customerName,
-      customerPhone,
+      barberId: resolvedBarberId,
+      customerName: resolvedCustomerName,
+      customerPhone: resolvedCustomerPhone,
       baseAmount,
       uniqueCode,
       totalAmount,
+      formattedTotal: `Rp ${totalAmount.toLocaleString('id-ID')}`,
       qrisImageUrl: qrisImageUrl || null,
       status: 'PENDING',
       rawNotification: null,
@@ -135,44 +257,36 @@ router.post('/create', async (req, res) => {
       expiresAt: expiresAt.toISOString()
     };
 
-    // Simpan ke memori
-    memoryPayments.set(referenceId, paymentRecord);
+    // Simpan ke Supabase (Fail-Closed: Gagal simpan DB = Tolak terbitkan QRIS)
+    const { error: insertErr } = await supabase.from('qris_payments').insert({
+      reference_id: referenceId,
+      type,
+      booking_id: bookingId ? String(bookingId) : null,
+      barber_id: resolvedBarberId ? String(resolvedBarberId) : null,
+      customer_name: resolvedCustomerName,
+      customer_phone: resolvedCustomerPhone,
+      base_amount: baseAmount,
+      unique_code: uniqueCode,
+      total_amount: totalAmount,
+      qris_image_url: qrisImageUrl,
+      status: 'PENDING',
+      expires_at: expiresAt.toISOString()
+    });
 
-    // Coba simpan ke Supabase jika tabel qris_payments tersedia
-    try {
-      await supabase.from('qris_payments').insert({
-        reference_id: referenceId,
-        type,
-        booking_id: bookingId,
-        barber_id: barberId,
-        customer_name: customerName,
-        customer_phone: customerPhone,
-        base_amount: baseAmount,
-        unique_code: uniqueCode,
-        total_amount: totalAmount,
-        qris_image_url: qrisImageUrl,
-        status: 'PENDING',
-        expires_at: expiresAt.toISOString()
+    if (insertErr) {
+      console.error('[SEC-001 DB Error]: Express qris_payments table insert failed:', insertErr.message);
+      return res.status(500).json({
+        success: false,
+        message: 'Gagal mencatat transaksi pembayaran ke database. Instruksi QRIS dibatalkan demi keamanan transaksi.'
       });
-    } catch (e) {
-      // Abaikan jika tabel belum dibuat di Supabase
     }
+
+    // Cache di memori sebagai pelengkap pencarian cepat
+    memoryPayments.set(referenceId, paymentRecord);
 
     return res.status(201).json({
       success: true,
-      payment: {
-        referenceId,
-        type,
-        bookingId,
-        baseAmount,
-        uniqueCode,
-        totalAmount,
-        formattedTotal: `Rp ${totalAmount.toLocaleString('id-ID')}`,
-        qrisImageUrl,
-        status: 'PENDING',
-        expiresAt: expiresAt.toISOString(),
-        expiresInSeconds: 900
-      }
+      payment: paymentRecord
     });
   } catch (err) {
     console.error('[QRIS Create Error]:', err);
@@ -318,6 +432,8 @@ router.post('/webhook', async (req, res) => {
             barberId: data.barber_id,
             customerName: data.customer_name,
             totalAmount: Number(data.total_amount),
+            baseAmount: Number(data.base_amount),
+            uniqueCode: Number(data.unique_code),
             type: data.type,
             status: data.status,
             expiresAt: data.expires_at
@@ -328,35 +444,104 @@ router.post('/webhook', async (req, res) => {
 
     // Jika tagihan ditemukan dan cocok!
     if (matchedPayment) {
+      // Jika ini adalah pembayaran booking, validasi ketat status & cross-check harga
+      if (matchedPayment.bookingId) {
+        const { data: bData, error: bErr } = await supabase
+          .from('bookings')
+          .select('id, total_price, booking_status, payment_status')
+          .eq('id', matchedPayment.bookingId)
+          .maybeSingle();
+
+        if (bErr || !bData) {
+          console.error(`[SEC-001 Error] Data booking ${matchedPayment.bookingId} tidak ditemukan:`, bErr?.message);
+          matchedPayment.status = 'REVIEW_REQUIRED';
+          memoryPayments.set(matchedPayment.referenceId, matchedPayment);
+          await supabase.from('qris_payments').update({
+            status: 'REVIEW_REQUIRED',
+            raw_notification: JSON.stringify(rawPayload)
+          }).eq('reference_id', matchedPayment.referenceId);
+
+          return res.status(200).json({
+            success: true,
+            matched: false,
+            reviewRequired: true,
+            message: 'Data booking tidak ditemukan. Tagihan ditandai REVIEW_REQUIRED.'
+          });
+        }
+
+        if (bData.payment_status === 'PAID') {
+          console.warn(`[SEC-001 Warning] Booking ${matchedPayment.bookingId} sudah berstatus PAID sebelumnya.`);
+          matchedPayment.status = 'DUPLICATE_PAYMENT';
+          memoryPayments.set(matchedPayment.referenceId, matchedPayment);
+          await supabase.from('qris_payments').update({
+            status: 'DUPLICATE_PAYMENT',
+            raw_notification: JSON.stringify(rawPayload)
+          }).eq('reference_id', matchedPayment.referenceId);
+
+          return res.status(200).json({
+            success: true,
+            matched: false,
+            duplicate: true,
+            message: 'Booking sudah lunas sebelumnya. Pembayaran ditandai DUPLICATE_PAYMENT.'
+          });
+        }
+
+        const paidBase = Number(matchedPayment.baseAmount) || (Number(matchedPayment.totalAmount) - (Number(matchedPayment.uniqueCode) || 0));
+        const requiredPrice = Number(bData.total_price || 0);
+
+        if (requiredPrice <= 0 || paidBase < requiredPrice) {
+          console.warn(`[SECURITY ALERT] Pembayaran kurang untuk booking ${matchedPayment.bookingId}: Dibayar dasar Rp ${paidBase}, Tagihan resmi Rp ${requiredPrice}`);
+          matchedPayment.status = 'UNDERPAID';
+          memoryPayments.set(matchedPayment.referenceId, matchedPayment);
+          await supabase.from('qris_payments').update({
+            status: 'UNDERPAID',
+            raw_notification: JSON.stringify(rawPayload)
+          }).eq('reference_id', matchedPayment.referenceId);
+
+          return res.status(200).json({
+            success: true,
+            matched: false,
+            underpaid: true,
+            message: `Nominal pembayaran tidak mencukupi harga resmi booking (Rp ${paidBase} < Rp ${requiredPrice}). Tagihan ditandai UNDERPAID.`
+          });
+        }
+
+        // Update status booking terlebih dahulu (Fail-Closed)
+        const { error: bUpdateErr } = await supabase.from('bookings').update({
+          booking_status: 'CONFIRMED',
+          payment_status: 'PAID',
+          payment_method: 'QRIS'
+        }).eq('id', matchedPayment.bookingId);
+
+        if (bUpdateErr) {
+          console.error(`[SEC-001 Error] Gagal konfirmasi booking ${matchedPayment.bookingId}:`, bUpdateErr.message);
+          matchedPayment.status = 'REVIEW_REQUIRED';
+          memoryPayments.set(matchedPayment.referenceId, matchedPayment);
+          await supabase.from('qris_payments').update({
+            status: 'REVIEW_REQUIRED',
+            raw_notification: JSON.stringify(rawPayload)
+          }).eq('reference_id', matchedPayment.referenceId);
+
+          return res.status(500).json({
+            success: false,
+            message: 'Gagal memperbarui status booking ke database. Transaksi ditandai REVIEW_REQUIRED.'
+          });
+        }
+      }
+
       matchedPayment.status = 'PAID';
       matchedPayment.paidAt = now.toISOString();
       matchedPayment.rawNotification = JSON.stringify(rawPayload);
       memoryPayments.set(matchedPayment.referenceId, matchedPayment);
 
-      // Update tabel Supabase qris_payments jika ada
-      supabase.from('qris_payments')
+      // Update tabel Supabase qris_payments
+      await supabase.from('qris_payments')
         .update({
           status: 'PAID',
           paid_at: matchedPayment.paidAt,
           raw_notification: matchedPayment.rawNotification
         })
-        .eq('reference_id', matchedPayment.referenceId)
-        .then(() => {})
-        .catch(() => {});
-
-      // Jika ini adalah pembayaran booking, update tabel bookings di Supabase!
-      if (matchedPayment.bookingId) {
-        try {
-          await supabase.from('bookings').update({
-            booking_status: 'CONFIRMED',
-            payment_status: 'PAID',
-            payment_method: 'QRIS'
-          }).eq('id', matchedPayment.bookingId);
-          console.log(`[QRIS] Booking ${matchedPayment.bookingId} berhasil dikonfirmasi via QRIS!`);
-        } catch (err) {
-          console.warn('[QRIS Booking Update Warning]:', err.message);
-        }
-      }
+        .eq('reference_id', matchedPayment.referenceId);
 
       // Jika ini adalah pembayaran upgrade paket berlangganan barber
       if (matchedPayment.type?.startsWith('PLAN_') && matchedPayment.barberId) {
@@ -381,6 +566,30 @@ router.post('/webhook', async (req, res) => {
         message: `Pembayaran Rp ${targetAmount.toLocaleString('id-ID')} berhasil diverifikasi!`
       });
     }
+
+    // Anti-Replay: Periksa apakah ada pembayaran PAID dalam 15 menit terakhir
+    const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+    try {
+      const { data: recentPaid } = await supabase
+        .from('qris_payments')
+        .select('*')
+        .eq('status', 'PAID')
+        .eq('total_amount', targetAmount)
+        .gte('paid_at', fifteenMinutesAgo)
+        .order('paid_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (recentPaid) {
+        return res.status(200).json({
+          success: true,
+          matched: true,
+          duplicate: true,
+          referenceId: recentPaid.reference_id,
+          message: `Notifikasi pembayaran untuk nominal Rp ${targetAmount.toLocaleString('id-ID')} sudah diproses sebelumnya (idempotent).`
+        });
+      }
+    } catch (e) {}
 
     // Jika tidak ada tagihan pending yang cocok
     return res.json({

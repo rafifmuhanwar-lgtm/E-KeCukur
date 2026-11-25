@@ -432,8 +432,9 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
 
 
   const teamMembers = liveTeamMembers;
-  const teamBookingEnabled = barber?.profileType === 'barbershop'
-    && barber?.features?.team === true
+  const isStudioPlan = barber?.plan === 'barber' || barber?.profileType === 'barbershop';
+  const teamBookingEnabled = isStudioPlan
+    && barber?.features?.team !== false
     && teamMembers.length > 0;
   const selectedCapster = teamMembers.find((member) => member.id === selectedCapsterId) || null;
   const calendarDays = useMemo(() => getCalendarDays(calendarMonth), [calendarMonth]);

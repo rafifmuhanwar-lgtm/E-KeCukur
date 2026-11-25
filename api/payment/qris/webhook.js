@@ -227,7 +227,7 @@ export default async function handler(req, res) {
     let matched = false;
     let matchDetails = null;
 
-    // 1. Cek tabel qris_payments di Supabase jika ada
+    // 1. Cek tabel qris_payments di Supabase
     try {
       const { data: qrisRow } = await supabase
         .from('qris_payments')
@@ -239,8 +239,104 @@ export default async function handler(req, res) {
         .maybeSingle();
 
       if (qrisRow) {
-        matched = true;
-        matchDetails = qrisRow;
+        // Validasi kedaluwarsa tagihan PENDING
+        if (qrisRow.expires_at && new Date(qrisRow.expires_at).getTime() < now.getTime()) {
+          console.warn(`[SEC-001 Warning] Pembayaran diterima untuk transaksi kedaluwarsa: Ref ${qrisRow.reference_id}`);
+          await supabase
+            .from('qris_payments')
+            .update({
+              status: 'EXPIRED',
+              raw_notification: JSON.stringify(payload)
+            })
+            .eq('reference_id', qrisRow.reference_id);
+
+          return res.status(200).json({
+            success: true,
+            matched: false,
+            expired: true,
+            referenceId: qrisRow.reference_id,
+            message: `Tagihan pembayaran sudah kedaluwarsa. Transaksi ditandai EXPIRED untuk peninjauan manual.`
+          });
+        }
+
+        // Jika transaksi terikat dengan bookingId, lakukan cross-check ketat
+        if (qrisRow.booking_id) {
+          const { data: bData, error: bErr } = await supabase
+            .from('bookings')
+            .select('id, total_price, booking_status, payment_status')
+            .eq('id', qrisRow.booking_id)
+            .maybeSingle();
+
+          if (bErr || !bData) {
+            console.error(`[SEC-001 Error] Data booking ${qrisRow.booking_id} tidak ditemukan atau gagal di-query:`, bErr?.message);
+            await supabase.from('qris_payments').update({
+              status: 'REVIEW_REQUIRED',
+              raw_notification: JSON.stringify(payload)
+            }).eq('reference_id', qrisRow.reference_id);
+
+            return res.status(200).json({
+              success: true,
+              matched: false,
+              reviewRequired: true,
+              message: 'Data booking tidak ditemukan. Tagihan ditandai REVIEW_REQUIRED.'
+            });
+          }
+
+          if (bData.payment_status === 'PAID') {
+            console.warn(`[SEC-001 Warning] Booking ${qrisRow.booking_id} sudah berstatus PAID sebelumnya.`);
+            await supabase.from('qris_payments').update({
+              status: 'DUPLICATE_PAYMENT',
+              raw_notification: JSON.stringify(payload)
+            }).eq('reference_id', qrisRow.reference_id);
+
+            return res.status(200).json({
+              success: true,
+              matched: false,
+              duplicate: true,
+              message: 'Booking sudah lunas sebelumnya. Pembayaran baru ditandai DUPLICATE_PAYMENT.'
+            });
+          }
+
+          const paidBase = Number(qrisRow.base_amount) || (Number(qrisRow.total_amount) - (Number(qrisRow.unique_code) || 0));
+          const requiredPrice = Number(bData.total_price || 0);
+
+          if (requiredPrice <= 0 || paidBase < requiredPrice) {
+            console.warn(`[SECURITY ALERT] Pembayaran kurang untuk booking ${qrisRow.booking_id}: Dibayar dasar Rp ${paidBase}, Tagihan resmi Rp ${requiredPrice}`);
+            await supabase.from('qris_payments').update({
+              status: 'UNDERPAID',
+              raw_notification: JSON.stringify(payload)
+            }).eq('reference_id', qrisRow.reference_id);
+
+            return res.status(200).json({
+              success: true,
+              matched: false,
+              underpaid: true,
+              message: `Nominal pembayaran tidak mencukupi harga resmi booking (Rp ${paidBase} < Rp ${requiredPrice}). Tagihan ditandai UNDERPAID.`
+            });
+          }
+
+          // Update booking terlebih dahulu (Fail-Closed)
+          const { error: bUpdateErr } = await supabase.from('bookings').update({
+            booking_status: 'CONFIRMED',
+            payment_status: 'PAID',
+            payment_method: 'QRIS'
+          }).eq('id', qrisRow.booking_id);
+
+          if (bUpdateErr) {
+            console.error(`[SEC-001 Error] Gagal update status booking ${qrisRow.booking_id}:`, bUpdateErr.message);
+            await supabase.from('qris_payments').update({
+              status: 'REVIEW_REQUIRED',
+              raw_notification: JSON.stringify(payload)
+            }).eq('reference_id', qrisRow.reference_id);
+
+            return res.status(500).json({
+              success: false,
+              message: 'Gagal memperbarui status booking ke database. Transaksi ditandai REVIEW_REQUIRED.'
+            });
+          }
+        }
+
+        // Update qris_payments menjadi PAID
         await supabase
           .from('qris_payments')
           .update({
@@ -250,13 +346,8 @@ export default async function handler(req, res) {
           })
           .eq('reference_id', qrisRow.reference_id);
 
-        if (qrisRow.booking_id) {
-          await supabase.from('bookings').update({
-            booking_status: 'CONFIRMED',
-            payment_status: 'PAID',
-            payment_method: 'QRIS'
-          }).eq('id', qrisRow.booking_id);
-        }
+        matched = true;
+        matchDetails = qrisRow;
 
         // Jika tipe TIP dan ada barber_id, update tip barber
         if (qrisRow.type === 'TIP' && qrisRow.barber_id) {
@@ -301,47 +392,31 @@ export default async function handler(req, res) {
             console.warn('Plan upgrade update notice:', planErr.message);
           }
         }
+      } else {
+        // Anti-Replay: Periksa apakah notifikasi ini merupakan replay / duplikat dari pembayaran yang baru saja PAID
+        const fifteenMinutesAgo = new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+        const { data: recentPaid } = await supabase
+          .from('qris_payments')
+          .select('*')
+          .eq('status', 'PAID')
+          .eq('total_amount', targetAmount)
+          .gte('paid_at', fifteenMinutesAgo)
+          .order('paid_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (recentPaid) {
+          return res.status(200).json({
+            success: true,
+            matched: true,
+            duplicate: true,
+            referenceId: recentPaid.reference_id,
+            message: `Notifikasi pembayaran untuk nominal Rp ${targetAmount.toLocaleString('id-ID')} sudah diproses sebelumnya (idempotent).`
+          });
+        }
       }
     } catch (e) {
-      // Table qris_payments belum dibuat, lanjut ke cek tabel bookings
-    }
-
-    // 2. Jika belum cocok di qris_payments, cari langsung di tabel bookings
-    if (!matched) {
-      try {
-        const { data: bookingsList } = await supabase
-          .from('bookings')
-          .select('*')
-          .eq('booking_status', 'PENDING_PAYMENT')
-          .order('created_at', { ascending: false })
-          .limit(20);
-
-        if (bookingsList && bookingsList.length > 0) {
-          // Prioritas 1: Cocok persis total_price === targetAmount
-          let matchingBooking = bookingsList.find(b => Number(b.total_price) === targetAmount);
-
-          // Prioritas 2 (fallback jika booking lama tersimpan dengan base price): selisih kode unik 100-899
-          if (!matchingBooking) {
-            matchingBooking = bookingsList.find(b => {
-              const price = Number(b.total_price);
-              return targetAmount >= price + 100 && targetAmount <= price + 899;
-            });
-          }
-
-          if (matchingBooking) {
-            matched = true;
-            matchDetails = matchingBooking;
-            await supabase.from('bookings').update({
-              booking_status: 'CONFIRMED',
-              payment_status: 'PAID',
-              payment_method: 'QRIS'
-            }).eq('id', matchingBooking.id);
-            console.log('[Vercel QRIS] Booking matched and confirmed:', matchingBooking.id);
-          }
-        }
-      } catch (err) {
-        console.warn('Booking direct match warning:', err.message);
-      }
+      console.error('[QRIS Webhook Table Error]:', e.message);
     }
 
     if (matched && matchDetails) {
