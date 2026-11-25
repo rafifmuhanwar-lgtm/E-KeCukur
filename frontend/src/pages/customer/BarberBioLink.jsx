@@ -2108,7 +2108,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                               {/* Likes Count */}
                               <div className="px-3 py-0.5">
                                 <span className="text-[11px] font-bold text-neutral-900">
-                                  {likesCount.toLocaleString('id-ID')} suka
+                                  {Number(likesCount || 0).toLocaleString('id-ID')} suka
                                 </span>
                               </div>
 
@@ -2323,7 +2323,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                       </span>
                       <div className="flex items-center justify-center gap-2 mt-0.5">
                         <span className="font-display font-extrabold text-lg text-[#285844] font-mono">
-                          Rp {bookingQrisData.totalAmount.toLocaleString('id-ID')}
+                          Rp {Number(bookingQrisData.totalAmount || 0).toLocaleString('id-ID')}
                         </span>
                         <button
                           type="button"
@@ -2735,7 +2735,7 @@ export default function BarberBioLink({ customBarber = null, isPreview = false }
                         </span>
                         <div className="flex items-center justify-center gap-2 mt-0.5">
                           <span className="font-display font-extrabold text-base text-neutral-900 font-mono">
-                            Rp {tipQrisData.totalAmount.toLocaleString('id-ID')}
+                            Rp {Number(tipQrisData.totalAmount || 0).toLocaleString('id-ID')}
                           </span>
                           <button
                             type="button"

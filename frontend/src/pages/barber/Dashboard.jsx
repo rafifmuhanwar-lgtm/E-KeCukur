@@ -55,25 +55,45 @@ import { getAppDomain } from '../../lib/domain';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import { getDynamicQrisImageUrl } from '../../lib/qrisPayment';
 
-// ─── SUBSCRIPTION MULTI-DURATION PRICING HELPER (Diskon Rp 10.000/bulan) ───
+// ─── SUBSCRIPTION MULTI-DURATION PRICING HELPER (Bundling Resmi) ───
 const SUBSCRIPTION_DURATIONS = [
   { months: 1, label: '1 Bulan', discountText: null, popular: false },
-  { months: 3, label: '3 Bulan', discountText: 'Hemat 30rb', popular: true },
-  { months: 6, label: '6 Bulan', discountText: 'Hemat 60rb', popular: false },
-  { months: 12, label: '1 Tahun', discountText: 'Hemat 120rb', popular: false }
+  { months: 3, label: '3 Bulan', discountText: 'Hemat s.d 15rb', popular: true },
+  { months: 6, label: '6 Bulan', discountText: 'Hemat s.d 59rb', popular: false },
+  { months: 12, label: '1 Tahun', discountText: 'Hemat s.d 179rb', popular: false }
 ];
 
+const PLAN_BUNDLES = {
+  capster: {
+    1: { total: 49000, discount: 0, discountLabel: null },
+    3: { total: 139000, discount: 8000, discountLabel: 'Hemat 8rb' },
+    6: { total: 265000, discount: 29000, discountLabel: 'Hemat 29rb' },
+    12: { total: 499000, discount: 89000, discountLabel: 'Hemat 89rb' }
+  },
+  barber: {
+    1: { total: 99000, discount: 0, discountLabel: null },
+    3: { total: 282000, discount: 15000, discountLabel: 'Hemat 15rb' },
+    6: { total: 535000, discount: 59000, discountLabel: 'Hemat 59rb' },
+    12: { total: 1009000, discount: 179000, discountLabel: 'Hemat 179rb' }
+  }
+};
+
 const getPlanPrice = (planType, months = 1) => {
-  const baseMonthly = planType === 'barber' ? 99000 : 49000;
-  const discount = months > 1 ? (months * 10000) : 0;
-  const total = (baseMonthly * months) - discount;
-  const effectiveMonthly = Math.round(total / months);
+  const type = planType === 'barber' ? 'barber' : 'capster';
+  const bundle = PLAN_BUNDLES[type][months] || PLAN_BUNDLES[type][1];
+  const baseMonthly = type === 'barber' ? 99000 : 49000;
+  const originalAmount = baseMonthly * months;
+  const effectiveMonthly = Math.round(bundle.total / months);
+
   return {
-    total,
-    discount,
+    amount: bundle.total,
+    total: bundle.total,
+    discount: bundle.discount,
+    discountLabel: bundle.discountLabel,
+    originalAmount,
+    normalTotal: originalAmount,
     effectiveMonthly,
-    baseMonthly,
-    normalTotal: baseMonthly * months
+    baseMonthly
   };
 };
 
@@ -1086,7 +1106,7 @@ export default function BarberDashboard() {
       durationMonths,
       uniqueCode,
       totalAmount: finalAmount,
-      formattedTotal: `Rp ${finalAmount.toLocaleString('id-ID')}`,
+      formattedTotal: `Rp ${Number(finalAmount || 0).toLocaleString('id-ID')}`,
       qrisImageUrl: qrImg,
       qrImageUrl: qrImg,
       status: 'PENDING',
@@ -5571,33 +5591,30 @@ export default function BarberDashboard() {
                         <div className={`p-4 rounded-2xl border-2 flex flex-col justify-between relative transition-all ${
                           isCapsterPlan ? 'border-[#285844] bg-[#D9E5DC]/25 shadow-xs' : 'border-[#285844]/60 bg-white'
                         }`}>
-                          <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1">
-                            <span className="px-2.5 py-0.5 rounded-full bg-[#285844] text-white text-[9px] font-bold">
-                              🔥 Populer
+                          {/* Floating Top Badge: Single clean pill */}
+                          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                            <span className="px-3 py-0.5 rounded-full bg-[#1E4334] text-white text-[10px] font-bold shadow-xs whitespace-nowrap inline-flex items-center gap-1 border border-[#285844]/60">
+                              <span>🔥 Populer</span>
                             </span>
-                            {capsterPricing.discount > 0 && (
-                              <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold">
-                                Hemat {Math.round(capsterPricing.discount / 1000)}rb
-                              </span>
-                            )}
                           </div>
+
                           <div>
-                            <div className="flex items-center justify-between mb-2 mt-1">
+                            <div className="flex items-center justify-between mb-2 mt-2">
                               <span className="text-xs font-bold text-[#285844]">Capster Pro</span>
-                              {isCapsterPlan && (
-                                <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[9.5px] font-bold">
-                                  Aktif
+                              {capsterPricing.discountLabel && (
+                                <span className="px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10.5px] font-bold tracking-tight whitespace-nowrap">
+                                  {capsterPricing.discountLabel}
                                 </span>
                               )}
                             </div>
                             <div className="mb-2">
                               {capsterPricing.discount > 0 && (
                                 <div className="text-[11px] text-neutral-400 line-through">
-                                  Rp {capsterPricing.originalAmount.toLocaleString('id-ID')}
+                                  Rp {Number(capsterPricing.originalAmount || 0).toLocaleString('id-ID')}
                                 </div>
                               )}
                               <div className="font-display font-black text-xl text-[#171717]">
-                                Rp {capsterPricing.amount.toLocaleString('id-ID')}{' '}
+                                Rp {Number(capsterPricing.amount || 0).toLocaleString('id-ID')}{' '}
                                 <span className="text-[10px] text-neutral-400 font-mono font-normal">
                                   /{selectedDurationMonths === 1 ? 'bln' : `${selectedDurationMonths} bln`}
                                 </span>
@@ -5659,33 +5676,26 @@ export default function BarberDashboard() {
                         <div className={`p-4 rounded-2xl border flex flex-col justify-between relative transition-all ${
                           isBarberPlan ? 'border-2 border-amber-500 bg-amber-50/40 shadow-xs' : 'border-neutral-200 bg-white'
                         }`}>
-                          {barberPricing.discount > 0 && (
-                            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
-                              <span className="px-2 py-0.5 rounded-full bg-amber-600 text-white text-[9px] font-bold">
-                                Hemat {Math.round(barberPricing.discount / 1000)}rb
-                              </span>
-                            </div>
-                          )}
                           <div>
-                            <div className="flex items-center justify-between mb-2 mt-1">
+                            <div className="flex items-center justify-between mb-2 mt-2">
                               <span className="text-xs font-bold text-amber-900 flex items-center gap-1">
-                                <Crown className="w-3 h-3 text-amber-600" />
+                                <Crown className="w-3.5 h-3.5 text-amber-600" />
                                 <span>Barber Studio</span>
                               </span>
-                              {isBarberPlan && (
-                                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-bold">
-                                  Aktif
+                              {barberPricing.discountLabel && (
+                                <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 text-[10.5px] font-bold tracking-tight whitespace-nowrap">
+                                  {barberPricing.discountLabel}
                                 </span>
                               )}
                             </div>
                             <div className="mb-2">
                               {barberPricing.discount > 0 && (
                                 <div className="text-[11px] text-neutral-400 line-through">
-                                  Rp {barberPricing.originalAmount.toLocaleString('id-ID')}
+                                  Rp {Number(barberPricing.originalAmount || 0).toLocaleString('id-ID')}
                                 </div>
                               )}
                               <div className="font-display font-black text-xl text-[#171717]">
-                                Rp {barberPricing.amount.toLocaleString('id-ID')}{' '}
+                                Rp {Number(barberPricing.amount || 0).toLocaleString('id-ID')}{' '}
                                 <span className="text-[10px] text-neutral-400 font-mono font-normal">
                                   /{selectedDurationMonths === 1 ? 'bln' : `${selectedDurationMonths} bln`}
                                 </span>
@@ -5838,7 +5848,7 @@ export default function BarberDashboard() {
                                 : 'bg-neutral-50 text-neutral-300 border-neutral-100 cursor-not-allowed'
                           }`}
                         >
-                          Rp {amt.toLocaleString('id-ID')}
+                          Rp {Number(amt || 0).toLocaleString('id-ID')}
                         </button>
                       );
                     })}

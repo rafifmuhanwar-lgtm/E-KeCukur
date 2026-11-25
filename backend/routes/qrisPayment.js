@@ -205,12 +205,18 @@ router.post('/create', async (req, res) => {
       resolvedBarberId = bookingData.barber_id || resolvedBarberId;
     } else if (type === 'PLAN_BARBER') {
       const months = [1, 3, 6, 12].includes(Number(req.body?.months)) ? Number(req.body.months) : 1;
-      const discount = months > 1 ? (months * 10000) : 0;
-      baseAmount = (99000 * months) - discount;
+      const PRICING_BUNDLES = {
+        barber: { 1: 99000, 3: 282000, 6: 535000, 12: 1009000 },
+        capster: { 1: 49000, 3: 139000, 6: 265000, 12: 499000 }
+      };
+      baseAmount = PRICING_BUNDLES.barber[months] || 99000;
     } else if (type === 'PLAN_CAPSTER' || type === 'PLAN_PRO') {
       const months = [1, 3, 6, 12].includes(Number(req.body?.months)) ? Number(req.body.months) : 1;
-      const discount = months > 1 ? (months * 10000) : 0;
-      baseAmount = (49000 * months) - discount;
+      const PRICING_BUNDLES = {
+        barber: { 1: 99000, 3: 282000, 6: 535000, 12: 1009000 },
+        capster: { 1: 49000, 3: 139000, 6: 265000, 12: 499000 }
+      };
+      baseAmount = PRICING_BUNDLES.capster[months] || 49000;
     } else if (type === 'TIP') {
       const tipNum = Number(amount);
       if (!Number.isSafeInteger(tipNum) || tipNum < 5000 || tipNum > 10000000) {
@@ -554,11 +560,17 @@ router.post('/webhook', async (req, res) => {
           let durationMonths = 1;
           const baseAmt = Number(matchedPayment.baseAmount) || Number(matchedPayment.base_amount) || 0;
           if (targetPlan === 'barber') {
-            if (baseAmt === 267000) durationMonths = 3;
+            if (baseAmt === 282000) durationMonths = 3;
+            else if (baseAmt === 535000) durationMonths = 6;
+            else if (baseAmt === 1009000) durationMonths = 12;
+            else if (baseAmt === 267000) durationMonths = 3;
             else if (baseAmt === 534000) durationMonths = 6;
             else if (baseAmt === 1068000) durationMonths = 12;
           } else {
-            if (baseAmt === 117000) durationMonths = 3;
+            if (baseAmt === 139000) durationMonths = 3;
+            else if (baseAmt === 265000) durationMonths = 6;
+            else if (baseAmt === 499000) durationMonths = 12;
+            else if (baseAmt === 117000) durationMonths = 3;
             else if (baseAmt === 234000) durationMonths = 6;
             else if (baseAmt === 468000) durationMonths = 12;
           }

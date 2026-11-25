@@ -388,11 +388,17 @@ export default async function handler(req, res) {
             let durationMonths = 1;
             const baseAmt = Number(qrisRow.base_amount) || (Number(qrisRow.total_amount) - (Number(qrisRow.unique_code) || 0)) || 0;
             if (targetPlan === 'barber') {
-              if (baseAmt === 267000) durationMonths = 3;
+              if (baseAmt === 282000) durationMonths = 3;
+              else if (baseAmt === 535000) durationMonths = 6;
+              else if (baseAmt === 1009000) durationMonths = 12;
+              else if (baseAmt === 267000) durationMonths = 3;
               else if (baseAmt === 534000) durationMonths = 6;
               else if (baseAmt === 1068000) durationMonths = 12;
             } else {
-              if (baseAmt === 117000) durationMonths = 3;
+              if (baseAmt === 139000) durationMonths = 3;
+              else if (baseAmt === 265000) durationMonths = 6;
+              else if (baseAmt === 499000) durationMonths = 12;
+              else if (baseAmt === 117000) durationMonths = 3;
               else if (baseAmt === 234000) durationMonths = 6;
               else if (baseAmt === 468000) durationMonths = 12;
             }

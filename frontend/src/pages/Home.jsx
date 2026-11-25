@@ -101,6 +101,23 @@ export default function Home() {
   const [usernameError, setUsernameError] = useState('');
   const [usernameSuccess, setUsernameSuccess] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState('free');
+  const [billingDuration, setBillingDuration] = useState(1); // 1 | 3 | 6 | 12 bulan
+
+  // Multi-durasi bundling resmi
+  const PRICING_BUNDLES = {
+    capster: {
+      1: { total: 49000, discount: 0, discountLabel: null },
+      3: { total: 139000, discount: 8000, discountLabel: 'Hemat 8rb' },
+      6: { total: 265000, discount: 29000, discountLabel: 'Hemat 29rb' },
+      12: { total: 499000, discount: 89000, discountLabel: 'Hemat 89rb' }
+    },
+    barber: {
+      1: { total: 99000, discount: 0, discountLabel: null },
+      3: { total: 282000, discount: 15000, discountLabel: 'Hemat 15rb' },
+      6: { total: 535000, discount: 59000, discountLabel: 'Hemat 59rb' },
+      12: { total: 1009000, discount: 179000, discountLabel: 'Hemat 179rb' }
+    }
+  };
 
   // Live Product Preview Persona Tab
   const [previewPersona, setPreviewPersona] = useState('reza'); // 'reza' | 'studio' | 'asgar'
@@ -1008,16 +1025,57 @@ export default function Home() {
       <section id="harga" className="scroll-mt-20 py-16 sm:py-24 bg-white border-y border-neutral-200">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           
-          <div className="text-center max-w-2xl mx-auto mb-14">
+          <div className="text-center max-w-2xl mx-auto mb-10">
             <span className="text-xs font-mono uppercase tracking-widest text-[#285844] font-semibold">
-              Pilihan Paket
+              Pilihan Paket & Bundling
             </span>
             <h2 className="text-2xl sm:text-4xl font-display font-extrabold text-[#171717] tracking-tight mt-2 mb-3">
               Pilih Paket Sesuai Kebutuhan Bisnismu
             </h2>
             <p className="text-sm text-neutral-600">
-              Mulai gratis dengan fitur esensial, atau pilih paket Capster dan Barber untuk skala bisnis yang lebih profesional.
+              Mulai gratis dengan fitur esensial, atau pilih paket hemat berlangganan langsung 3 bulan, 6 bulan, hingga 1 tahun.
             </p>
+
+            {/* DURATION SWITCHER WITH ANIMATION */}
+            <div className="mt-8 flex justify-center">
+              <div className="inline-flex p-1.5 bg-[#F7F6F2] rounded-2xl border border-neutral-300/80 gap-1 sm:gap-2 shadow-xs">
+                {[
+                  { months: 1, label: '1 Bulan', tag: null },
+                  { months: 3, label: '3 Bulan', tag: 'Hemat s.d 15rb' },
+                  { months: 6, label: '6 Bulan', tag: 'Hemat s.d 59rb' },
+                  { months: 12, label: '1 Tahun', tag: 'Hemat s.d 179rb', hot: true }
+                ].map((dur) => {
+                  const isSelected = billingDuration === dur.months;
+                  return (
+                    <button
+                      key={dur.months}
+                      type="button"
+                      onClick={() => setBillingDuration(dur.months)}
+                      className={`relative px-3 sm:px-4 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                        isSelected
+                          ? 'bg-[#285844] text-white shadow-sm'
+                          : 'text-neutral-700 hover:text-neutral-900 hover:bg-neutral-200/50'
+                      }`}
+                    >
+                      <span>{dur.label}</span>
+                      {dur.tag && (
+                        <span
+                          className={`text-[9px] sm:text-[10px] px-1.5 py-0.5 rounded-full font-extrabold tracking-tight ${
+                            isSelected
+                              ? 'bg-amber-400 text-neutral-950'
+                              : dur.hot
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-neutral-200 text-neutral-700'
+                          }`}
+                        >
+                          {dur.tag}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-stretch">
@@ -1085,144 +1143,223 @@ export default function Home() {
             </div>
 
             {/* 2. PLAN CAPSTER (POPULAR HIGHLIGHT) */}
-            <div className="p-6 sm:p-7 rounded-3xl bg-[#F7F6F2] border-2 border-[#285844] shadow-md flex flex-col justify-between relative">
-              <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
-                <span className="px-3.5 py-1 rounded-full bg-[#285844] text-white text-[11px] font-bold tracking-wide shadow-sm flex items-center gap-1">
-                  <Sparkles className="w-3 h-3 text-amber-300" />
-                  <span>Paling Populer</span>
-                </span>
-              </div>
+            {(() => {
+              const capBundle = PRICING_BUNDLES.capster[billingDuration] || PRICING_BUNDLES.capster[1];
+              const originalAmount = 49000 * billingDuration;
+              return (
+                <div className="p-6 sm:p-7 rounded-3xl bg-[#F7F6F2] border-2 border-[#285844] shadow-md flex flex-col justify-between relative">
+                  {/* Floating Single Pill Badge */}
+                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2">
+                    <span className="px-3.5 py-1 rounded-full bg-[#1E4334] text-white text-[11px] font-bold tracking-wide shadow-sm flex items-center gap-1.5 whitespace-nowrap border border-[#285844]">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                      <span>Paling Populer</span>
+                    </span>
+                  </div>
 
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D9E5DC] text-[#285844] text-xs font-bold mb-4 mt-1">
-                  <span>Capster Mandiri & Home Service</span>
+                  <div>
+                    <div className="flex items-center justify-between mb-4 mt-1">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#D9E5DC] text-[#285844] text-xs font-bold">
+                        <span>Capster Mandiri & Home Service</span>
+                      </div>
+                      {capBundle?.discountLabel && (
+                        <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 text-[11px] font-bold tracking-tight whitespace-nowrap">
+                          {capBundle.discountLabel}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-display font-bold text-2xl text-[#171717] mb-1">Paket Capster</h3>
+                    <p className="text-xs text-neutral-600 mb-5">Untuk capster profesional, stylist mandiri & barber panggilan.</p>
+                    
+                    <div className="mb-6">
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={`cap-${billingDuration}`}
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 6 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          {Number(capBundle?.discount || 0) > 0 && (
+                            <div className="text-xs text-neutral-400 line-through mb-0.5">
+                              Rp {Number(originalAmount || 0).toLocaleString('id-ID')}
+                            </div>
+                          )}
+                          <div className="flex flex-wrap items-baseline gap-1.5">
+                            <span className="text-2xl sm:text-3xl font-display font-extrabold text-[#171717] tracking-tight whitespace-nowrap">
+                              Rp {Number(capBundle?.total || 0).toLocaleString('id-ID')}
+                            </span>
+                            <span className="text-xs font-mono text-neutral-500 whitespace-nowrap">
+                              / {billingDuration === 1 ? 'bulan' : `${billingDuration} bulan`}
+                            </span>
+                          </div>
+                          {billingDuration > 1 && (
+                            <div className="text-[11.5px] text-emerald-800 font-semibold mt-1">
+                              Setara Rp {Math.round(Number(capBundle?.total || 0) / billingDuration).toLocaleString('id-ID')}/bln
+                            </div>
+                          )}
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+
+                    <ul className="space-y-3 text-sm text-neutral-700 mb-8">
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span><strong>Semua fitur dalam Paket Free</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Menu layanan cukur <strong>tanpa batas (Unlimited)</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Portofolio foto haircut <strong>tanpa batas (Unlimited)</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Mode Home Service & radius area panggilan</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Badge Capster Terverifikasi (Centang Emas Pro)</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Kustomisasi tema warna bio link eksklusif</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Preset sawer tip kopi bebas & fleksibel</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Statistik tayangan profil & klik tautan</span>
+                      </li>
+                    </ul>
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      setSelectedPlan('capster');
+                      const el = document.getElementById('claim-box');
+                      if (el) {
+                        el.scrollIntoView({ behavior: 'smooth' });
+                        const input = el.querySelector('input');
+                        if (input) input.focus();
+                      }
+                    }}
+                    className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-sm rounded-xl transition-all shadow-sm cursor-pointer active:scale-98"
+                  >
+                    Pilih Paket Capster {billingDuration > 1 ? `(${billingDuration} Bln)` : ''}
+                  </button>
                 </div>
-                <h3 className="font-display font-bold text-2xl text-[#171717] mb-1">Paket Capster</h3>
-                <p className="text-xs text-neutral-600 mb-6">Untuk capster profesional, stylist mandiri & barber panggilan.</p>
-                
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className="text-4xl font-display font-extrabold text-[#171717]">Rp 49.000</span>
-                  <span className="text-xs font-mono text-neutral-500">/ bulan</span>
-                </div>
-
-                <ul className="space-y-3 text-sm text-neutral-700 mb-8">
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span><strong>Semua fitur dalam Paket Free</strong></span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Menu layanan cukur <strong>tanpa batas (Unlimited)</strong></span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Portofolio foto haircut <strong>tanpa batas (Unlimited)</strong></span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Mode Home Service & radius area panggilan</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Badge Capster Terverifikasi (Centang Emas Pro)</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Kustomisasi tema warna bio link eksklusif</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Preset sawer tip kopi bebas & fleksibel</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Statistik tayangan profil & klik tautan</span>
-                  </li>
-                </ul>
-              </div>
-
-              <button
-                onClick={() => {
-                  setSelectedPlan('capster');
-                  const el = document.getElementById('claim-box');
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth' });
-                    const input = el.querySelector('input');
-                    if (input) input.focus();
-                  }
-                }}
-                className="w-full py-3.5 bg-[#285844] hover:bg-[#1E4334] text-white font-semibold text-sm rounded-xl transition-all shadow-sm cursor-pointer active:scale-98"
-              >
-                Pilih Paket Capster
-              </button>
-            </div>
+              );
+            })()}
 
             {/* 3. PLAN BARBER (STUDIO & BUSINESS) */}
-            <div className="p-6 sm:p-7 rounded-3xl bg-white border border-neutral-300 shadow-xs flex flex-col justify-between hover:border-neutral-400 transition-all">
-              <div>
-                <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold mb-4">
-                  <Crown className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Studio & Barbershop</span>
-                </div>
-                <h3 className="font-display font-bold text-2xl text-[#171717] mb-1">Paket Barber</h3>
-                <p className="text-xs text-neutral-600 mb-6">Untuk pemilik barbershop fisik dengan kursi & tim capster.</p>
-                
-                <div className="flex items-baseline gap-1 mb-6">
-                  <span className="text-4xl font-display font-extrabold text-[#171717]">Rp 99.000</span>
-                  <span className="text-xs font-mono text-neutral-500">/ bulan</span>
-                </div>
+            {(() => {
+              const barBundle = PRICING_BUNDLES.barber[billingDuration] || PRICING_BUNDLES.barber[1];
+              const originalAmount = 99000 * billingDuration;
+              return (
+                <div className="p-6 sm:p-7 rounded-3xl bg-white border border-neutral-300 shadow-xs flex flex-col justify-between hover:border-neutral-400 transition-all relative">
+                  <div>
+                    <div className="flex items-center justify-between mb-4 mt-1">
+                      <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-bold">
+                        <Crown className="w-3.5 h-3.5 text-amber-600" />
+                        <span>Studio & Barbershop</span>
+                      </div>
+                      {barBundle?.discountLabel && (
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-900 text-[11px] font-bold tracking-tight whitespace-nowrap">
+                          {barBundle.discountLabel}
+                        </span>
+                      )}
+                    </div>
+                    <h3 className="font-display font-bold text-2xl text-[#171717] mb-1">Paket Barber</h3>
+                    <p className="text-xs text-neutral-600 mb-5">Untuk pemilik barbershop fisik dengan kursi & tim capster.</p>
+                    
+                    <div className="mb-6">
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={`bar-${billingDuration}`}
+                          initial={{ opacity: 0, y: -6 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 6 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          {Number(barBundle?.discount || 0) > 0 && (
+                            <div className="text-xs text-neutral-400 line-through mb-0.5">
+                              Rp {Number(originalAmount || 0).toLocaleString('id-ID')}
+                            </div>
+                          )}
+                          <div className="flex flex-wrap items-baseline gap-1.5">
+                            <span className="text-2xl sm:text-3xl font-display font-extrabold text-[#171717] tracking-tight whitespace-nowrap">
+                              Rp {Number(barBundle?.total || 0).toLocaleString('id-ID')}
+                            </span>
+                            <span className="text-xs font-mono text-neutral-500 whitespace-nowrap">
+                              / {billingDuration === 1 ? 'bulan' : `${billingDuration} bulan`}
+                            </span>
+                          </div>
+                          {billingDuration > 1 && (
+                            <div className="text-[11.5px] text-amber-800 font-semibold mt-1">
+                              Setara Rp {Math.round(Number(barBundle?.total || 0) / billingDuration).toLocaleString('id-ID')}/bln
+                            </div>
+                          )}
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
 
-                <ul className="space-y-3 text-sm text-neutral-700 mb-8">
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span><strong>Semua fitur dalam Paket Capster</strong></span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Manajemen multi-capster & tim barbershop</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Pelanggan bebas pilih capster saat booking</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Rekap finansial & bagi hasil komisi otomatis</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Pengaturan jadwal kerja & shift operasional</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Kit cetak standee QR Code akrilik meja siap print</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Ekspor laporan keuangan (Excel / CSV)</span>
-                  </li>
-                  <li className="flex items-start gap-2.5">
-                    <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
-                    <span>Lencana Resmi Official Studio & Prioritas Bisnis</span>
-                  </li>
-                </ul>
-              </div>
+                    <ul className="space-y-3 text-sm text-neutral-700 mb-8">
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span><strong>Semua fitur dalam Paket Capster</strong></span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Manajemen multi-capster & tim barbershop</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Pelanggan bebas pilih capster saat booking</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Rekap finansial & bagi hasil komisi otomatis</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Pengaturan jadwal kerja & shift operasional</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Kit cetak standee QR Code akrilik meja siap print</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Ekspor laporan keuangan (Excel / CSV)</span>
+                      </li>
+                      <li className="flex items-start gap-2.5">
+                        <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                        <span>Lencana Resmi Official Studio & Prioritas Bisnis</span>
+                      </li>
+                    </ul>
+                  </div>
 
-              <button
-                onClick={() => {
-                  setSelectedPlan('barber');
-                  const el = document.getElementById('claim-box');
-                  if (el) {
-                    el.scrollIntoView({ behavior: 'smooth' });
-                    const input = el.querySelector('input');
-                    if (input) input.focus();
-                  }
-                }}
-                className="w-full py-3.5 border-2 border-[#285844] text-[#285844] hover:bg-[#285844] hover:text-white font-semibold text-sm rounded-xl transition-all cursor-pointer active:scale-98"
-              >
-                Pilih Paket Barber
-              </button>
-            </div>
+                  <button
+                    onClick={() => {
+                      setSelectedPlan('barber');
+                      const el = document.getElementById('claim-box');
+                      if (el) {
+                        el.scrollIntoView({ behavior: 'smooth' });
+                        const input = el.querySelector('input');
+                        if (input) input.focus();
+                      }
+                    }}
+                    className="w-full py-3.5 border-2 border-[#285844] text-[#285844] hover:bg-[#285844] hover:text-white font-semibold text-sm rounded-xl transition-all cursor-pointer active:scale-98"
+                  >
+                    Pilih Paket Barber {billingDuration > 1 ? `(${billingDuration} Bln)` : ''}
+                  </button>
+                </div>
+              );
+            })()}
 
           </div>
 

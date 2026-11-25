@@ -1795,7 +1795,7 @@ export const useStore = create((set, get) => ({
       : (typeof targetBarber?.tipBalance === 'number' ? targetBarber.tipBalance : 0);
 
     if (amount > currentBalance) {
-      return { success: false, message: `Saldo tidak mencukupi (Saldo saat ini: Rp ${currentBalance.toLocaleString('id-ID')})` };
+      return { success: false, message: `Saldo tidak mencukupi (Saldo saat ini: Rp ${Number(currentBalance || 0).toLocaleString('id-ID')})` };
     }
 
     const newWithdrawal = {
@@ -1842,7 +1842,7 @@ export const useStore = create((set, get) => ({
 
       result = { 
         success: true, 
-        message: `Pengajuan penarikan Rp ${amount.toLocaleString('id-ID')} berhasil diajukan dan sedang menunggu verifikasi/transfer oleh admin.` 
+        message: `Pengajuan penarikan Rp ${Number(amount || 0).toLocaleString('id-ID')} berhasil diajukan dan sedang menunggu verifikasi/transfer oleh admin.` 
       };
       return { barbers: updatedBarbers, activeBarber: active };
     });
