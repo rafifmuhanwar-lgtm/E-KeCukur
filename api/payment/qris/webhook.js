@@ -384,10 +384,44 @@ export default async function handler(req, res) {
         // Jika tipe PLAN upgrade dan ada barber_id, update plan barber otomatis
         if (qrisRow.type?.startsWith('PLAN_') && qrisRow.barber_id) {
           try {
-            const targetPlan = qrisRow.type.replace('PLAN_', '').toLowerCase();
+            const targetPlan = qrisRow.type.replace('PLAN_', '').toLowerCase() === 'barber' ? 'barber' : 'capster';
+            let durationMonths = 1;
+            const baseAmt = Number(qrisRow.base_amount) || (Number(qrisRow.total_amount) - (Number(qrisRow.unique_code) || 0)) || 0;
+            if (targetPlan === 'barber') {
+              if (baseAmt === 267000) durationMonths = 3;
+              else if (baseAmt === 534000) durationMonths = 6;
+              else if (baseAmt === 1068000) durationMonths = 12;
+            } else {
+              if (baseAmt === 117000) durationMonths = 3;
+              else if (baseAmt === 234000) durationMonths = 6;
+              else if (baseAmt === 468000) durationMonths = 12;
+            }
+
+            // Hitung masa aktif baru (akumulatif jika langganan saat ini masih aktif)
+            const { data: currentB } = await supabase
+              .from('barbers')
+              .select('id, plan, plan_expires_at, features')
+              .eq('id', qrisRow.barber_id)
+              .maybeSingle();
+
+            const currentExp = currentB?.plan_expires_at || currentB?.features?.planExpiresAt;
+            const isStillActive = currentExp && new Date(currentExp).getTime() > Date.now();
+            const baseDate = isStillActive ? new Date(currentExp) : new Date();
+            baseDate.setMonth(baseDate.getMonth() + durationMonths);
+            const newExpiresAt = baseDate.toISOString();
+
             await supabase.from('barbers').update({
-              plan: targetPlan
+              plan: targetPlan,
+              profile_type: targetPlan === 'barber' ? 'barbershop' : 'barber',
+              plan_expires_at: newExpiresAt,
+              features: {
+                ...(currentB?.features || {}),
+                plan: targetPlan,
+                planExpiresAt: newExpiresAt,
+                team: targetPlan === 'barber'
+              }
             }).eq('id', qrisRow.barber_id);
+            console.log(`[QRIS Webhook] Barber ${qrisRow.barber_id} berhasil di-upgrade ke ${targetPlan} selama ${durationMonths} bulan (berakhir ${newExpiresAt})!`);
           } catch (planErr) {
             console.warn('Plan upgrade update notice:', planErr.message);
           }

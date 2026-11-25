@@ -91,6 +91,10 @@ export default async function handler(req, res) {
     let resolvedCustomerPhone = customerPhone;
     let resolvedBarberId = barberId;
 
+    // Durasi langganan (default 1 bulan; opsi multi-bulan diskon Rp 10.000/bln)
+    const durationMonths = [1, 3, 6, 12].includes(Number(req.body?.months)) ? Number(req.body.months) : 1;
+    const planDiscount = durationMonths > 1 ? (durationMonths * 10000) : 0;
+
     // 2. Validasi & Pengambilan Harga Resmi Berdasarkan Tipe
     if (type === 'BOOKING') {
       if (!bookingId) {
@@ -173,11 +177,11 @@ export default async function handler(req, res) {
       resolvedCustomerPhone = bookingData.customer_phone || resolvedCustomerPhone;
       resolvedBarberId = bookingData.barber_id || resolvedBarberId;
     } else if (type === 'PLAN_BARBER') {
-      // Paket Langganan Barber Studio Resmi Rp 99.000
-      baseAmount = 99000;
+      // Paket Langganan Barber Studio Resmi: Rp 99.000/bln (Hemat Rp 10.000/bln untuk 3, 6, 12 bulan)
+      baseAmount = (99000 * durationMonths) - planDiscount;
     } else if (type === 'PLAN_CAPSTER' || type === 'PLAN_PRO') {
-      // Paket Langganan Capster Pro Resmi Rp 49.000
-      baseAmount = 49000;
+      // Paket Langganan Capster Pro Resmi: Rp 49.000/bln (Hemat Rp 10.000/bln untuk 3, 6, 12 bulan)
+      baseAmount = (49000 * durationMonths) - planDiscount;
     } else if (type === 'TIP') {
       // Batas TIP sukarela: minimal Rp 5.000 dan maksimal Rp 10.000.000
       const tipNum = Number(amount);

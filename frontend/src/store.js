@@ -158,6 +158,7 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
       accountHolder: ''
     },
     plan: row.plan || row.features?.plan || (row.profile_type === 'capster' ? 'capster' : (row.features?.team ? 'barber' : 'free')),
+    planExpiresAt: row.plan_expires_at || row.features?.planExpiresAt || null,
     accountStatus: row.account_status || 'ACTIVE',
     stats: {
       views: 0,
@@ -177,10 +178,15 @@ export const mapSupabaseBarber = (row, _allServices = []) => {
         if (!row.tipping_config && cached.tippingConfig) barberObj.tippingConfig = cached.tippingConfig;
         if (row.tip_balance === undefined && cached.tipBalance !== undefined) barberObj.tipBalance = cached.tipBalance;
         if (!row.plan && !row.features?.plan && cached.plan) barberObj.plan = cached.plan;
+        if (!barberObj.planExpiresAt && cached.planExpiresAt) barberObj.planExpiresAt = cached.planExpiresAt;
       }
       const directPlan = localStorage.getItem(`ecukur_plan_${row.id}`) || localStorage.getItem(`ecukur_plan_${slug}`);
       if (directPlan && !row.plan && !row.features?.plan) {
         barberObj.plan = directPlan;
+      }
+      const directPlanExp = localStorage.getItem(`ecukur_plan_expires_${row.id}`) || localStorage.getItem(`ecukur_plan_expires_${slug}`);
+      if (directPlanExp && !barberObj.planExpiresAt) {
+        barberObj.planExpiresAt = directPlanExp;
       }
     }
   } catch {}
@@ -1143,6 +1149,11 @@ export const useStore = create((set, get) => ({
             if (target.slug) localStorage.setItem(`ecukur_plan_${target.slug}`, updates.plan);
             if (barberId) localStorage.setItem(`ecukur_plan_${barberId}`, updates.plan);
           }
+          if (updates.planExpiresAt) {
+            if (target.id) localStorage.setItem(`ecukur_plan_expires_${target.id}`, updates.planExpiresAt);
+            if (target.slug) localStorage.setItem(`ecukur_plan_expires_${target.slug}`, updates.planExpiresAt);
+            if (barberId) localStorage.setItem(`ecukur_plan_expires_${barberId}`, updates.planExpiresAt);
+          }
           localStorage.setItem('ecukur_last_active_slug', target.slug || target.id);
           window.dispatchEvent(new Event('storage'));
         }
@@ -1190,6 +1201,13 @@ export const useStore = create((set, get) => ({
         ...(payload.features || updates.features || {}),
         plan: updates.plan,
         team: updates.plan === 'barber'
+      };
+    }
+    if (updates.planExpiresAt !== undefined) {
+      payload.plan_expires_at = updates.planExpiresAt;
+      payload.features = {
+        ...(payload.features || updates.features || {}),
+        planExpiresAt: updates.planExpiresAt
       };
     }
     if (updates.accountStatus !== undefined) payload.account_status = updates.accountStatus;

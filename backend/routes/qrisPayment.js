@@ -204,9 +204,13 @@ router.post('/create', async (req, res) => {
       resolvedCustomerPhone = bookingData.customer_phone || resolvedCustomerPhone;
       resolvedBarberId = bookingData.barber_id || resolvedBarberId;
     } else if (type === 'PLAN_BARBER') {
-      baseAmount = 99000;
+      const months = [1, 3, 6, 12].includes(Number(req.body?.months)) ? Number(req.body.months) : 1;
+      const discount = months > 1 ? (months * 10000) : 0;
+      baseAmount = (99000 * months) - discount;
     } else if (type === 'PLAN_CAPSTER' || type === 'PLAN_PRO') {
-      baseAmount = 49000;
+      const months = [1, 3, 6, 12].includes(Number(req.body?.months)) ? Number(req.body.months) : 1;
+      const discount = months > 1 ? (months * 10000) : 0;
+      baseAmount = (49000 * months) - discount;
     } else if (type === 'TIP') {
       const tipNum = Number(amount);
       if (!Number.isSafeInteger(tipNum) || tipNum < 5000 || tipNum > 10000000) {
@@ -547,10 +551,43 @@ router.post('/webhook', async (req, res) => {
       if (matchedPayment.type?.startsWith('PLAN_') && matchedPayment.barberId) {
         try {
           const targetPlan = matchedPayment.type === 'PLAN_BARBER' ? 'barber' : 'capster';
+          let durationMonths = 1;
+          const baseAmt = Number(matchedPayment.baseAmount) || Number(matchedPayment.base_amount) || 0;
+          if (targetPlan === 'barber') {
+            if (baseAmt === 267000) durationMonths = 3;
+            else if (baseAmt === 534000) durationMonths = 6;
+            else if (baseAmt === 1068000) durationMonths = 12;
+          } else {
+            if (baseAmt === 117000) durationMonths = 3;
+            else if (baseAmt === 234000) durationMonths = 6;
+            else if (baseAmt === 468000) durationMonths = 12;
+          }
+
+          // Hitung masa aktif baru (akumulatif jika langganan saat ini masih aktif)
+          const { data: currentB } = await supabase
+            .from('barbers')
+            .select('id, plan, plan_expires_at, features')
+            .eq('id', matchedPayment.barberId)
+            .maybeSingle();
+
+          const currentExp = currentB?.plan_expires_at || currentB?.features?.planExpiresAt;
+          const isStillActive = currentExp && new Date(currentExp).getTime() > Date.now();
+          const baseDate = isStillActive ? new Date(currentExp) : new Date();
+          baseDate.setMonth(baseDate.getMonth() + durationMonths);
+          const newExpiresAt = baseDate.toISOString();
+
           await supabase.from('barbers').update({
-            plan: targetPlan
+            plan: targetPlan,
+            profile_type: targetPlan === 'barber' ? 'barbershop' : 'barber',
+            plan_expires_at: newExpiresAt,
+            features: {
+              ...(currentB?.features || {}),
+              plan: targetPlan,
+              planExpiresAt: newExpiresAt,
+              team: targetPlan === 'barber'
+            }
           }).eq('id', matchedPayment.barberId);
-          console.log(`[QRIS] Barber ${matchedPayment.barberId} berhasil di-upgrade ke paket ${targetPlan}!`);
+          console.log(`[QRIS] Barber ${matchedPayment.barberId} berhasil di-upgrade ke ${targetPlan} selama ${durationMonths} bulan (berakhir ${newExpiresAt})!`);
         } catch (err) {
           console.warn('[QRIS Barber Plan Update Warning]:', err.message);
         }

@@ -32,34 +32,23 @@
   </head>
   <body style="margin: 0; background-color: #F7F6F2;">
     <div id="root">
-      <div id="app-splash" style="position: fixed; inset: 0; background-color: #F7F6F2; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Outfit', 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; user-select: none; z-index: 99999;">
-        <style>
-          @keyframes splash-pulse {
-            0%, 100% { opacity: 0.15; transform: scale(1); }
-            50% { opacity: 0.35; transform: scale(1.08); }
-          }
-          @keyframes splash-shimmer {
-            0% { left: 0%; transform: translateX(0%); }
-            100% { left: 100%; transform: translateX(-100%); }
-          }
-        </style>
-        <div style="position: relative; margin-bottom: 20px; display: flex; align-items: center; justify-content: center;">
-          <div style="position: absolute; inset: -8px; background-color: #285844; border-radius: 28px; filter: blur(12px); animation: splash-pulse 2s ease-in-out infinite;"></div>
-          <div style="position: relative; width: 80px; height: 80px; background-color: #285844; border-radius: 20px; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 25px -5px rgba(40, 88, 68, 0.3);">
-            <svg style="width: 44px; height: 44px; color: #F5F4EF; fill: currentColor;" viewBox="0 0 120 128" fill-rule="evenodd" xmlns="http://www.w3.org/2000/svg">
+      <div id="app-splash" style="position: fixed; inset: 0; background-color: #F7F6F2; display: flex; align-items: center; justify-content: center; font-family: 'Sora', 'Outfit', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; user-select: none; z-index: 99999;">
+        <div style="display: flex; align-items: center; justify-content: center; padding: 0 24px;">
+          <div style="width: 56px; height: 56px; color: #0F1110; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+            <svg style="width: 100%; height: 100%; fill: #0F1110;" viewBox="0 0 120 128" fill-rule="evenodd" xmlns="http://www.w3.org/2000/svg">
               <path d="M0.0 57.0 L1.7 48.0 L5.7 37.0 L10.9 28.0 L15.5 22.0 L28.0 10.7 L39.0 4.7 L48.0 1.7 L59.0 0.2 L71.0 0.6 L86.0 4.8 L92.0 7.7 L102.0 14.7 L108.3 21.0 L114.4 30.0 L97.0 41.2 L62.0 61.5 L47.0 71.5 L41.0 73.5 L1.0 102.0 L0.5 101.0 L5.6 92.0 L1.6 81.0 L0.0 71.8 Z M25.3 72.0 L83.0 36.3 L87.5 33.0 L87.5 32.0 L85.0 28.9 L78.0 23.8 L71.0 20.8 L65.0 19.7 L54.0 20.6 L43.0 25.7 L38.0 29.6 L30.6 38.0 L24.7 50.0 L22.7 59.0 L22.5 68.0 L23.2 72.0 L24.0 72.8 L25.3 72.0 Z M69.0 127.0 L58.0 127.4 L50.0 126.4 L35.0 121.4 L21.3 112.0 L13.8 104.0 L11.7 100.0 L45.0 85.3 L76.0 68.7 L96.0 65.8 L95.1 69.0 L93.0 71.7 L86.0 77.1 L68.0 85.3 L44.0 92.7 L36.4 96.0 L38.0 98.5 L43.0 102.1 L50.0 105.2 L60.0 107.1 L68.0 106.5 L77.0 103.5 L84.0 99.0 L90.4 92.0 L95.0 85.0 L118.0 85.1 L118.6 86.0 L117.3 90.0 L111.4 101.0 L105.0 108.8 L98.0 115.3 L84.0 123.3 L69.0 127.0 Z M86.4 73.0 L88.3 71.0 L87.2 69.0 L86.0 68.7 L84.1 71.0 L85.0 72.8 L86.4 73.0 Z" />
             </svg>
           </div>
-        </div>
-        <div style="font-weight: 800; font-size: 24px; letter-spacing: -0.02em; color: #171717; display: flex; align-items: center; justify-content: center; gap: 6px;">
-          <span>E-CUKUR</span>
-          <span style="display: inline-block; width: 6px; height: 6px; border-radius: 9999px; background-color: #285844;"></span>
-        </div>
-        <p style="margin: 4px 0 0; font-size: 12px; color: #737373; font-weight: 500; letter-spacing: 0.02em;">
-          Platform Digital Barbershop &amp; Capster
-        </p>
-        <div style="width: 160px; height: 6px; background-color: #D9E5DC; border-radius: 9999px; overflow: hidden; margin-top: 24px; position: relative;">
-          <div style="position: absolute; top: 0; bottom: 0; width: 45%; background-color: #285844; border-radius: 9999px; animation: splash-shimmer 1.4s ease-in-out infinite alternate;"></div>
+          <div style="width: 1.5px; height: 44px; background-color: rgba(15, 17, 16, 0.25); margin: 0 14px; border-radius: 9999px; flex-shrink: 0;"></div>
+          <div style="display: flex; flex-direction: column; justify-content: center;">
+            <div style="display: flex; align-items: baseline; gap: 4px; white-space: nowrap;">
+              <span style="font-weight: 800; font-size: 26px; letter-spacing: -0.02em; line-height: 1; color: #0F1110; text-transform: lowercase;">e cukur</span>
+              <span style="font-size: 11px; font-weight: 700; line-height: 1; color: rgba(15, 17, 16, 0.6);">®</span>
+            </div>
+            <span style="font-weight: 700; font-size: 9px; text-transform: uppercase; letter-spacing: 0.28em; color: #737373; line-height: 1.2; margin-top: 4px; white-space: nowrap;">
+              BARBER &amp; MORE
+            </span>
+          </div>
         </div>
       </div>
     </div>

@@ -39,6 +39,7 @@ import {
   TrendingUp,
   Receipt,
   AlertCircle,
+  AlertTriangle,
   Crown,
   Download,
   Printer,
@@ -53,6 +54,36 @@ import { compressImage } from '../../lib/imageUploader';
 import { getAppDomain } from '../../lib/domain';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
 import { getDynamicQrisImageUrl } from '../../lib/qrisPayment';
+
+// ─── SUBSCRIPTION MULTI-DURATION PRICING HELPER (Diskon Rp 10.000/bulan) ───
+const SUBSCRIPTION_DURATIONS = [
+  { months: 1, label: '1 Bulan', discountText: null, popular: false },
+  { months: 3, label: '3 Bulan', discountText: 'Hemat 30rb', popular: true },
+  { months: 6, label: '6 Bulan', discountText: 'Hemat 60rb', popular: false },
+  { months: 12, label: '1 Tahun', discountText: 'Hemat 120rb', popular: false }
+];
+
+const getPlanPrice = (planType, months = 1) => {
+  const baseMonthly = planType === 'barber' ? 99000 : 49000;
+  const discount = months > 1 ? (months * 10000) : 0;
+  const total = (baseMonthly * months) - discount;
+  const effectiveMonthly = Math.round(total / months);
+  return {
+    total,
+    discount,
+    effectiveMonthly,
+    baseMonthly,
+    normalTotal: baseMonthly * months
+  };
+};
+
+const calculateNewExpiryDate = (currentExpiryIso, monthsToAdd = 1) => {
+  const current = currentExpiryIso ? new Date(currentExpiryIso) : null;
+  const isStillValid = current && !isNaN(current.getTime()) && current.getTime() > Date.now();
+  const base = isStillValid ? new Date(current.getTime()) : new Date();
+  base.setMonth(base.getMonth() + Number(monthsToAdd || 1));
+  return base.toISOString();
+};
 import { DEFAULT_OPERATING_HOURS, generateTimeSlots, isSlotInBreakTime } from '../../lib/operatingHours';
 
 const computeWeeklyChartData = (bookingsList) => {
@@ -931,10 +962,24 @@ export default function BarberDashboard() {
   };
 
   // ─── SUBSCRIPTION PLAN & QUOTA HELPERS ───
+  const [selectedDurationMonths, setSelectedDurationMonths] = useState(3);
   const currentPlan = barber?.plan || 'free';
-  const isFreePlan = currentPlan === 'free';
-  const isCapsterPlan = currentPlan === 'capster';
-  const isBarberPlan = currentPlan === 'barber';
+  const planExpiresAt = barber?.planExpiresAt ? new Date(barber.planExpiresAt) : null;
+  const hasExpiryDate = Boolean(planExpiresAt && !isNaN(planExpiresAt.getTime()));
+
+  // Sisa hari masa aktif
+  const daysUntilExpiry = hasExpiryDate
+    ? Math.ceil((planExpiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+
+  // Status peringatan masa aktif
+  const isPlanExpired = Boolean(currentPlan !== 'free' && hasExpiryDate && daysUntilExpiry <= 0);
+  const isNearExpiry = Boolean(currentPlan !== 'free' && hasExpiryDate && daysUntilExpiry > 0 && daysUntilExpiry <= 7);
+
+  // Status paket efektif
+  const isFreePlan = currentPlan === 'free' || isPlanExpired;
+  const isCapsterPlan = currentPlan === 'capster' && !isPlanExpired;
+  const isBarberPlan = currentPlan === 'barber' && !isPlanExpired;
 
   const serviceCount = (barber?.services || []).length;
   const isServiceLimitReached = isFreePlan && serviceCount >= 5;
@@ -969,12 +1014,26 @@ export default function BarberDashboard() {
           if (data?.status === 'PAID' && !isCancelled) {
             clearInterval(interval);
             setUpgradeSuccess(true);
-            const planNames = { capster: 'Paket Capster Pro (Rp 49K)', barber: 'Paket Barber Studio (Rp 99K)' };
+            const duration = upgradeQrisData?.durationMonths || selectedDurationMonths || 1;
+            const newExpiryIso = calculateNewExpiryDate(barber?.planExpiresAt, duration);
+            const planNames = { capster: 'Paket Capster Pro', barber: 'Paket Barber Studio' };
             const planExtra = upgradeTargetPlan === 'barber'
-              ? { plan: 'barber', profileType: 'barbershop', features: { ...(barber.features || {}), team: true, location: true } }
-              : { plan: 'capster', profileType: 'barber', features: { ...(barber.features || {}), team: false } };
+              ? {
+                  plan: 'barber',
+                  profileType: 'barbershop',
+                  planExpiresAt: newExpiryIso,
+                  features: { ...(barber.features || {}), team: true, location: true, planExpiresAt: newExpiryIso }
+                }
+              : {
+                  plan: 'capster',
+                  profileType: 'barber',
+                  planExpiresAt: newExpiryIso,
+                  features: { ...(barber.features || {}), team: false, planExpiresAt: newExpiryIso }
+                };
+
             await updateBarber(barber.id, planExtra);
-            showToast(`🎉 Pembayaran QRIS Dikonfirmasi! Paket ${planNames[upgradeTargetPlan] || upgradeTargetPlan} kini AKTIF!`);
+            const expFormatted = new Date(newExpiryIso).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' });
+            showToast(`🎉 Pembayaran QRIS Dikonfirmasi! ${planNames[upgradeTargetPlan]} (${duration} Bulan) AKTIF s/d ${expFormatted}!`);
 
             setTimeout(() => {
               if (!isCancelled) {
@@ -983,7 +1042,7 @@ export default function BarberDashboard() {
                 setUpgradeSuccess(false);
                 setIsUpgradeModalOpen(false);
               }
-            }, 2000);
+            }, 2500);
           }
         }
       } catch {}
@@ -993,12 +1052,12 @@ export default function BarberDashboard() {
       isCancelled = true;
       clearInterval(interval);
     };
-  }, [upgradeQrisData?.referenceId, upgradeTargetPlan, barber?.id, barber?.features, updateBarber]);
+  }, [upgradeQrisData?.referenceId, upgradeQrisData?.durationMonths, upgradeTargetPlan, selectedDurationMonths, barber?.id, barber?.features, barber?.planExpiresAt, updateBarber]);
 
-  const handleSwitchPlan = (targetPlan) => {
+  const handleSwitchPlan = (targetPlan, durationMonths = selectedDurationMonths) => {
     if (targetPlan === 'free') {
       try {
-        updateBarber(barber.id, { plan: 'free' });
+        updateBarber(barber.id, { plan: 'free', planExpiresAt: null });
         showToast('✓ Akun Anda telah beralih ke Paket Free');
         setIsUpgradeModalOpen(false);
         setUpgradeQrisData(null);
@@ -1009,10 +1068,9 @@ export default function BarberDashboard() {
       return;
     }
 
-    // Paket Berbayar (Capster: Rp 49.000 / Barber Studio: Rp 99.000)
-    // Langsung generate QRIS dinamis di browser secara instan seperti Booking Flow
-    const planPrices = { capster: 49000, barber: 99000 };
-    const basePrice = planPrices[targetPlan] || 49000;
+    // Paket Berbayar dengan opsi multi-bulan & diskon
+    const pricing = getPlanPrice(targetPlan, durationMonths);
+    const basePrice = pricing.total;
     const planType = targetPlan === 'barber' ? 'PLAN_BARBER' : 'PLAN_CAPSTER';
     const uniqueCode = Math.floor(100 + Math.random() * 899);
     const finalAmount = basePrice + uniqueCode;
@@ -1025,6 +1083,7 @@ export default function BarberDashboard() {
       barberId: barber.id,
       customerName: barber.name || 'Owner Barber',
       baseAmount: basePrice,
+      durationMonths,
       uniqueCode,
       totalAmount: finalAmount,
       formattedTotal: `Rp ${finalAmount.toLocaleString('id-ID')}`,
@@ -1038,7 +1097,7 @@ export default function BarberDashboard() {
     setUpgradeQrisData(paymentData);
     setUpgradeSuccess(false);
 
-    // Simpan ke Supabase qris_payments jika terhubung agar notifikasi MacroDroid / Telegram dapat mencocokkan
+    // Simpan ke Supabase qris_payments jika terhubung
     try {
       if (isSupabaseConfigured && supabase) {
         supabase.from('qris_payments').insert({
@@ -1574,25 +1633,44 @@ export default function BarberDashboard() {
             type="button"
             onClick={() => setIsUpgradeModalOpen(true)}
             className={`flex items-center gap-1 px-2 sm:px-2.5 py-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all cursor-pointer shrink-0 shadow-2xs ${
-              isBarberPlan
-                ? 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
-                : isCapsterPlan
-                  ? 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'
-                  : 'bg-neutral-100 text-neutral-700 border border-neutral-200 hover:bg-neutral-200'
+              isPlanExpired
+                ? 'bg-red-50 text-red-700 border border-red-300 hover:bg-red-100'
+                : isNearExpiry
+                  ? 'bg-amber-100 text-amber-900 border border-amber-300 hover:bg-amber-200 animate-pulse'
+                  : isBarberPlan
+                    ? 'bg-amber-50 text-amber-900 border border-amber-300 hover:bg-amber-100'
+                    : isCapsterPlan
+                      ? 'bg-emerald-50 text-emerald-900 border border-emerald-300 hover:bg-emerald-100'
+                      : 'bg-neutral-100 text-neutral-700 border border-neutral-200 hover:bg-neutral-200'
             }`}
             title="Kelola Paket Berlangganan"
           >
-            {isBarberPlan ? (
+            {isPlanExpired ? (
+              <>
+                <AlertCircle className="w-3.5 h-3.5 text-red-600 shrink-0" />
+                <span>{currentPlan === 'barber' ? 'Studio' : 'Pro'} (Habis)</span>
+              </>
+            ) : isBarberPlan ? (
               <>
                 <Crown className="w-3.5 h-3.5 text-amber-600 shrink-0" />
                 <span className="hidden sm:inline">Barber Studio</span>
                 <span className="sm:hidden">Studio</span>
+                {daysUntilExpiry !== null && (
+                  <span className={`text-[10px] font-mono font-normal ml-0.5 ${isNearExpiry ? 'text-amber-800 font-bold' : 'text-neutral-500'}`}>
+                    ({daysUntilExpiry} hr)
+                  </span>
+                )}
               </>
             ) : isCapsterPlan ? (
               <>
                 <Sparkles className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                 <span className="hidden sm:inline">Capster Pro</span>
                 <span className="sm:hidden">Pro</span>
+                {daysUntilExpiry !== null && (
+                  <span className={`text-[10px] font-mono font-normal ml-0.5 ${isNearExpiry ? 'text-emerald-800 font-bold' : 'text-neutral-500'}`}>
+                    ({daysUntilExpiry} hr)
+                  </span>
+                )}
               </>
             ) : (
               <>
@@ -1637,6 +1715,57 @@ export default function BarberDashboard() {
         
         {/* ─── LEFT COLUMN: STUDIO CONFIG TABS & EDITOR (8 COLS, INDEPENDENT SCROLL) ─── */}
         <div className="lg:col-span-8 space-y-6 lg:h-full lg:overflow-y-auto lg:pr-3 lg:pb-16 custom-scrollbar">
+
+          {/* Alert Masa Aktif Langganan (Habis / Menjelang Habis) */}
+          {isPlanExpired ? (
+            <div className="p-4 rounded-2xl bg-red-50 border-2 border-red-300 text-red-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-red-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <AlertCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="font-display font-bold text-xs sm:text-sm text-red-950">
+                    Masa Langganan {currentPlan === 'barber' ? 'Barber Studio' : 'Capster Pro'} Telah Berakhir
+                  </div>
+                  <div className="text-[11px] text-red-800 mt-0.5 leading-relaxed">
+                    Fitur studio & kuota foto dialihkan sementara ke mode <strong>Free</strong>. Seluruh portofolio & riwayat layanan Anda tetap aman.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUpgradeModalOpen(true)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer active:scale-95 flex items-center gap-1.5"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Perpanjang Paket</span>
+              </button>
+            </div>
+          ) : isNearExpiry ? (
+            <div className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                  <AlertTriangle className="w-5 h-5 text-amber-100" />
+                </div>
+                <div>
+                  <div className="font-display font-bold text-xs sm:text-sm text-amber-950">
+                    Masa Aktif {isBarberPlan ? 'Barber Studio' : 'Capster Pro'} Tersisa {daysUntilExpiry} Hari Lagi!
+                  </div>
+                  <div className="text-[11px] text-amber-800 mt-0.5 leading-relaxed">
+                    Langganan berakhir pada {planExpiresAt ? planExpiresAt.toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : 'segera'}. Dapatkan potongan hemat hingga Rp 120.000 untuk perpanjangan langsung.
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUpgradeModalOpen(true)}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs shrink-0 cursor-pointer active:scale-95 flex items-center gap-1.5"
+              >
+                <RefreshCw className="w-3.5 h-3.5 text-amber-100" />
+                <span>Perpanjang Sekarang</span>
+              </button>
+            </div>
+          ) : null}
 
           {/* Category Tabs: Sleek Segmented Controller */}
           <div className="bg-white rounded-xl border border-neutral-200/90 shadow-2xs p-1 flex items-center gap-1 overflow-x-auto hide-scrollbar no-scrollbar touch-pan-x">
@@ -5282,10 +5411,10 @@ export default function BarberDashboard() {
                       Pembayaran QRIS Otomatis
                     </span>
                     <h3 className="font-display font-black text-xl text-[#171717] mt-2">
-                      Upgrade ke {upgradeTargetPlan === 'barber' ? 'Barber Studio' : 'Capster Pro'}
+                      {isBarberPlan || isCapsterPlan ? 'Perpanjangan' : 'Aktivasi'} {upgradeTargetPlan === 'barber' ? 'Barber Studio' : 'Capster Pro'} ({upgradeQrisData.durationMonths || 1} Bulan)
                     </h3>
                     <p className="text-xs text-neutral-500 mt-0.5">
-                      Scan kode QRIS di bawah ini dengan BCA, Mandiri, BRI, GoPay, OVO, Dana, atau ShopeePay
+                      Masa aktif baru berlaku s/d <strong>{new Date(calculateNewExpiryDate(barber?.planExpiresAt, upgradeQrisData.durationMonths || 1)).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</strong>
                     </p>
                   </div>
 
@@ -5339,7 +5468,7 @@ export default function BarberDashboard() {
               ) : (
                 /* SCREEN 3: PILIH PAKET */
                 <>
-                  <div className="text-center max-w-md mx-auto mb-6">
+                  <div className="text-center max-w-md mx-auto mb-4">
                     <span className="text-[11px] font-mono uppercase tracking-wider text-[#285844] font-bold">
                       Paket & Kuota Akun
                     </span>
@@ -5349,6 +5478,36 @@ export default function BarberDashboard() {
                     <p className="text-xs text-neutral-500 mt-1">
                       Tingkatkan paket untuk menambah kuota layanan, portofolio tanpa batas, dan fitur tim barbershop.
                     </p>
+                  </div>
+
+                  {/* DURATION SELECTOR PILLS */}
+                  <div className="flex justify-center mb-6">
+                    <div className="inline-flex p-1 bg-neutral-100 rounded-2xl border border-neutral-200/80 gap-1">
+                      {SUBSCRIPTION_DURATIONS.map((dur) => {
+                        const isSelected = selectedDurationMonths === dur.months;
+                        return (
+                          <button
+                            key={dur.months}
+                            type="button"
+                            onClick={() => setSelectedDurationMonths(dur.months)}
+                            className={`relative px-3 sm:px-4 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                              isSelected
+                                ? 'bg-white text-[#285844] shadow-xs'
+                                : 'text-neutral-600 hover:text-neutral-900 hover:bg-neutral-200/50'
+                            }`}
+                          >
+                            <span>{dur.label}</span>
+                            {dur.discountLabel && (
+                              <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-bold ${
+                                isSelected ? 'bg-emerald-100 text-emerald-800' : 'bg-neutral-200 text-neutral-700'
+                              }`}>
+                                {dur.discountLabel}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
@@ -5406,130 +5565,176 @@ export default function BarberDashboard() {
                     </div>
 
                     {/* 2. Paket Capster */}
-                    <div className={`p-4 rounded-2xl border-2 flex flex-col justify-between relative transition-all ${
-                      isCapsterPlan ? 'border-[#285844] bg-[#D9E5DC]/25 shadow-xs' : 'border-[#285844]/60 bg-white'
-                    }`}>
-                      <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
-                        <span className="px-2.5 py-0.5 rounded-full bg-[#285844] text-white text-[9px] font-bold">
-                          🔥 Populer
-                        </span>
-                      </div>
-                      <div>
-                        <div className="flex items-center justify-between mb-2 mt-1">
-                          <span className="text-xs font-bold text-[#285844]">Capster Pro</span>
-                          {isCapsterPlan && (
-                            <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[9.5px] font-bold">
-                              Aktif
+                    {(() => {
+                      const capsterPricing = getPlanPrice('capster', selectedDurationMonths);
+                      return (
+                        <div className={`p-4 rounded-2xl border-2 flex flex-col justify-between relative transition-all ${
+                          isCapsterPlan ? 'border-[#285844] bg-[#D9E5DC]/25 shadow-xs' : 'border-[#285844]/60 bg-white'
+                        }`}>
+                          <div className="absolute -top-2.5 left-1/2 -translate-x-1/2 flex items-center gap-1">
+                            <span className="px-2.5 py-0.5 rounded-full bg-[#285844] text-white text-[9px] font-bold">
+                              🔥 Populer
                             </span>
-                          )}
-                        </div>
-                        <div className="font-display font-black text-xl text-[#171717] mb-2">
-                          Rp 49.000 <span className="text-[10px] text-neutral-400 font-mono font-normal">/bln</span>
-                        </div>
-                        <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
-                          <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
-                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Layanan <strong>Unlimited</strong></span>
-                          </li>
-                          <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
-                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Foto <strong>Unlimited</strong></span>
-                          </li>
-                          <li className="flex items-center gap-1.5">
-                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Mode Home Service</span>
-                          </li>
-                          <li className="flex items-center gap-1.5">
-                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Centang Emas Pro</span>
-                          </li>
-                        </ul>
-                      </div>
+                            {capsterPricing.discount > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-emerald-600 text-white text-[9px] font-bold">
+                                Hemat {Math.round(capsterPricing.discount / 1000)}rb
+                              </span>
+                            )}
+                          </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-2 mt-1">
+                              <span className="text-xs font-bold text-[#285844]">Capster Pro</span>
+                              {isCapsterPlan && (
+                                <span className="px-2 py-0.5 rounded-full bg-[#285844] text-white text-[9.5px] font-bold">
+                                  Aktif
+                                </span>
+                              )}
+                            </div>
+                            <div className="mb-2">
+                              {capsterPricing.discount > 0 && (
+                                <div className="text-[11px] text-neutral-400 line-through">
+                                  Rp {capsterPricing.originalAmount.toLocaleString('id-ID')}
+                                </div>
+                              )}
+                              <div className="font-display font-black text-xl text-[#171717]">
+                                Rp {capsterPricing.amount.toLocaleString('id-ID')}{' '}
+                                <span className="text-[10px] text-neutral-400 font-mono font-normal">
+                                  /{selectedDurationMonths === 1 ? 'bln' : `${selectedDurationMonths} bln`}
+                                </span>
+                              </div>
+                            </div>
+                            <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
+                              <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Layanan <strong>Unlimited</strong></span>
+                              </li>
+                              <li className="flex items-center gap-1.5 font-semibold text-emerald-800">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Foto <strong>Unlimited</strong></span>
+                              </li>
+                              <li className="flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Mode Home Service</span>
+                              </li>
+                              <li className="flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Centang Emas Pro</span>
+                              </li>
+                            </ul>
+                          </div>
 
-                      <button
-                        type="button"
-                        disabled={isCapsterPlan || isBarberPlan}
-                        onClick={() => handleSwitchPlan('capster')}
-                        className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                          isCapsterPlan 
-                            ? 'bg-emerald-200 text-emerald-900 cursor-default' 
-                            : isBarberPlan
-                              ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed opacity-75'
-                              : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-sm'
-                        }`}
-                      >
-                        {isCapsterPlan ? (
-                          'Paket Aktif'
-                        ) : isBarberPlan ? (
-                          'Paket di Bawah Barber Studio'
-                        ) : (
-                          <>
-                            <QrCode className="w-3.5 h-3.5" />
-                            <span>Bayar QRIS (Rp 49K)</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                          <button
+                            type="button"
+                            disabled={isCapsterPlan || isBarberPlan}
+                            onClick={() => handleSwitchPlan('capster')}
+                            className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              isCapsterPlan 
+                                ? 'bg-emerald-200 text-emerald-900 cursor-default' 
+                                : isBarberPlan
+                                  ? 'bg-neutral-100 text-neutral-400 cursor-not-allowed opacity-75'
+                                  : 'bg-[#285844] hover:bg-[#1E4334] text-white shadow-sm'
+                            }`}
+                          >
+                            {isCapsterPlan ? (
+                              'Paket Aktif'
+                            ) : isBarberPlan ? (
+                              'Paket di Bawah Barber Studio'
+                            ) : (
+                              <>
+                                <QrCode className="w-3.5 h-3.5" />
+                                <span>
+                                  Bayar QRIS {selectedDurationMonths > 1 ? `(${selectedDurationMonths} Bln)` : ''} (Rp {Math.round(capsterPricing.amount / 1000)}K)
+                                </span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })()}
 
                     {/* 3. Paket Barber */}
-                    <div className={`p-4 rounded-2xl border flex flex-col justify-between transition-all ${
-                      isBarberPlan ? 'border-2 border-amber-500 bg-amber-50/40 shadow-xs' : 'border-neutral-200 bg-white'
-                    }`}>
-                      <div>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="text-xs font-bold text-amber-900 flex items-center gap-1">
-                            <Crown className="w-3 h-3 text-amber-600" />
-                            <span>Barber Studio</span>
-                          </span>
-                          {isBarberPlan && (
-                            <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-bold">
-                              Aktif
-                            </span>
+                    {(() => {
+                      const barberPricing = getPlanPrice('barber', selectedDurationMonths);
+                      return (
+                        <div className={`p-4 rounded-2xl border flex flex-col justify-between relative transition-all ${
+                          isBarberPlan ? 'border-2 border-amber-500 bg-amber-50/40 shadow-xs' : 'border-neutral-200 bg-white'
+                        }`}>
+                          {barberPricing.discount > 0 && (
+                            <div className="absolute -top-2.5 left-1/2 -translate-x-1/2">
+                              <span className="px-2 py-0.5 rounded-full bg-amber-600 text-white text-[9px] font-bold">
+                                Hemat {Math.round(barberPricing.discount / 1000)}rb
+                              </span>
+                            </div>
                           )}
-                        </div>
-                        <div className="font-display font-black text-xl text-[#171717] mb-2">
-                          Rp 99.000 <span className="text-[10px] text-neutral-400 font-mono font-normal">/bln</span>
-                        </div>
-                        <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
-                          <li className="flex items-center gap-1.5">
-                            <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                            <span>Semua fitur Capster</span>
-                          </li>
-                          <li className="flex items-center gap-1.5 font-semibold text-amber-900">
-                            <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span><strong>Tim Multi-Capster</strong></span>
-                          </li>
-                          <li className="flex items-center gap-1.5">
-                            <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span>Pilih Capster saat booking</span>
-                          </li>
-                          <li className="flex items-center gap-1.5">
-                            <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                            <span>Ekspor CSV & Official Studio</span>
-                          </li>
-                        </ul>
-                      </div>
+                          <div>
+                            <div className="flex items-center justify-between mb-2 mt-1">
+                              <span className="text-xs font-bold text-amber-900 flex items-center gap-1">
+                                <Crown className="w-3 h-3 text-amber-600" />
+                                <span>Barber Studio</span>
+                              </span>
+                              {isBarberPlan && (
+                                <span className="px-2 py-0.5 rounded-full bg-amber-500 text-white text-[9.5px] font-bold">
+                                  Aktif
+                                </span>
+                              )}
+                            </div>
+                            <div className="mb-2">
+                              {barberPricing.discount > 0 && (
+                                <div className="text-[11px] text-neutral-400 line-through">
+                                  Rp {barberPricing.originalAmount.toLocaleString('id-ID')}
+                                </div>
+                              )}
+                              <div className="font-display font-black text-xl text-[#171717]">
+                                Rp {barberPricing.amount.toLocaleString('id-ID')}{' '}
+                                <span className="text-[10px] text-neutral-400 font-mono font-normal">
+                                  /{selectedDurationMonths === 1 ? 'bln' : `${selectedDurationMonths} bln`}
+                                </span>
+                              </div>
+                            </div>
+                            <ul className="space-y-2 text-[11px] text-neutral-700 mb-4">
+                              <li className="flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                <span>Semua fitur Capster</span>
+                              </li>
+                              <li className="flex items-center gap-1.5 font-semibold text-amber-900">
+                                <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span><strong>Tim Multi-Capster</strong></span>
+                              </li>
+                              <li className="flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span>Pilih Capster saat booking</span>
+                              </li>
+                              <li className="flex items-center gap-1.5">
+                                <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                                <span>Ekspor CSV & Official Studio</span>
+                              </li>
+                            </ul>
+                          </div>
 
-                      <button
-                        type="button"
-                        disabled={isBarberPlan}
-                        onClick={() => handleSwitchPlan('barber')}
-                        className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                          isBarberPlan 
-                            ? 'bg-amber-200 text-amber-900 cursor-default' 
-                            : 'border-2 border-[#285844] text-[#285844] hover:bg-[#285844] hover:text-white'
-                        }`}
-                      >
-                        {isBarberPlan ? (
-                          'Paket Aktif'
-                        ) : (
-                          <>
-                            <QrCode className="w-3.5 h-3.5" />
-                            <span>Bayar QRIS (Rp 99K)</span>
-                          </>
-                        )}
-                      </button>
-                    </div>
+                          <button
+                            type="button"
+                            disabled={isBarberPlan}
+                            onClick={() => handleSwitchPlan('barber')}
+                            className={`w-full py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                              isBarberPlan 
+                                ? 'bg-amber-200 text-amber-900 cursor-default' 
+                                : 'border-2 border-[#285844] text-[#285844] hover:bg-[#285844] hover:text-white'
+                            }`}
+                          >
+                            {isBarberPlan ? (
+                              'Paket Aktif'
+                            ) : (
+                              <>
+                                <QrCode className="w-3.5 h-3.5" />
+                                <span>
+                                  Bayar QRIS {selectedDurationMonths > 1 ? `(${selectedDurationMonths} Bln)` : ''} (Rp {Math.round(barberPricing.amount / 1000)}K)
+                                </span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })()}
 
                   </div>
 
