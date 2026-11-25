@@ -18,16 +18,15 @@ import SplashScreen from './components/SplashScreen';
 import { useStore } from './store';
 
 export default function App() {
-  // State to indicate when initApp has finished and minimum splash time has passed
+  // State to indicate when initApp has finished
   const [isAppReady, setIsAppReady] = useState(false);
 
   const initApp = useStore((state) => state.initApp);
 
-  // Tunggu inisialisasi data DAN pastikan animasi splash screen berjalan sempurna (5 detik),
-  // lalu baru masuk ke dashboard/halaman utama. Jika loading internet lambat, splash screen akan terus mengulang (looping) tanpa macet.
+  // Jalankan inisialisasi aplikasi secara murni mengikuti kecepatan jaringan asli.
+  // Splash screen animasi sketsa akan langsung menggambar dari detik 0 dan terus berulang (looping) sampai jaringan siap.
   useEffect(() => {
-    const minSplashPromise = new Promise((resolve) => setTimeout(resolve, 5000));
-    void Promise.all([initApp(), minSplashPromise]).finally(() => setIsAppReady(true));
+    void initApp().finally(() => setIsAppReady(true));
   }, [initApp]);
 
   // While the app is initializing, show the branded splash screen

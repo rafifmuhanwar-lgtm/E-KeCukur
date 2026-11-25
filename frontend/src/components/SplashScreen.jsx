@@ -8,8 +8,8 @@ const RAZOR_E_PATH =
 const TITLE_CHARS = ['e', ' ', 'c', 'u', 'k', 'u', 'r'];
 const SUBTITLE_CHARS = 'BARBER & MORE'.split('');
 
-// 1 siklus animasi berjalan 4.8 detik dan akan otomatis berulang (looping) terus menerus tanpa stuck
-const CYCLE_DURATION = 4.8;
+// 1 siklus animasi sketsa: langsung mulai digambar dari frame 0, dan terus meloop sampai jaringan selesai memuat
+const CYCLE_DURATION = 3.6;
 
 export default function SplashScreen() {
   return (
@@ -18,7 +18,7 @@ export default function SplashScreen() {
       style={{ backgroundColor: '#F7F6F2' }}
     >
       <div className="relative flex flex-col items-center justify-center">
-        {/* Subtle breathing glow under the drawing */}
+        {/* Subtle breathing glow */}
         <motion.div
           animate={{
             scale: [0.95, 1.15, 0.95],
@@ -32,7 +32,7 @@ export default function SplashScreen() {
           className="absolute -inset-8 bg-[#285844]/20 rounded-full blur-2xl pointer-events-none"
         />
 
-        {/* The Animated Drawing SVG (Hitam Pekat & Berputar Terus) */}
+        {/* The Pure Sketch Drawing SVG (Langsung mulai dari goresan garis, tanpa ada logo jadi di awal) */}
         <div className="relative w-24 h-24 sm:w-28 sm:h-28 flex items-center justify-center">
           <svg
             viewBox="0 0 120 128"
@@ -46,10 +46,11 @@ export default function SplashScreen() {
               strokeWidth="3.2"
               strokeLinecap="round"
               strokeLinejoin="round"
+              // Detik 0: kosong murni, langsung mulai digambar (pathLength: 0)
               initial={{
                 pathLength: 0,
                 fill: 'rgba(15, 17, 16, 0)',
-                opacity: 0,
+                opacity: 1,
               }}
               animate={{
                 pathLength: [0, 1, 1, 1, 0],
@@ -60,27 +61,30 @@ export default function SplashScreen() {
                   'rgba(15, 17, 16, 1)',
                   'rgba(15, 17, 16, 0)',
                 ],
-                opacity: [0.6, 1, 1, 1, 0.2],
+                opacity: [1, 1, 1, 1, 0.3],
               }}
               transition={{
                 duration: CYCLE_DURATION,
                 repeat: Infinity,
                 repeatType: 'loop',
                 ease: 'easeInOut',
-                // Timeline: 0-1.8s nulis garis -> 1.8-2.4s isi hitam pekat -> 2.4-4.2s tampil utuh lengkap -> 4.2-4.8s fade out & loop lagi
-                times: [0, 0.38, 0.5, 0.88, 1],
+                // Timeline per siklus:
+                // 0% -> 42%: goresan garis sketsa digambar dari 0 sampai utuh
+                // 42% -> 55%: warna hitam pekat langsung mengisi logo
+                // 55% -> 85%: logo tampil utuh jelas
+                // 85% -> 100%: fade out pelan dan langsung mengulang menggambar sketsa lagi
+                times: [0, 0.42, 0.55, 0.85, 1],
               }}
             />
           </svg>
         </div>
 
-        {/* Teks dengan Efek Menulis Huruf Satu per Satu */}
+        {/* Teks Menulis Huruf Satu per Satu */}
         <div className="mt-6 flex flex-col items-center">
           {/* Baris 1: e cukur */}
           <div className="flex items-center justify-center font-sora font-extrabold text-lg sm:text-xl tracking-[0.2em] text-[#0F1110] leading-none">
             {TITLE_CHARS.map((char, idx) => {
-              // Mulai ditulis setelah garis logo mulai jadi (detik 1.2s - 2.2s)
-              const startDelayFraction = 0.25 + idx * 0.035;
+              const startDelayFraction = 0.22 + idx * 0.035;
               return (
                 <motion.span
                   key={idx}
@@ -93,7 +97,7 @@ export default function SplashScreen() {
                     repeat: Infinity,
                     repeatType: 'loop',
                     ease: 'easeOut',
-                    times: [0, startDelayFraction, startDelayFraction + 0.04, 0.88, 1],
+                    times: [0, startDelayFraction, startDelayFraction + 0.04, 0.85, 1],
                   }}
                   className="inline-block"
                   style={{ width: char === ' ' ? '0.45em' : 'auto' }}
@@ -107,8 +111,7 @@ export default function SplashScreen() {
           {/* Baris 2: BARBER & MORE */}
           <div className="flex items-center justify-center mt-1.5 font-sora font-bold text-[8px] sm:text-[9.5px] uppercase tracking-[0.32em] text-neutral-500 leading-none">
             {SUBTITLE_CHARS.map((char, idx) => {
-              // Muncul menyusul setelah e cukur (detik 1.8s - 2.8s)
-              const startDelayFraction = 0.38 + idx * 0.02;
+              const startDelayFraction = 0.36 + idx * 0.02;
               return (
                 <motion.span
                   key={idx}
@@ -121,7 +124,7 @@ export default function SplashScreen() {
                     repeat: Infinity,
                     repeatType: 'loop',
                     ease: 'easeOut',
-                    times: [0, startDelayFraction, startDelayFraction + 0.035, 0.88, 1],
+                    times: [0, startDelayFraction, startDelayFraction + 0.035, 0.85, 1],
                   }}
                   className="inline-block"
                   style={{ width: char === ' ' ? '0.4em' : 'auto' }}
